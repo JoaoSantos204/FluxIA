@@ -6,10 +6,12 @@ def gerar_hash_senha(senha: str) -> str:
     """Gera um hash SHA-256 simples para a senha."""
     return hashlib.sha256(senha.encode('utf-8')).hexdigest()
 
+PERFIS_PERMITIDOS = ['master', 'admin', 'funcionario', 'cliente']
+
 def cadastrar_usuario(empresa_id: int, nome: str, email: str, senha: str, perfil: str = 'cliente'):
     """Cadastra um novo usuário no sistema (Padrão: cliente)."""
-    if perfil not in ['admin', 'funcionario', 'cliente']:
-        return {"sucesso": False, "erro": "Perfil inválido. Use 'admin', 'funcionario' ou 'cliente'."}
+    if perfil not in PERFIS_PERMITIDOS:
+        return {"sucesso": False, "erro": f"Perfil inválido. Use um dos seguintes: {', '.join(PERFIS_PERMITIDOS)}."}
 
     conexao = conectar()
     cursor = _cursor(conexao)
@@ -87,9 +89,9 @@ def buscar_usuario_por_telegram(telegram_chat_id: str):
     return dados
 
 def alterar_perfil_usuario(usuario_id: int, novo_perfil: str):
-    """Altera o perfil do usuário ('admin', 'funcionario' ou 'cliente')."""
-    if novo_perfil not in ['admin', 'funcionario', 'cliente']:
-        return {"sucesso": False, "erro": "Perfil inválido."}
+    """Altera o perfil do usuário ('master', 'admin', 'funcionario' ou 'cliente')."""
+    if novo_perfil not in PERFIS_PERMITIDOS:
+        return {"sucesso": False, "erro": f"Perfil inválido. Use um dos seguintes: {', '.join(PERFIS_PERMITIDOS)}."}
 
     conexao = conectar()
     cursor = _cursor(conexao)
@@ -245,4 +247,94 @@ def redefinir_senha_usuario(email: str, nova_senha: str) -> bool:
         conexao.commit()
         return cursor.rowcount > 0
     finally:
-        conexao.close()
+        conexao.close()
+
+
+def cadastrar_empresa_com_admin(nome_empresa: str, cnpj: str, nome_responsavel: str, email: str, senha: str) -> dict:
+    """
+    Cadastra uma nova empresa no SaaS com CNPJ OBRIGATÓRIO e cria o primeiro usuário com perfil 'admin' vinculado a ela.
+    """
+    nome_emp = nome_empresa.strip()
+    cnpj_limpo = cnpj.strip()
+    nome_user = nome_responsavel.strip()
+    email_user = email.strip().lower()
+
+    if not nome_emp:
+        return {"sucesso": False, "erro": "O nome da empresa é obrigatório."}
+
+    if not cnpj_limpo:
+        return {"sucesso": False, "erro": "O CNPJ é obrigatório para cadastrar a empresa."}
+
+    if len(senha.strip()) < 4:
+        return {"sucesso": False, "erro": "A senha deve ter no mínimo 4 caracteres."}
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    data_criacao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        # 1. Verifica se e-mail já existe
+        cursor.execute(f"SELECT id FROM usuarios WHERE LOWER(email) = {ph}", (email_user,))
+        if cursor.fetchone():
+            return {"sucesso": False, "erro": "Este e-mail já está cadastrado em outra conta."}
+
+        # 2. Verifica se CNPJ já existe
+        cursor.execute(f"SELECT id FROM empresas WHERE cnpj_ou_identificador = {ph}", (cnpj_limpo,))
+        if cursor.fetchone():
+            return {"sucesso": False, "erro": "Este CNPJ já está cadastrado no sistema."}
+
+        # 3. Insere a Empresa
+        cursor.execute(f"""
+            INSERT INTO empresas (nome, cnpj_ou_identificador, data_criacao)
+            VALUES ({ph}, {ph}, {ph})
+        """, (nome_emp, cnpj_limpo, data_criacao))
+
+        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
+            empresa_id = cursor.lastrowid
+        else:
+            cursor.execute(f"SELECT id FROM empresas WHERE cnpj_ou_identificador = {ph}", (cnpj_limpo,))
+            empresa_id = cursor.fetchone()["id"]
+
+        # 4. Insere Configurações padrão de suporte para a nova empresa
+        cursor.execute(f"""
+            INSERT INTO configuracoes_empresa (empresa_id, numero_suporte_humano, mensagem_suporte)
+            VALUES ({ph}, {ph}, {ph})
+        """, (empresa_id, "(11) 99999-9999", "Por favor, entre em contato com nossa equipe de atendimento."))
+
+        # 5. Insere o Usuário com Perfil 'admin'
+        senha_hash = gerar_hash_senha(senha)
+        cursor.execute(f"""
+            INSERT INTO usuarios (empresa_id, nome, email, senha_hash, perfil, status, data_criacao)
+            VALUES ({ph}, {ph}, {ph}, {ph}, 'admin', 'ativo', {ph})
+        """, (empresa_id, nome_user, email_user, senha_hash, data_criacao))
+
+        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
+            usuario_id = cursor.lastrowid
+        else:
+            cursor.execute(f"SELECT id FROM usuarios WHERE LOWER(email) = {ph}", (email_user,))
+            usuario_id = cursor.fetchone()["id"]
+
+        conexao.commit()
+
+        return {
+            "sucesso": True,
+            "usuario": {
+                "id": usuario_id,
+                "empresa_id": empresa_id,
+                "nome": nome_user,
+                "email": email_user,
+                "perfil": "admin"
+            },
+            "empresa": {
+                "id": empresa_id,
+                "nome": nome_emp,
+                "cnpj": cnpj_limpo
+            }
+        }
+    except Exception as e:
+        conexao.rollback()
+        return {"sucesso": False, "erro": str(e)}
+    finally:
+        conexao.close()
+

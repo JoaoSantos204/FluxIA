@@ -346,7 +346,8 @@
         <select class="cf-select" id="novo-user-perfil">
           <option value="cliente">Cliente (Acessa apenas documentos públicos da empresa)</option>
           <option value="funcionario">Funcionário (Acessa documentos internos e chat)</option>
-          <option value="admin">Administrador (Acesso total)</option>
+          <option value="admin">Administrador da Empresa (Gestão do ambiente e equipe)</option>
+          <option value="master">Super Admin (Master / Desenvolvedor - Acesso Global)</option>
         </select>
       </div>
     </div>
@@ -616,7 +617,8 @@ function renderizarUsuarios(usuarios) {
           <select class="cf-select" style="padding:4px 8px; font-size:11px; width:auto;" onchange="alterarPerfil(${u.id}, this.value)">
             <option value="cliente" ${u.perfil === 'cliente' ? 'selected' : ''}>Cliente</option>
             <option value="funcionario" ${u.perfil === 'funcionario' ? 'selected' : ''}>Funcionário</option>
-            <option value="admin" ${u.perfil === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="admin" ${u.perfil === 'admin' ? 'selected' : ''}>Admin da Empresa</option>
+            <option value="master" ${u.perfil === 'master' ? 'selected' : ''}>Master (Dev)</option>
           </select>
         </td>
         <td>
@@ -814,12 +816,12 @@ function verificarAutenticacaoAdmin() {
     adminLogado = JSON.parse(userJson);
     if (!adminLogado || !adminLogado.id) throw new Error('Sessão inválida');
 
-    // Regra estrita: apenas usuários com perfil 'admin' podem acessar o portal de administração
-    if (adminLogado.perfil !== 'admin') {
+    // Regra estrita: apenas o Desenvolvedor / Super Admin (perfil 'master') pode acessar o portal de administração de ambientes
+    if (adminLogado.perfil !== 'master') {
       const overlay = document.getElementById('overlay-acesso-negado');
       const msg = document.getElementById('msg-acesso-negado');
       if (overlay) overlay.classList.add('active');
-      if (msg) msg.textContent = `Olá, ${adminLogado.nome}. Seu perfil de acesso é "${adminLogado.perfil.toUpperCase()}". Apenas administradores têm permissão para gerenciar empresas e usuários.`;
+      if (msg) msg.textContent = `Olá, ${adminLogado.nome}. Seu perfil de acesso é "${adminLogado.perfil.toUpperCase()}". Apenas o Desenvolvedor / Super Administrador (Master) tem permissão para gerenciar todos os ambientes da plataforma. Se você é administrador de uma empresa, gerencie sua equipe diretamente pelo Portal Operacional.`;
       return null;
     }
 
@@ -861,9 +863,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="width:64px; height:64px; background:rgba(239, 68, 68, 0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 18px; color:#ef4444; font-size:30px;">
       🚫
     </div>
-    <div style="font-family:'Syne', sans-serif; font-size:22px; font-weight:700; margin-bottom:10px; color:white;">Acesso Restrito: Apenas Administradores</div>
+    <div style="font-family:'Syne', sans-serif; font-size:22px; font-weight:700; margin-bottom:10px; color:white;">Acesso Restrito: Apenas Desenvolvedor Master</div>
     <p style="font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:28px;" id="msg-acesso-negado">
-      Você está autenticado, porém sua conta não possui perfil de Administrador para gerenciar ambientes e usuários.
+      Você está autenticado, porém sua conta não possui perfil de Super Administrador (Master) para gerenciar ambientes globais.
     </p>
     <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
       <a href="/" class="btn-green" style="text-decoration:none; padding:10px 18px;">

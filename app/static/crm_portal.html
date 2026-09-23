@@ -66,13 +66,22 @@
         </div>
       </div>
 
+      <div class="nav-section" id="nav-section-empresa" style="display:none;">
+        <div class="nav-label">Empresa</div>
+        <div class="nav-item" id="nav-item-equipe" onclick="switchTab('equipe', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Minha Equipe
+          <span class="nav-badge" id="badge-total-equipe">0</span>
+        </div>
+      </div>
+
       <div class="nav-section">
         <div class="nav-label">Sistema</div>
         <div class="nav-item" onclick="switchTab('config', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.44l-1.54 1.54a10 10 0 0 1-13.44-1.41l-1.54-1.54A10 10 0 0 1 5.36 3.44l1.54-1.54a10 10 0 0 1 12.17 3.03z"/></svg>
           Configurações
         </div>
-        <a href="/admin" id="nav-item-admin" class="nav-item" style="color:#a78bfa;">
+        <a href="/admin" id="nav-item-admin" class="nav-item" style="color:#a78bfa; display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
           Gestão de Ambientes ⚙️
         </a>
@@ -99,15 +108,15 @@
   <div class="main">
     <!-- TOPBAR -->
     <div class="topbar">
-      <div class="topbar-left">
-        <div class="env-badge">
+      <div class="topbar-left" id="topbar-tenant-container">
+        <div class="env-badge" id="env-badge-container">
           <div class="env-dot"></div>
-          <span id="label-empresa-atual">Ambiente: Empresa Padrão</span>
+          <span id="label-empresa-atual">Ambiente: Carregando...</span>
         </div>
-        <span style="font-size:12px; color:var(--text-muted);">API Online · PostgreSQL</span>
+        <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
       </div>
       <div class="topbar-actions">
-        <a href="/admin" id="topbar-btn-admin" class="btn-nav-switch" style="border-color:#7F77DD; color:#534AB7;">
+        <a href="/admin" id="topbar-btn-admin" class="btn-nav-switch" style="border-color:#7F77DD; color:#534AB7; display:none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>Portal Administrar Ambientes</span>
         </a>
@@ -758,6 +767,38 @@
         </div>
       </div>
     </div>
+
+    <!-- TELA: MINHA EQUIPE (GESTAO DO AMBIENTE) -->
+    <div class="screen" id="screen-equipe">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Minha Equipe</div>
+          <div class="page-sub" id="equipe-sub-label">Colaboradores com acesso ao ambiente desta empresa</div>
+        </div>
+        <button class="btn-green" onclick="abrirModalMembroEquipe()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Adicionar Colaborador
+        </button>
+      </div>
+
+      <div class="table-container" style="margin-top: 20px;">
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>E-mail</th>
+              <th>Perfil de Acesso</th>
+              <th>Status</th>
+              <th>Data de Cadastro</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-equipe-body">
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Carregando equipe...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -773,6 +814,7 @@ function switchTab(tabId, navEl) {
   if (screen) screen.classList.add('active');
 
   if (tabId === 'documentos') carregarDocumentos();
+  if (tabId === 'equipe') carregarEquipe();
 }
 
 // ===== CHAT DO LEAD =====
@@ -850,7 +892,7 @@ async function enviarMensagemRAG() {
     const res = await fetch('/chat/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensagem: texto })
+      body: JSON.stringify({ mensagem: texto, empresa_id: obterEmpresaAtivaId() })
     });
     const data = await res.json();
     typingDiv.remove();
@@ -879,7 +921,8 @@ async function enviarMensagemRAG() {
 async function carregarDocumentos() {
   const container = document.getElementById('kb-table-container');
   try {
-    const res = await fetch('/documents/');
+    const empresaId = obterEmpresaAtivaId();
+    const res = await fetch(`/documents/?empresa_id=${empresaId}`);
     const data = await res.json();
     documentosCarregados = data.documentos || [];
     renderizarDocumentos(documentosCarregados);
@@ -949,7 +992,7 @@ async function enviarUploadDocumento(arquivo) {
   const formData = new FormData();
   formData.append('arquivo', arquivo);
   formData.append('nivel_acesso', 'publico');
-  formData.append('empresa_id', 1);
+  formData.append('empresa_id', obterEmpresaAtivaId());
 
   const apiKey = localStorage.getItem('FLUXIA_ADMIN_KEY') || 'fluxia-admin-secret-key-2026';
 
@@ -991,6 +1034,237 @@ async function excluirDocumento(id, nome) {
 
 // ===== AUTENTICAÇÃO E SESSÃO =====
 let usuarioAtual = null;
+let listaEmpresasCadastradas = [];
+let equipeCarregada = [];
+
+function obterEmpresaAtivaId() {
+  if (usuarioAtual && usuarioAtual.perfil === 'master') {
+    const salvo = localStorage.getItem('fluxia_active_empresa_id');
+    return salvo ? parseInt(salvo) : (usuarioAtual.empresa_id || 1);
+  }
+  return (usuarioAtual && usuarioAtual.empresa_id) ? parseInt(usuarioAtual.empresa_id) : 1;
+}
+
+function trocarEmpresaAtiva(novoId) {
+  localStorage.setItem('fluxia_active_empresa_id', novoId);
+  atualizarInterfaceTenant();
+  carregarDocumentos();
+  const telaEquipe = document.getElementById('screen-equipe');
+  if (telaEquipe && telaEquipe.classList.contains('active')) {
+    carregarEquipe();
+  }
+}
+
+async function atualizarInterfaceTenant() {
+  if (!usuarioAtual) return;
+  const empresaIdAtiva = obterEmpresaAtivaId();
+
+  try {
+    const res = await fetch('/empresa/');
+    if (res.ok) {
+      const data = await res.json();
+      listaEmpresasCadastradas = data.empresas || [];
+    }
+  } catch (e) {
+    console.warn('Não foi possível listar empresas:', e);
+  }
+
+  const containerBadge = document.getElementById('topbar-tenant-container');
+  const navEquipe = document.getElementById('nav-section-empresa');
+  const navAdmin = document.getElementById('nav-item-admin');
+  const topAdmin = document.getElementById('topbar-btn-admin');
+
+  if (usuarioAtual.perfil === 'master') {
+    // Super Admin Master
+    if (navAdmin) navAdmin.style.display = 'flex';
+    if (topAdmin) topAdmin.style.display = 'inline-flex';
+    if (navEquipe) navEquipe.style.display = 'block';
+
+    const optionsHtml = listaEmpresasCadastradas.map(emp => 
+      `<option value="${emp.id}" ${emp.id === empresaIdAtiva ? 'selected' : ''}>${emp.nome} (ID: ${emp.id})</option>`
+    ).join('');
+
+    containerBadge.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:12px; font-weight:600; color:#a78bfa;">Visualizando Ambiente:</span>
+        <select id="select-empresa-switcher" onchange="trocarEmpresaAtiva(this.value)" style="background:#1a1f2e; color:white; border:1px solid rgba(167,139,250,0.4); border-radius:6px; padding:4px 10px; font-size:12px; font-weight:500; cursor:pointer; outline:none;">
+          ${optionsHtml || `<option value="1">Empresa Padrão (ID: 1)</option>`}
+        </select>
+      </div>
+      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
+    `;
+  } else if (usuarioAtual.perfil === 'admin') {
+    // Admin da Empresa
+    if (navAdmin) navAdmin.style.display = 'none';
+    if (topAdmin) topAdmin.style.display = 'none';
+    if (navEquipe) navEquipe.style.display = 'block';
+
+    const empObj = listaEmpresasCadastradas.find(e => e.id === usuarioAtual.empresa_id);
+    const empNome = empObj ? empObj.nome : `Empresa #${usuarioAtual.empresa_id}`;
+    const empCnpj = empObj?.cnpj_ou_identificador ? ` · CNPJ: ${empObj.cnpj_ou_identificador}` : '';
+
+    containerBadge.innerHTML = `
+      <div class="env-badge">
+        <div class="env-dot"></div>
+        <span id="label-empresa-atual">Ambiente: ${empNome}${empCnpj}</span>
+      </div>
+      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
+    `;
+  } else {
+    // Funcionário ou Cliente
+    if (navAdmin) navAdmin.style.display = 'none';
+    if (topAdmin) topAdmin.style.display = 'none';
+    if (navEquipe) navEquipe.style.display = 'none';
+
+    const empObj = listaEmpresasCadastradas.find(e => e.id === usuarioAtual.empresa_id);
+    const empNome = empObj ? empObj.nome : `Empresa #${usuarioAtual.empresa_id}`;
+
+    containerBadge.innerHTML = `
+      <div class="env-badge">
+        <div class="env-dot"></div>
+        <span id="label-empresa-atual">Ambiente: ${empNome}</span>
+      </div>
+      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
+    `;
+  }
+
+  const empAtual = listaEmpresasCadastradas.find(e => e.id === empresaIdAtiva);
+  const labelSub = document.getElementById('equipe-sub-label');
+  if (labelSub && empAtual) {
+    labelSub.textContent = `Colaboradores vinculados a ${empAtual.nome} (CNPJ: ${empAtual.cnpj_ou_identificador || 'N/A'})`;
+  }
+}
+
+// ===== GESTÃO DE EQUIPE =====
+async function carregarEquipe() {
+  const empresaId = obterEmpresaAtivaId();
+  const tbody = document.getElementById('tabela-equipe-body');
+  try {
+    const res = await fetch(`/usuarios/equipe?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao consultar equipe.');
+    const data = await res.json();
+    equipeCarregada = data.usuarios || [];
+    renderizarEquipe(equipeCarregada);
+    document.getElementById('badge-total-equipe').textContent = equipeCarregada.length;
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#ef4444;">Erro ao carregar colaboradores: ${err.message}</td></tr>`;
+  }
+}
+
+function renderizarEquipe(usuarios) {
+  const tbody = document.getElementById('tabela-equipe-body');
+  if (usuarios.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Nenhum colaborador cadastrado neste ambiente ainda. Clique em "Adicionar Colaborador" acima.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = usuarios.map(u => {
+    const initials = (u.nome || 'U').substring(0, 2).toUpperCase();
+    const isAtivo = u.status === 'ativo';
+    const isSelf = usuarioAtual && usuarioAtual.id === u.id;
+    const isMaster = u.perfil === 'master';
+
+    let badgeClass = 'badge-client';
+    let perfilLabel = 'Cliente';
+    if (u.perfil === 'master') { badgeClass = 'badge-master'; perfilLabel = 'Super Admin (Master)'; }
+    else if (u.perfil === 'admin') { badgeClass = 'badge-admin'; perfilLabel = 'Administrador'; }
+    else if (u.perfil === 'funcionario') { badgeClass = 'badge-func'; perfilLabel = 'Funcionário'; }
+
+    return `
+      <tr>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="user-avatar" style="width:28px; height:28px; font-size:10px;">${initials}</div>
+            <div style="font-weight:600;">${u.nome} ${isSelf ? '<span style="font-size:10px; color:var(--green);">(Você)</span>' : ''}</div>
+          </div>
+        </td>
+        <td style="font-size:12px; color:var(--text-muted);">${u.email}</td>
+        <td>
+          <span class="badge ${badgeClass}">${perfilLabel}</span>
+        </td>
+        <td>
+          <span class="badge ${isAtivo ? 'badge-active' : 'badge-inactive'}">
+            ${isAtivo ? '● Ativo' : '○ Inativo'}
+          </span>
+        </td>
+        <td style="font-size:11px; color:var(--text-muted);">${(u.data_criacao || '').substring(0, 10)}</td>
+        <td style="text-align:right;">
+          ${(!isSelf && !isMaster) ? `
+            <button class="btn-danger" style="padding:4px 8px; font-size:11px;" onclick="removerColaborador(${u.id}, '${u.nome}')">
+              Excluir
+            </button>
+          ` : `
+            <span style="font-size:11px; color:var(--text-muted);">-</span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function abrirModalMembroEquipe() {
+  document.getElementById('equipe-novo-nome').value = '';
+  document.getElementById('equipe-novo-email').value = '';
+  document.getElementById('equipe-novo-senha').value = '';
+  document.getElementById('modal-membro-equipe').classList.add('active');
+}
+
+function fecharModalMembroEquipe() {
+  document.getElementById('modal-membro-equipe').classList.remove('active');
+}
+
+async function salvarNovoColaborador() {
+  const nome = document.getElementById('equipe-novo-nome').value.trim();
+  const email = document.getElementById('equipe-novo-email').value.trim();
+  const senha = document.getElementById('equipe-novo-senha').value.trim();
+  const perfil = document.getElementById('equipe-novo-perfil').value;
+  const empresaId = obterEmpresaAtivaId();
+
+  if (!nome || !email || !senha) {
+    alert('Preencha todos os campos obrigatórios.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/usuarios/equipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        nome: nome,
+        email: email,
+        senha: senha,
+        perfil: perfil
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao adicionar colaborador');
+
+    alert('Colaborador adicionado com sucesso!');
+    fecharModalMembroEquipe();
+    carregarEquipe();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function removerColaborador(usuarioId, nome) {
+  if (!confirm(`Deseja realmente remover o colaborador "${nome}" da equipe?`)) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await fetch(`/usuarios/equipe/${usuarioId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao remover colaborador');
+
+    carregarEquipe();
+  } catch (err) {
+    alert(err.message);
+  }
+}
 
 function verificarAutenticacao() {
   const userJson = localStorage.getItem('fluxia_user');
@@ -1025,20 +1299,13 @@ function aplicarDadosUsuario() {
   if (nameEl) nameEl.textContent = usuarioAtual.nome;
   if (roleEl) roleEl.textContent = usuarioAtual.perfil.toUpperCase();
   if (avatarEl) avatarEl.textContent = (usuarioAtual.nome || 'U').substring(0, 2).toUpperCase();
-
-  // Se o usuário não for admin, esconde os acessos para o painel de administração
-  if (usuarioAtual.perfil !== 'admin') {
-    const navAdmin = document.getElementById('nav-item-admin');
-    const topAdmin = document.getElementById('topbar-btn-admin');
-    if (navAdmin) navAdmin.style.display = 'none';
-    if (topAdmin) topAdmin.style.display = 'none';
-  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   const user = verificarAutenticacao();
   if (!user) return;
   aplicarDadosUsuario();
+  atualizarInterfaceTenant();
 
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const labelData = document.getElementById('data-atual-label');
@@ -1046,5 +1313,43 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarDocumentos();
 });
 </script>
+
+<!-- MODAL NOVO COLABORADOR -->
+<div class="modal-overlay" id="modal-membro-equipe">
+  <div class="modal-content" style="background:#1a1f2e; color:white; border:1px solid rgba(255,255,255,0.08); border-radius:12px;">
+    <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.08); padding:16px 20px;">
+      <div class="modal-title" style="color:white; font-weight:700; font-family:'Syne',sans-serif;">Adicionar Colaborador à Equipe</div>
+      <button class="btn-icon" style="background:none; border:none; color:white; font-size:16px; cursor:pointer;" onclick="fecharModalMembroEquipe()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Nome Completo *</div>
+        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-nome" placeholder="Ex: Maria Oliveira" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">E-mail Corporativo *</div>
+        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-email" type="email" placeholder="maria@empresa.com" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Senha Inicial *</div>
+        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-senha" type="password" placeholder="Mínimo 4 caracteres" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Perfil de Acesso (RBAC) *</div>
+        <select class="login-input" style="padding:10px 14px; background:#0f172a; color:white;" id="equipe-novo-perfil">
+          <option value="funcionario">Funcionário (Acesso ao CRM, Chat RAG e Documentos)</option>
+          <option value="admin">Administrador (Gestão de Equipe e Configurações)</option>
+          <option value="cliente">Cliente (Acesso apenas a Documentos Públicos)</option>
+        </select>
+        <div style="font-size:11px; color:#64748b; margin-top:4px;">* Acesso restrito aos dados deste ambiente. Apenas o desenvolvedor master pode criar usuários Master.</div>
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid rgba(255,255,255,0.08); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" style="background:transparent; color:#cbd5e1; border-color:rgba(255,255,255,0.1);" onclick="fecharModalMembroEquipe()">Cancelar</button>
+      <button class="btn-green" onclick="salvarNovoColaborador()">Cadastrar Colaborador</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

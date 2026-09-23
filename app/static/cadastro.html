@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FluxIA - Criar Conta de Empresa</title>
+  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <style>
+    body {
+      background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08) 0%, transparent 40%),
+                  radial-gradient(circle at 80% 80%, rgba(83, 74, 183, 0.1) 0%, transparent 45%),
+                  #0e121b;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .signup-card {
+      background: rgba(26, 31, 46, 0.88);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 480px;
+      padding: 34px 30px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .signup-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .signup-logo {
+      width: 48px;
+      height: 48px;
+      background: var(--green);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      box-shadow: 0 8px 20px rgba(37, 211, 102, 0.35);
+    }
+
+    .signup-logo svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .signup-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: -0.5px;
+    }
+
+    .signup-sub {
+      font-size: 13px;
+      color: var(--sidebar-text);
+      margin-top: 4px;
+    }
+
+    .section-divider {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 18px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    .signup-input {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 13px;
+      color: white;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .signup-input:focus {
+      border-color: var(--green);
+      background: rgba(15, 23, 42, 0.9);
+      box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+    }
+
+    .signup-input::placeholder {
+      color: #475569;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 22px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 14px rgba(37, 211, 102, 0.3);
+    }
+
+    .btn-submit:hover {
+      background: var(--green-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .alert-box {
+      display: none;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      align-items: center;
+      gap: 10px;
+      line-height: 1.4;
+    }
+
+    .alert-box.active { display: flex; }
+
+    .signup-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .signup-footer a {
+      color: var(--green);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .signup-footer a:hover { text-decoration: underline; }
+
+    .terms-text {
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<div class="signup-card">
+  <div class="signup-header">
+    <div class="signup-logo">
+      <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.133.558 4.133 1.532 5.868L0 24l6.267-1.508A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.854 0-3.585-.494-5.08-1.356L3.5 21.5l.882-3.343A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+    </div>
+    <div class="signup-title">Crie sua Conta de Empresa</div>
+    <div class="signup-sub">Inicie seu ambiente isolado no CRM FluxIA</div>
+  </div>
+
+  <div class="alert-box" id="signup-alert">
+    <span>⚠️</span>
+    <span id="signup-alert-text">Erro ao processar cadastro.</span>
+  </div>
+
+  <form id="form-signup" onsubmit="executarCadastro(event)">
+    <div class="section-divider">1. Dados da Empresa</div>
+
+    <div class="form-group">
+      <label class="form-label" for="empresa-nome">Nome da Empresa / Razão Social *</label>
+      <input class="signup-input" type="text" id="empresa-nome" placeholder="Ex: Acme Tecnologia Ltda" required />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="empresa-cnpj">CNPJ (Obrigatório) *</label>
+      <input class="signup-input" type="text" id="empresa-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="aplicarMascaraCNPJ(this)" required />
+    </div>
+
+    <div class="section-divider">2. Administrador Responsável</div>
+
+    <div class="form-group">
+      <label class="form-label" for="admin-nome">Nome Completo do Responsável *</label>
+      <input class="signup-input" type="text" id="admin-nome" placeholder="Seu nome completo" required />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="admin-email">E-mail Corporativo *</label>
+      <input class="signup-input" type="email" id="admin-email" placeholder="contato@suaempresa.com" required autocomplete="email" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="admin-senha">Senha de Acesso *</label>
+      <input class="signup-input" type="password" id="admin-senha" placeholder="Mínimo de 4 caracteres" minlength="4" required autocomplete="new-password" />
+    </div>
+
+    <button type="submit" class="btn-submit" id="btn-signup-submit">
+      <span>Criar Empresa & Acessar</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+  </form>
+
+  <p class="terms-text">
+    Ao se cadastrar, seu usuário receberá o perfil <strong>Admin</strong> para gerenciar os colaboradores e documentos exclusivos da sua empresa.
+  </p>
+
+  <div class="signup-footer">
+    Já tem uma conta cadastrada? <a href="/login">Fazer Login</a>
+  </div>
+</div>
+
+<script>
+function aplicarMascaraCNPJ(input) {
+  let v = input.value.replace(/\D/g, '');
+  if (v.length > 14) v = v.slice(0, 14);
+
+  if (v.length > 12) {
+    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
+  } else if (v.length > 8) {
+    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})$/, '$1.$2.$3/$4');
+  } else if (v.length > 5) {
+    v = v.replace(/^(\d{2})(\d{3})(\d{1,3})$/, '$1.$2.$3');
+  } else if (v.length > 2) {
+    v = v.replace(/^(\d{2})(\d{1,3})$/, '$1.$2');
+  }
+  input.value = v;
+}
+
+function exibirErro(msg) {
+  const alertEl = document.getElementById('signup-alert');
+  document.getElementById('signup-alert-text').textContent = msg;
+  alertEl.classList.add('active');
+}
+
+function limparErro() {
+  document.getElementById('signup-alert').classList.remove('active');
+}
+
+async function executarCadastro(e) {
+  e.preventDefault();
+  limparErro();
+
+  const nomeEmpresa = document.getElementById('empresa-nome').value.trim();
+  const cnpj = document.getElementById('empresa-cnpj').value.trim();
+  const nomeResponsavel = document.getElementById('admin-nome').value.trim();
+  const email = document.getElementById('admin-email').value.trim();
+  const senha = document.getElementById('admin-senha').value.trim();
+  const btn = document.getElementById('btn-signup-submit');
+
+  if (!cnpj || cnpj.replace(/\D/g, '').length < 14) {
+    exibirErro('Por favor, informe um CNPJ válido com 14 dígitos.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = `<span>Criando seu ambiente...</span>`;
+
+  try {
+    const res = await fetch('/auth/cadastro-empresa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome_empresa: nomeEmpresa,
+        cnpj: cnpj,
+        nome_responsavel: nomeResponsavel,
+        email: email,
+        senha: senha
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao realizar cadastro.');
+
+    // Grava usuário logado na sessão local
+    localStorage.setItem('fluxia_user', JSON.stringify(data.usuario));
+
+    // Redireciona para o Portal Operacional do cliente
+    window.location.href = '/';
+  } catch (err) {
+    exibirErro(err.message);
+    btn.disabled = false;
+    btn.innerHTML = `<span>Criar Empresa & Acessar</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
+  }
+}
+</script>
+
+</body>
+</html>

@@ -182,9 +182,12 @@ def deletar_empresa(empresa_id: int) -> bool:
     ph = _placeholder()
 
     try:
+        cursor.execute(f"DELETE FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        cursor.execute(f"DELETE FROM usuarios WHERE empresa_id = {ph}", (empresa_id,))
+        cursor.execute(f"DELETE FROM documentos WHERE empresa_id = {ph}", (empresa_id,))
         cursor.execute(f"DELETE FROM empresas WHERE id = {ph}", (empresa_id,))
         conexao.commit()
-        return cursor.rowcount > 0
+        return True
     finally:
         conexao.close()
 

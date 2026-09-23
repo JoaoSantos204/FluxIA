@@ -65,3 +65,42 @@ def redefinir_senha(dados: RedefinirSenhaRequest):
         "sucesso": True,
         "mensagem": f"Senha do usuário {dados.email} redefinida com sucesso!"
     }
+
+
+class CadastroEmpresaRequest(BaseModel):
+    nome_empresa: str = Field(..., min_length=2, description="Nome da empresa ou razão social")
+    cnpj: str = Field(..., min_length=11, description="CNPJ da empresa (obrigatório)")
+    nome_responsavel: str = Field(..., min_length=2, description="Nome completo do administrador responsável")
+    email: str = Field(..., description="E-mail de acesso corporativo")
+    senha: str = Field(..., min_length=4, description="Senha inicial de acesso (mínimo 4 caracteres)")
+
+
+@router.post("/cadastro-empresa", status_code=status.HTTP_201_CREATED)
+def cadastrar_nova_empresa_self_service(dados: CadastroEmpresaRequest):
+    """
+    Auto-cadastro de nova empresa (SaaS Self-Service Onboarding).
+    Cria a empresa com CNPJ obrigatório e o primeiro usuário com perfil 'admin'.
+    """
+    from app.services.user_service import cadastrar_empresa_com_admin
+
+    resultado = cadastrar_empresa_com_admin(
+        nome_empresa=dados.nome_empresa,
+        cnpj=dados.cnpj,
+        nome_responsavel=dados.nome_responsavel,
+        email=dados.email,
+        senha=dados.senha
+    )
+
+    if not resultado["sucesso"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=resultado["erro"]
+        )
+
+    return {
+        "sucesso": True,
+        "mensagem": "Empresa e usuário administrador criados com sucesso!",
+        "usuario": resultado["usuario"],
+        "empresa": resultado["empresa"]
+    }
+

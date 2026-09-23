@@ -1,32 +1,49 @@
 import json
 
-from app.database.database import conectar
+from app.database.database import conectar, _cursor, _placeholder
 from app.services.embedding_service import gerar_embedding
 from app.services.similarity_service import calcular_similaridade
 
 LIMIAR_SIMILARIDADE = 0.70
 
-def buscar_chunks_semanticamente(pergunta: str, limite: int = 3):
+def buscar_chunks_semanticamente(pergunta: str, limite: int = 3, empresa_id: int | None = None):
 
     # Gera o embedding da pergunta
     embedding_pergunta = gerar_embedding(pergunta)
 
     conexao = conectar()
-    cursor = conexao.cursor()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
 
-    cursor.execute("""
-        SELECT
-            c.id,
-            c.documento_id,
-            c.numero_chunk,
-            c.conteudo,
-            c.embedding,
-            d.nome_arquivo
-        FROM chunks c
-        INNER JOIN documentos d
-            ON c.documento_id = d.id
-        WHERE c.embedding IS NOT NULL
-    """)
+    if empresa_id:
+        cursor.execute(f"""
+            SELECT
+                c.id,
+                c.documento_id,
+                c.numero_chunk,
+                c.conteudo,
+                c.embedding,
+                d.nome_arquivo
+            FROM chunks c
+            INNER JOIN documentos d
+                ON c.documento_id = d.id
+            WHERE c.embedding IS NOT NULL
+              AND d.empresa_id = {ph}
+        """, (empresa_id,))
+    else:
+        cursor.execute("""
+            SELECT
+                c.id,
+                c.documento_id,
+                c.numero_chunk,
+                c.conteudo,
+                c.embedding,
+                d.nome_arquivo
+            FROM chunks c
+            INNER JOIN documentos d
+                ON c.documento_id = d.id
+            WHERE c.embedding IS NOT NULL
+        """)
 
     chunks = cursor.fetchall()
     conexao.close()
@@ -82,21 +99,21 @@ def buscar_chunks_semanticamente(pergunta: str, limite: int = 3):
     # Começamos com os melhores resultados semânticos
     resultados_finais = list(resultados_relevantes)
 
-    # Expande o contexto somente ao retor do melhor resultado
+    # Expande o contexto somente ao redor do melhor resultado
     melhor_resultado = resultados_relevantes[0]
 
     conexao = conectar()
-    cursor = conexao.cursor()
+    cursor = _cursor(conexao)
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT
             id,
             documento_id,
             numero_chunk
         FROM chunks
-        WHERE documento_id = ?
-            AND numero_chunk in (?, ?)
-        """,(
+        WHERE documento_id = {ph}
+            AND numero_chunk IN ({ph}, {ph})
+        """, (
             melhor_resultado["documento_id"],
             melhor_resultado["numero_chunk"] - 1,
             melhor_resultado["numero_chunk"] + 1

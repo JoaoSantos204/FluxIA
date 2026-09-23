@@ -264,11 +264,17 @@
 
   <div class="role-hint">
     <strong>Controle de Acesso (RBAC):</strong><br>
-    • <strong>Administrador:</strong> Acesso completo ao Portal de Gestão (<code>/admin</code>) e Operação.<br>
-    • <strong>Funcionário / Cliente:</strong> Acesso estrito ao Portal Operacional (<code>/</code>).
+    • <strong>Super Admin (Master):</strong> Acesso completo ao Portal de Ambientes (<code>/admin</code>) e Operação.<br>
+    • <strong>Administrador de Empresa:</strong> Gestão da sua própria empresa, equipe e dados no Portal Operacional.<br>
+    • <strong>Funcionário / Cliente:</strong> Acesso operacional aos atendimentos e documentos da sua empresa.
   </div>
 
   <div class="login-footer">
+    <div style="margin-bottom: 10px;">
+      <a href="/cadastro" style="color:var(--green); font-weight:600; font-size:13px; text-decoration:none;">
+        ✨ Novo por aqui? Cadastre sua empresa →
+      </a>
+    </div>
     <a href="#" onclick="abrirModalRecuperar(event)">Esqueceu sua senha?</a>
   </div>
 </div>
@@ -362,15 +368,15 @@ async function executarLogin(e) {
     const redirectUrl = urlParams.get('redirect');
 
     if (redirectUrl) {
-      // Se tentou acessar admin e é admin, redireciona para admin
-      if (redirectUrl.includes('/admin') && data.usuario.perfil !== 'admin') {
+      // Se tentou acessar admin e NÃO é master, redireciona para o portal operacional
+      if (redirectUrl.includes('/admin') && data.usuario.perfil !== 'master') {
         window.location.href = '/';
       } else {
         window.location.href = redirectUrl;
       }
     } else {
-      // Se for admin, pode ir para a gestão de ambientes
-      if (data.usuario.perfil === 'admin') {
+      // Super Admin (Master) vai para o portal de ambientes; Admins de empresas e funcionários vão para o operacional
+      if (data.usuario.perfil === 'master') {
         window.location.href = '/admin';
       } else {
         window.location.href = '/';
@@ -430,9 +436,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const urlParams = new URLSearchParams(window.location.search);
         const redirect = urlParams.get('redirect');
         if (redirect) {
-          window.location.href = redirect;
+          if (redirect.includes('/admin') && u.perfil !== 'master') {
+            window.location.href = '/';
+          } else {
+            window.location.href = redirect;
+          }
         } else {
-          window.location.href = u.perfil === 'admin' ? '/admin' : '/';
+          window.location.href = u.perfil === 'master' ? '/admin' : '/';
         }
       }
     } catch (e) {

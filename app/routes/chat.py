@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from app.services.semantic_search_service import buscar_chunks_semanticamente
 from app.services.ai_service import AIService
-from app.database.database import conectar
+from app.database.database import conectar, _cursor, _placeholder
 from app.services.context_service import verificar_contexto
 
 router = APIRouter(
@@ -17,15 +17,23 @@ ai_service = AIService()
 # Define o formato esperado pelo chatbot.
 class Pergunta(BaseModel):
     mensagem: str
+    empresa_id: int | None = None
 
-def existe_base_de_conhecimento():
+def existe_base_de_conhecimento(empresa_id: int | None = None):
 
     conexao = conectar()
-    cursor = conexao.cursor()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
 
-    cursor.execute(
-        "SELECT COUNT(*) AS total FROM documentos"
-    )
+    if empresa_id:
+        cursor.execute(
+            f"SELECT COUNT(*) AS total FROM documentos WHERE empresa_id = {ph}",
+            (empresa_id,)
+        )
+    else:
+        cursor.execute(
+            "SELECT COUNT(*) AS total FROM documentos"
+        )
 
     total_documentos = cursor.fetchone()["total"]
 
@@ -43,8 +51,8 @@ def existe_base_de_conhecimento():
 
 def conversar(pergunta: Pergunta):
 
-    if not existe_base_de_conhecimento():
-        return{
+    if not existe_base_de_conhecimento(empresa_id=pergunta.empresa_id):
+        return {
             "resposta": (
                 "Ainda não existe uma base de conhecimento cadastrada "
                 "para que eu possa responder às suas perguntas. "
@@ -53,8 +61,8 @@ def conversar(pergunta: Pergunta):
             )
         }
 
-    # Busca os chunks semanticamente mais relevantes.
-    contexto = buscar_chunks_semanticamente(pergunta.mensagem)
+    # Busca os chunks semanticamente mais relevantes filtrados pelo tenant
+    contexto = buscar_chunks_semanticamente(pergunta.mensagem, empresa_id=pergunta.empresa_id)
 
     if not contexto:
         return {

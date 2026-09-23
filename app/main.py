@@ -48,6 +48,12 @@ def tela_login():
     return FileResponse(STATIC_DIR / "login.html")
 
 
+@app.get("/cadastro", response_class=FileResponse)
+def tela_cadastro():
+    """Tela de Auto-Cadastro de Empresa e Administrador (SaaS Onboarding)"""
+    return FileResponse(STATIC_DIR / "cadastro.html")
+
+
 @app.get("/", response_class=FileResponse)
 def portal_visualizacao():
     """Portal de Visualização e Operação (WhatsApp CRM + RAG)"""
