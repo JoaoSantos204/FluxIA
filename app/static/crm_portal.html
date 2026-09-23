@@ -72,7 +72,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.44l-1.54 1.54a10 10 0 0 1-13.44-1.41l-1.54-1.54A10 10 0 0 1 5.36 3.44l1.54-1.54a10 10 0 0 1 12.17 3.03z"/></svg>
           Configurações
         </div>
-        <a href="/admin" class="nav-item" style="color:#a78bfa;">
+        <a href="/admin" id="nav-item-admin" class="nav-item" style="color:#a78bfa;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
           Gestão de Ambientes ⚙️
         </a>
@@ -80,12 +80,17 @@
     </div>
 
     <div class="sidebar-footer">
-      <div class="user-card">
-        <div class="user-avatar">JC</div>
-        <div class="user-info">
-          <div class="user-name">João Carlos</div>
-          <div class="user-role">Gerente Comercial</div>
+      <div class="user-card" style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+          <div class="user-avatar" id="current-user-avatar">JC</div>
+          <div class="user-info">
+            <div class="user-name" id="current-user-name">Usuário</div>
+            <div class="user-role" id="current-user-role">Acesso</div>
+          </div>
         </div>
+        <button onclick="fazerLogout()" title="Sair da conta" style="background:none; border:none; color:var(--sidebar-text); cursor:pointer; padding:6px; border-radius:6px; display:flex; align-items:center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -102,7 +107,7 @@
         <span style="font-size:12px; color:var(--text-muted);">API Online · PostgreSQL</span>
       </div>
       <div class="topbar-actions">
-        <a href="/admin" class="btn-nav-switch" style="border-color:#7F77DD; color:#534AB7;">
+        <a href="/admin" id="topbar-btn-admin" class="btn-nav-switch" style="border-color:#7F77DD; color:#534AB7;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>Portal Administrar Ambientes</span>
         </a>
@@ -984,7 +989,57 @@ async function excluirDocumento(id, nome) {
   }
 }
 
+// ===== AUTENTICAÇÃO E SESSÃO =====
+let usuarioAtual = null;
+
+function verificarAutenticacao() {
+  const userJson = localStorage.getItem('fluxia_user');
+  if (!userJson) {
+    window.location.href = '/login?redirect=/';
+    return null;
+  }
+  try {
+    usuarioAtual = JSON.parse(userJson);
+    if (!usuarioAtual || !usuarioAtual.id) throw new Error('Sessão inválida');
+    return usuarioAtual;
+  } catch (e) {
+    localStorage.removeItem('fluxia_user');
+    window.location.href = '/login?redirect=/';
+    return null;
+  }
+}
+
+function fazerLogout() {
+  if (confirm('Deseja realmente sair da sua conta?')) {
+    localStorage.removeItem('fluxia_user');
+    window.location.href = '/login';
+  }
+}
+
+function aplicarDadosUsuario() {
+  if (!usuarioAtual) return;
+  const nameEl = document.getElementById('current-user-name');
+  const roleEl = document.getElementById('current-user-role');
+  const avatarEl = document.getElementById('current-user-avatar');
+
+  if (nameEl) nameEl.textContent = usuarioAtual.nome;
+  if (roleEl) roleEl.textContent = usuarioAtual.perfil.toUpperCase();
+  if (avatarEl) avatarEl.textContent = (usuarioAtual.nome || 'U').substring(0, 2).toUpperCase();
+
+  // Se o usuário não for admin, esconde os acessos para o painel de administração
+  if (usuarioAtual.perfil !== 'admin') {
+    const navAdmin = document.getElementById('nav-item-admin');
+    const topAdmin = document.getElementById('topbar-btn-admin');
+    if (navAdmin) navAdmin.style.display = 'none';
+    if (topAdmin) topAdmin.style.display = 'none';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  const user = verificarAutenticacao();
+  if (!user) return;
+  aplicarDadosUsuario();
+
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const labelData = document.getElementById('data-atual-label');
   if (labelData) labelData.textContent = hoje.charAt(0).toUpperCase() + hoje.slice(1);

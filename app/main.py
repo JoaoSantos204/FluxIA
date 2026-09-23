@@ -13,6 +13,7 @@ from app.routes.documents import router as documents_router
 from app.routes.telegram import router as telegram_router, configurar_comandos_bot_telegram
 from app.routes.company import router as company_router
 from app.routes.users import router as users_router
+from app.routes.auth import router as auth_router
 
 # Criação da Aplicação (Ponto Central)
 app = FastAPI(
@@ -33,11 +34,18 @@ def iniciar_aplicacao():
     configurar_comandos_bot_telegram()
 
 # Registra as rotas da aplicação
+app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(documents_router)
 app.include_router(telegram_router)
 app.include_router(company_router)
 app.include_router(users_router)
+
+
+@app.get("/login", response_class=FileResponse)
+def tela_login():
+    """Tela de Autenticação do Usuário"""
+    return FileResponse(STATIC_DIR / "login.html")
 
 
 @app.get("/", response_class=FileResponse)

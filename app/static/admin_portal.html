@@ -75,12 +75,17 @@
     </div>
 
     <div class="sidebar-footer">
-      <div class="user-card" onclick="abrirModalApiKey()" style="cursor:pointer;" title="Clique para alterar chave admin">
-        <div class="user-avatar" style="background:#534AB7;">AD</div>
-        <div class="user-info">
-          <div class="user-name">Administrador</div>
-          <div class="user-role" id="api-key-status">Chave: Ativa 🔑</div>
+      <div class="user-card" style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0; cursor:pointer;" onclick="abrirModalApiKey()" title="Clique para gerenciar chave admin">
+          <div class="user-avatar" id="admin-user-avatar" style="background:#534AB7;">AD</div>
+          <div class="user-info">
+            <div class="user-name" id="admin-user-name">Administrador</div>
+            <div class="user-role" id="admin-user-role">Admin Master</div>
+          </div>
         </div>
+        <button onclick="fazerLogout()" title="Sair da conta" style="background:none; border:none; color:var(--sidebar-text); cursor:pointer; padding:6px; border-radius:6px; display:flex; align-items:center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
   </div>
@@ -795,13 +800,82 @@ function abrirModalApiKey() {
 }
 function fecharModalApiKey() { document.getElementById('modal-api-key').classList.remove('active'); }
 
+// ===== AUTENTICAÇÃO & CONTROLE DE ACESSO RBAC =====
+let adminLogado = null;
+
+function verificarAutenticacaoAdmin() {
+  const userJson = localStorage.getItem('fluxia_user');
+  if (!userJson) {
+    window.location.href = '/login?redirect=/admin';
+    return null;
+  }
+
+  try {
+    adminLogado = JSON.parse(userJson);
+    if (!adminLogado || !adminLogado.id) throw new Error('Sessão inválida');
+
+    // Regra estrita: apenas usuários com perfil 'admin' podem acessar o portal de administração
+    if (adminLogado.perfil !== 'admin') {
+      const overlay = document.getElementById('overlay-acesso-negado');
+      const msg = document.getElementById('msg-acesso-negado');
+      if (overlay) overlay.classList.add('active');
+      if (msg) msg.textContent = `Olá, ${adminLogado.nome}. Seu perfil de acesso é "${adminLogado.perfil.toUpperCase()}". Apenas administradores têm permissão para gerenciar empresas e usuários.`;
+      return null;
+    }
+
+    const nameEl = document.getElementById('admin-user-name');
+    const avatarEl = document.getElementById('admin-user-avatar');
+    if (nameEl) nameEl.textContent = adminLogado.nome;
+    if (avatarEl) avatarEl.textContent = (adminLogado.nome || 'AD').substring(0, 2).toUpperCase();
+
+    return adminLogado;
+  } catch (e) {
+    localStorage.removeItem('fluxia_user');
+    window.location.href = '/login?redirect=/admin';
+    return null;
+  }
+}
+
+function fazerLogout() {
+  if (confirm('Deseja realmente sair da sua conta?')) {
+    localStorage.removeItem('fluxia_user');
+    window.location.href = '/login';
+  }
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
+  const admin = verificarAutenticacaoAdmin();
+  if (!admin) return;
+
   const key = obterApiKey();
   document.getElementById('input-admin-api-key').value = key;
   carregarEmpresas();
   carregarUsuarios();
 });
 </script>
+
+<!-- OVERLAY ACESSO NEGADO (QUANDO NÃO FOR ADMIN) -->
+<div class="modal-overlay" id="overlay-acesso-negado" style="background:rgba(14, 18, 27, 0.96); backdrop-filter:blur(10px); z-index:9999;">
+  <div class="modal-content" style="background:#1a1f2e; color:white; border:1px solid rgba(239, 68, 68, 0.3); text-align:center; padding:36px 28px;">
+    <div style="width:64px; height:64px; background:rgba(239, 68, 68, 0.15); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 18px; color:#ef4444; font-size:30px;">
+      🚫
+    </div>
+    <div style="font-family:'Syne', sans-serif; font-size:22px; font-weight:700; margin-bottom:10px; color:white;">Acesso Restrito: Apenas Administradores</div>
+    <p style="font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:28px;" id="msg-acesso-negado">
+      Você está autenticado, porém sua conta não possui perfil de Administrador para gerenciar ambientes e usuários.
+    </p>
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <a href="/" class="btn-green" style="text-decoration:none; padding:10px 18px;">
+        Voltar para o Portal Operacional
+      </a>
+      <button class="btn-secondary" style="background:transparent; color:#cbd5e1; border-color:rgba(255,255,255,0.2);" onclick="fazerLogout()">
+        Trocar de Conta
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
+

@@ -185,3 +185,64 @@ def deletar_usuario(usuario_id: int) -> bool:
         return cursor.rowcount > 0
     finally:
         conexao.close()
+
+
+def autenticar_usuario(email: str, senha: str) -> dict:
+    """
+    Autentica um usuário conferindo email, senha_hash e se a conta está ativa.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            SELECT id, empresa_id, nome, email, senha_hash, perfil, status
+            FROM usuarios
+            WHERE LOWER(email) = {ph}
+        """, (email.strip().lower(),))
+        linha = cursor.fetchone()
+
+        if not linha:
+            return {"sucesso": False, "erro": "E-mail ou senha incorretos."}
+
+        if linha["status"] != "ativo":
+            return {"sucesso": False, "erro": "Esta conta foi desativada. Contate o administrador."}
+
+        senha_hash_calculado = gerar_hash_senha(senha)
+        if senha_hash_calculado != linha["senha_hash"]:
+            return {"sucesso": False, "erro": "E-mail ou senha incorretos."}
+
+        return {
+            "sucesso": True,
+            "usuario": {
+                "id": linha["id"],
+                "empresa_id": linha["empresa_id"],
+                "nome": linha["nome"],
+                "email": linha["email"],
+                "perfil": linha["perfil"] or "cliente"
+            }
+        }
+    finally:
+        conexao.close()
+
+
+def redefinir_senha_usuario(email: str, nova_senha: str) -> bool:
+    """
+    Redefine a senha de um usuário pelo e-mail.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    nova_hash = gerar_hash_senha(nova_senha)
+
+    try:
+        cursor.execute(f"""
+            UPDATE usuarios
+            SET senha_hash = {ph}
+            WHERE LOWER(email) = {ph}
+        """, (nova_hash, email.strip().lower()))
+        conexao.commit()
+        return cursor.rowcount > 0
+    finally:
+        conexao.close()
