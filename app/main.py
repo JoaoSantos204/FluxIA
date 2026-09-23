@@ -1,4 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 # 1. Carrega as variáveis do .env assim que o servidor liga
@@ -18,6 +21,12 @@ app = FastAPI(
     version="0.1.0"
 )
 
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+# Monta arquivos estáticos
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 @app.on_event("startup")
 def iniciar_aplicacao():
     criar_banco()
@@ -30,8 +39,23 @@ app.include_router(telegram_router)
 app.include_router(company_router)
 app.include_router(users_router)
 
-@app.get("/")
-def inicio():
+
+@app.get("/", response_class=FileResponse)
+def portal_visualizacao():
+    """Portal de Visualização e Operação (WhatsApp CRM + RAG)"""
+    return FileResponse(STATIC_DIR / "crm_portal.html")
+
+
+@app.get("/admin", response_class=FileResponse)
+def portal_administracao():
+    """Portal de Administração de Ambientes e Usuários"""
+    return FileResponse(STATIC_DIR / "admin_portal.html")
+
+
+@app.get("/health")
+@app.get("/api")
+def api_status():
     return {
+        "status": "online",
         "mensagem": "FluxIA API funcionando!"
-    }
+    }

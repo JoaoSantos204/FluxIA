@@ -1,10 +1,13 @@
 import os
 import sqlite3
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Detecta se está em produção (DATABASE_URL definida pelo Render) ou local (SQLite)
 DATABASE_URL = os.getenv("DATABASE_URL")
-USAR_POSTGRES = DATABASE_URL is not None
+USAR_POSTGRES = DATABASE_URL is not None and DATABASE_URL.strip() != ""
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "fluxia.db"

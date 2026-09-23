@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FluxIA - Gestão de Ambientes & Usuários</title>
+  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <style>
+    .admin-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .admin-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR ADMIN -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">
+        <div class="logo-icon" style="background:#534AB7;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </div>
+        <div>
+          <div class="logo-text">FluxIA Admin</div>
+          <div class="logo-sub">Gestão de Ambientes</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-label">Administração</div>
+        <div class="nav-item active" onclick="switchAdminTab('ambientes', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Ambientes / Empresas
+          <div class="nav-dot"></div>
+        </div>
+        <div class="nav-item" onclick="switchAdminTab('usuarios', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Usuários & Acessos
+          <span class="nav-badge" id="badge-total-users">0</span>
+        </div>
+        <div class="nav-item" onclick="switchAdminTab('configuracoes', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.44l-1.54 1.54a10 10 0 0 1-13.44-1.41l-1.54-1.54A10 10 0 0 1 5.36 3.44l1.54-1.54a10 10 0 0 1 12.17 3.03z"/></svg>
+          Configurações de Suporte
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Navegação</div>
+        <a href="/" class="nav-item" style="color:#25D366;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Portal Operacional (CRM)
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-card" onclick="abrirModalApiKey()" style="cursor:pointer;" title="Clique para alterar chave admin">
+        <div class="user-avatar" style="background:#534AB7;">AD</div>
+        <div class="user-info">
+          <div class="user-name">Administrador</div>
+          <div class="user-role" id="api-key-status">Chave: Ativa 🔑</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="env-badge">
+          <div class="env-dot" style="background:#534AB7;"></div>
+          <span>Ambiente Master (Multi-Tenant)</span>
+        </div>
+        <span style="font-size:12px; color:var(--text-muted);" id="current-db-status">PostgreSQL Conectado</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-secondary" onclick="abrirModalApiKey()" style="padding:6px 12px; font-size:12px;">
+          🔑 Chave Admin
+        </button>
+        <a href="/" class="btn-nav-switch">
+          <span>Abrir Portal de Visualização</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- TELA 1: AMBIENTES (EMPRESAS) -->
+    <div class="screen active" id="screen-ambientes">
+      <div class="admin-container">
+        <div class="admin-header">
+          <div>
+            <div class="page-title">Ambientes & Empresas</div>
+            <div class="page-sub">Gerencie empresas clientes e isole os dados com multi-tenancy</div>
+          </div>
+          <button class="btn-green" onclick="abrirModalEmpresa()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Ambiente
+          </button>
+        </div>
+
+        <div class="metrics-grid" style="padding:0 0 20px 0;">
+          <div class="metric-card">
+            <div class="metric-icon mi-purple">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="metric-label">Ambientes Cadastrados</div>
+            <div class="metric-value" id="card-total-empresas">1</div>
+            <div class="metric-change up">Multi-tenancy ativo</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon mi-green">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            </div>
+            <div class="metric-label">Total de Usuários</div>
+            <div class="metric-value" id="card-total-usuarios">0</div>
+            <div class="metric-change up">Todos os ambientes</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon mi-blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            </div>
+            <div class="metric-label">Documentos Indexados</div>
+            <div class="metric-value" id="card-total-docs">0</div>
+            <div class="metric-change up">RAG multi-empresa</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon mi-amber">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            </div>
+            <div class="metric-label">Isolamento de Dados</div>
+            <div class="metric-value" style="font-size:18px;">RBAC + Tenant</div>
+            <div class="metric-change up">Segurança ativa</div>
+          </div>
+        </div>
+
+        <div class="section-title">Lista de Ambientes Registrados</div>
+        <div class="company-card-grid" id="empresas-grid">
+          <!-- Inserido dinamicamente via JS -->
+          <div style="color:var(--text-muted); padding:20px;">Carregando ambientes...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELA 2: USUÁRIOS & ACESSOS -->
+    <div class="screen" id="screen-usuarios">
+      <div class="admin-container">
+        <div class="admin-header">
+          <div>
+            <div class="page-title">Usuários & Controle de Acesso (RBAC)</div>
+            <div class="page-sub">Cadastre novos usuários com permissões específicas por ambiente</div>
+          </div>
+          <button class="btn-green" onclick="abrirModalUsuario()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Usuário
+          </button>
+        </div>
+
+        <div class="filter-bar">
+          <div style="flex:1; max-width:280px;">
+            <input class="search-input" id="filtro-usuario-busca" placeholder="Buscar por nome ou e-mail..." oninput="filtrarTabelaUsuarios()" />
+          </div>
+          <div style="width:240px;">
+            <select class="cf-select" id="filtro-usuario-empresa" onchange="carregarUsuarios()">
+              <option value="">Todos os Ambientes</option>
+            </select>
+          </div>
+          <button class="btn-secondary" onclick="carregarUsuarios()" title="Atualizar lista">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Atualizar
+          </button>
+        </div>
+
+        <div class="admin-card" style="padding:0; overflow:hidden;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Ambiente / Empresa</th>
+                <th>Perfil (RBAC)</th>
+                <th>Telegram ID</th>
+                <th>Status</th>
+                <th>Data Cadastro</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="usuarios-table-body">
+              <tr>
+                <td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">
+                  Carregando usuários...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELA 3: CONFIGURAÇÕES DE SUPORTE -->
+    <div class="screen" id="screen-configuracoes">
+      <div class="admin-container">
+        <div class="admin-header">
+          <div>
+            <div class="page-title">Configurações de Suporte do Ambiente</div>
+            <div class="page-sub">Defina o contato humano de transbordo e orientações do bot</div>
+          </div>
+        </div>
+
+        <div class="config-grid">
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon fi-purple">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#534AB7" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              </div>
+              Ambiente Selecionado
+            </div>
+            <div class="config-field">
+              <div class="cf-label">Escolha a Empresa / Ambiente</div>
+              <select class="cf-select" id="config-empresa-select" onchange="carregarConfiguracoesEmpresa()">
+                <option value="1">Empresa Padrão (ID: 1)</option>
+              </select>
+            </div>
+            <div class="config-field">
+              <div class="cf-label">WhatsApp / Telefone de Suporte Humano</div>
+              <input class="cf-input" id="config-suporte-telefone" placeholder="(11) 99999-9999" />
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                Este número é enviado aos clientes quando solicitarem suporte com atendente no Telegram.
+              </div>
+            </div>
+            <div class="config-field">
+              <div class="cf-label">Mensagem Padrão de Orientação</div>
+              <textarea class="cf-input" id="config-suporte-msg" rows="3" placeholder="Por favor, entre em contato com nossa equipe..."></textarea>
+            </div>
+            <button class="btn-green" onclick="salvarConfiguracaoSuporte()" style="width:100%; justify-content:center; margin-top:10px;">
+              Salvar Alterações do Ambiente
+            </button>
+          </div>
+
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon fi-green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              Credenciais & Segurança da API
+            </div>
+            <div class="config-field">
+              <div class="cf-label">Chave Administrativa Atual (X-Admin-API-Key)</div>
+              <input class="cf-input" id="input-admin-api-key" type="password" value="fluxia-admin-secret-key-2026" />
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                Essa chave autentica chamadas de criação e exclusão de usuários e ambientes.
+              </div>
+            </div>
+            <button class="btn-secondary" onclick="salvarApiKeyStorage()" style="width:100%; justify-content:center;">
+              Salvar Chave no Navegador
+            </button>
+            <div style="margin-top:20px; padding:12px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12px; line-height:1.6; color:#475569;">
+              <strong>ℹ️ Dica de TCC:</strong><br>
+              A chave padrão configurada na API é <code>fluxia-admin-secret-key-2026</code> ou o valor definido na variável <code>ADMIN_API_KEY</code> do seu Render/.env.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO AMBIENTE -->
+<div class="modal-overlay" id="modal-empresa">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Cadastrar Novo Ambiente / Empresa</div>
+      <button class="btn-icon" onclick="fecharModalEmpresa()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="config-field">
+        <div class="cf-label">Nome da Empresa / Tenant *</div>
+        <input class="cf-input" id="novo-empresa-nome" placeholder="Ex: Acme Corp, Loja Exemplo" required />
+      </div>
+      <div class="config-field">
+        <div class="cf-label">CNPJ ou Identificador Único</div>
+        <input class="cf-input" id="novo-empresa-cnpj" placeholder="Ex: 12.345.678/0001-90" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="fecharModalEmpresa()">Cancelar</button>
+      <button class="btn-green" onclick="enviarCadastroEmpresa()">Cadastrar Ambiente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO USUÁRIO -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Cadastrar Novo Usuário</div>
+      <button class="btn-icon" onclick="fecharModalUsuario()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="config-field">
+        <div class="cf-label">Nome Completo *</div>
+        <input class="cf-input" id="novo-user-nome" placeholder="Nome do colaborador ou cliente" required />
+      </div>
+      <div class="config-field">
+        <div class="cf-label">E-mail Corporativo *</div>
+        <input class="cf-input" id="novo-user-email" type="email" placeholder="usuario@empresa.com" required />
+      </div>
+      <div class="config-field">
+        <div class="cf-label">Senha Inicial *</div>
+        <input class="cf-input" id="novo-user-senha" type="password" placeholder="Mínimo 4 caracteres" required />
+      </div>
+      <div class="config-field">
+        <div class="cf-label">Ambiente / Empresa *</div>
+        <select class="cf-select" id="novo-user-empresa">
+          <!-- Preenchido via JS -->
+        </select>
+      </div>
+      <div class="config-field">
+        <div class="cf-label">Perfil de Acesso (RBAC) *</div>
+        <select class="cf-select" id="novo-user-perfil">
+          <option value="cliente">Cliente (Acessa apenas documentos públicos da empresa)</option>
+          <option value="funcionario">Funcionário (Acessa documentos internos e chat)</option>
+          <option value="admin">Administrador (Acesso total)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="fecharModalUsuario()">Cancelar</button>
+      <button class="btn-green" onclick="enviarCadastroUsuario()">Cadastrar Usuário</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL API KEY -->
+<div class="modal-overlay" id="modal-api-key">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Configurar Chave Administrativa</div>
+      <button class="btn-icon" onclick="fecharModalApiKey()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+        Informe a chave <code>ADMIN_API_KEY</code> para autenticar suas operações administrativas contra o back-end:
+      </p>
+      <div class="config-field">
+        <div class="cf-label">Chave de Administração (X-Admin-API-Key)</div>
+        <input class="cf-input" id="modal-input-key" type="text" value="fluxia-admin-secret-key-2026" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="fecharModalApiKey()">Fechar</button>
+      <button class="btn-green" onclick="salvarApiKeyModal()">Salvar Chave</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+let listaEmpresas = [];
+let listaUsuarios = [];
+
+function obterApiKey() {
+  return localStorage.getItem('FLUXIA_ADMIN_KEY') || 'fluxia-admin-secret-key-2026';
+}
+
+function salvarApiKeyStorage() {
+  const key = document.getElementById('input-admin-api-key').value.trim();
+  if (key) {
+    localStorage.setItem('FLUXIA_ADMIN_KEY', key);
+    mostrarToast('Chave de API salva com sucesso!', 'success');
+  }
+}
+
+function salvarApiKeyModal() {
+  const key = document.getElementById('modal-input-key').value.trim();
+  if (key) {
+    localStorage.setItem('FLUXIA_ADMIN_KEY', key);
+    document.getElementById('input-admin-api-key').value = key;
+    mostrarToast('Chave de API atualizada!', 'success');
+    fecharModalApiKey();
+  }
+}
+
+function mostrarToast(mensagem, tipo = 'success') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${tipo}`;
+  toast.innerHTML = `<span>${tipo === 'success' ? '✓' : '⚠️'}</span> <span>${mensagem}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 4000);
+}
+
+function switchAdminTab(tabId, el) {
+  document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => item.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById('screen-' + tabId);
+  if (target) target.classList.add('active');
+
+  if (tabId === 'ambientes') carregarEmpresas();
+  if (tabId === 'usuarios') carregarUsuarios();
+  if (tabId === 'configuracoes') carregarConfiguracoesEmpresa();
+}
+
+// ===== EMPRESAS =====
+async function carregarEmpresas() {
+  try {
+    const res = await fetch('/empresa/');
+    if (!res.ok) throw new Error('Erro ao listar empresas');
+    const data = await res.json();
+    listaEmpresas = data.empresas || [];
+    renderizarEmpresas();
+    atualizarSelectsEmpresa();
+  } catch (err) {
+    console.error(err);
+    mostrarToast('Erro ao carregar ambientes: ' + err.message, 'error');
+  }
+}
+
+function renderizarEmpresas() {
+  const grid = document.getElementById('empresas-grid');
+  document.getElementById('card-total-empresas').textContent = listaEmpresas.length;
+
+  let totalUsers = 0;
+  let totalDocs = 0;
+
+  if (listaEmpresas.length === 0) {
+    grid.innerHTML = '<div style="color:var(--text-muted); padding:20px;">Nenhum ambiente encontrado.</div>';
+    return;
+  }
+
+  grid.innerHTML = listaEmpresas.map(emp => {
+    totalUsers += parseInt(emp.total_usuarios || 0);
+    totalDocs += parseInt(emp.total_documentos || 0);
+    return `
+      <div class="company-box" onclick="selecionarEmpresaParaFiltro(${emp.id})">
+        <div class="company-box-header">
+          <div class="company-box-name">${emp.nome}</div>
+          <span class="company-box-badge">ID: ${emp.id}</span>
+        </div>
+        <div class="company-box-meta">
+          <span>CNPJ: ${emp.cnpj_ou_identificador || 'Não informado'}</span>
+          <span>Criado em: ${emp.data_criacao.substring(0, 10)}</span>
+        </div>
+        <div class="company-box-stats">
+          <div class="cbs-item"><strong>${emp.total_usuarios}</strong> usuários</div>
+          <div class="cbs-item"><strong>${emp.total_documentos}</strong> documentos</div>
+          ${emp.id !== 1 ? `
+            <button class="btn-danger" style="margin-left:auto; padding:3px 8px; font-size:11px;" onclick="event.stopPropagation(); excluirEmpresa(${emp.id}, '${emp.nome}')">
+              Excluir
+            </button>
+          ` : '<span style="margin-left:auto; font-size:10px; color:var(--text-muted); padding:4px;">Padrão</span>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('card-total-usuarios').textContent = totalUsers;
+  document.getElementById('card-total-docs').textContent = totalDocs;
+  document.getElementById('badge-total-users').textContent = totalUsers;
+}
+
+function atualizarSelectsEmpresa() {
+  const selectFiltro = document.getElementById('filtro-usuario-empresa');
+  const selectModal = document.getElementById('novo-user-empresa');
+  const selectConfig = document.getElementById('config-empresa-select');
+
+  const options = listaEmpresas.map(e => `<option value="${e.id}">${e.nome} (ID: ${e.id})</option>`).join('');
+
+  selectFiltro.innerHTML = `<option value="">Todos os Ambientes</option>` + options;
+  selectModal.innerHTML = options;
+  selectConfig.innerHTML = options;
+}
+
+function selecionarEmpresaParaFiltro(empresaId) {
+  document.getElementById('filtro-usuario-empresa').value = empresaId;
+  switchAdminTab('usuarios', document.querySelectorAll('.sidebar-nav .nav-item')[1]);
+}
+
+async function enviarCadastroEmpresa() {
+  const nome = document.getElementById('novo-empresa-nome').value.trim();
+  const cnpj = document.getElementById('novo-empresa-cnpj').value.trim();
+
+  if (!nome) {
+    mostrarToast('Por favor, informe o nome da empresa.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/empresa/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-API-Key': obterApiKey()
+      },
+      body: JSON.stringify({ nome: nome, cnpj_ou_identificador: cnpj || null })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao cadastrar empresa');
+
+    mostrarToast('Ambiente criado com sucesso!', 'success');
+    fecharModalEmpresa();
+    carregarEmpresas();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function excluirEmpresa(id, nome) {
+  if (!confirm(`Tem certeza que deseja excluir o ambiente "${nome}"?`)) return;
+
+  try {
+    const res = await fetch(`/empresa/${id}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-API-Key': obterApiKey() }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao excluir');
+
+    mostrarToast('Ambiente excluído com sucesso!', 'success');
+    carregarEmpresas();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+// ===== USUÁRIOS =====
+async function carregarUsuarios() {
+  const empresaId = document.getElementById('filtro-usuario-empresa').value;
+  const url = empresaId ? `/usuarios/?empresa_id=${empresaId}` : '/usuarios/';
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-Admin-API-Key': obterApiKey() }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao carregar usuários');
+
+    listaUsuarios = data.usuarios || [];
+    renderizarUsuarios(listaUsuarios);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('usuarios-table-body').innerHTML = `
+      <tr><td colspan="7" style="text-align:center; padding:20px; color:#A32D2D;">
+        ${err.message} (Verifique sua Chave Admin)
+      </td></tr>
+    `;
+  }
+}
+
+function renderizarUsuarios(usuarios) {
+  const tbody = document.getElementById('usuarios-table-body');
+  if (usuarios.length === 0) {
+    tbody.innerHTML = `
+      <tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">
+        Nenhum usuário encontrado para este ambiente.
+      </td></tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = usuarios.map(u => {
+    const empresaNome = listaEmpresas.find(e => e.id === u.empresa_id)?.nome || `Empresa #${u.empresa_id}`;
+    const initials = (u.nome || 'U').substring(0, 2).toUpperCase();
+    const isAtivo = u.status === 'ativo';
+
+    let badgeClass = 'badge-client';
+    if (u.perfil === 'admin') badgeClass = 'badge-admin';
+    if (u.perfil === 'funcionario') badgeClass = 'badge-func';
+
+    return `
+      <tr>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="user-avatar" style="width:28px; height:28px; font-size:10px;">${initials}</div>
+            <div>
+              <div style="font-weight:600;">${u.nome}</div>
+              <div style="font-size:11px; color:var(--text-muted);">${u.email}</div>
+            </div>
+          </div>
+        </td>
+        <td><strong>${empresaNome}</strong></td>
+        <td>
+          <select class="cf-select" style="padding:4px 8px; font-size:11px; width:auto;" onchange="alterarPerfil(${u.id}, this.value)">
+            <option value="cliente" ${u.perfil === 'cliente' ? 'selected' : ''}>Cliente</option>
+            <option value="funcionario" ${u.perfil === 'funcionario' ? 'selected' : ''}>Funcionário</option>
+            <option value="admin" ${u.perfil === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+        </td>
+        <td>
+          ${u.telegram_chat_id ? `
+            <span style="color:#0F6E56; font-size:11px; font-weight:600;">✓ Vinculado (${u.telegram_chat_id})</span>
+          ` : `
+            <span style="color:var(--text-muted); font-size:11px;">Pendente</span>
+          `}
+        </td>
+        <td>
+          <button class="badge ${isAtivo ? 'badge-active' : 'badge-inactive'}" style="cursor:pointer; border:none;" onclick="alternarStatus(${u.id}, '${isAtivo ? 'inativo' : 'ativo'}')">
+            ${isAtivo ? '● Ativo' : '○ Inativo'}
+          </button>
+        </td>
+        <td style="font-size:11px; color:var(--text-muted);">${(u.data_criacao || '').substring(0, 10)}</td>
+        <td style="text-align:right;">
+          <button class="btn-danger" style="padding:4px 8px; font-size:11px;" onclick="excluirUsuario(${u.id}, '${u.nome}')">
+            Excluir
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filtrarTabelaUsuarios() {
+  const busca = document.getElementById('filtro-usuario-busca').value.toLowerCase();
+  const filtrados = listaUsuarios.filter(u => 
+    (u.nome && u.nome.toLowerCase().includes(busca)) ||
+    (u.email && u.email.toLowerCase().includes(busca))
+  );
+  renderizarUsuarios(filtrados);
+}
+
+async function enviarCadastroUsuario() {
+  const nome = document.getElementById('novo-user-nome').value.trim();
+  const email = document.getElementById('novo-user-email').value.trim();
+  const senha = document.getElementById('novo-user-senha').value.trim();
+  const empresa_id = parseInt(document.getElementById('novo-user-empresa').value);
+  const perfil = document.getElementById('novo-user-perfil').value;
+
+  if (!nome || !email || !senha) {
+    mostrarToast('Preencha todos os campos obrigatórios.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/usuarios/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-API-Key': obterApiKey()
+      },
+      body: JSON.stringify({
+        empresa_id: empresa_id,
+        nome: nome,
+        email: email,
+        senha: senha,
+        perfil: perfil
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao cadastrar usuário');
+
+    mostrarToast('Usuário cadastrado com sucesso!', 'success');
+    fecharModalUsuario();
+    carregarUsuarios();
+    carregarEmpresas();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function alterarPerfil(userId, novoPerfil) {
+  try {
+    const res = await fetch(`/usuarios/${userId}/perfil`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-API-Key': obterApiKey()
+      },
+      body: JSON.stringify({ perfil: novoPerfil })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao alterar perfil');
+    mostrarToast('Perfil atualizado com sucesso!', 'success');
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+    carregarUsuarios();
+  }
+}
+
+async function alternarStatus(userId, novoStatus) {
+  try {
+    const res = await fetch(`/usuarios/${userId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-API-Key': obterApiKey()
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao alterar status');
+    mostrarToast(`Status alterado para ${novoStatus}!`, 'success');
+    carregarUsuarios();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function excluirUsuario(userId, nome) {
+  if (!confirm(`Deseja realmente remover o usuário "${nome}"?`)) return;
+
+  try {
+    const res = await fetch(`/usuarios/${userId}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-API-Key': obterApiKey() }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao excluir usuário');
+    mostrarToast('Usuário excluído com sucesso!', 'success');
+    carregarUsuarios();
+    carregarEmpresas();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+// ===== CONFIGURAÇÃO DE SUPORTE =====
+async function carregarConfiguracoesEmpresa() {
+  const empresaId = document.getElementById('config-empresa-select').value || 1;
+  try {
+    const res = await fetch(`/empresa/configuracoes?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Erro ao carregar configurações');
+    const data = await res.json();
+
+    document.getElementById('config-suporte-telefone').value = data.numero_suporte_humano || '';
+    document.getElementById('config-suporte-msg').value = data.mensagem_suporte || '';
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function salvarConfiguracaoSuporte() {
+  const empresaId = parseInt(document.getElementById('config-empresa-select').value || 1);
+  const telefone = document.getElementById('config-suporte-telefone').value.trim();
+  const mensagem = document.getElementById('config-suporte-msg').value.trim();
+
+  try {
+    const res = await fetch('/empresa/configuracoes', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-API-Key': obterApiKey()
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        numero_suporte_humano: telefone,
+        mensagem_suporte: mensagem
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar configurações');
+
+    mostrarToast('Configurações de suporte atualizadas!', 'success');
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+// Modais
+function abrirModalEmpresa() { document.getElementById('modal-empresa').classList.add('active'); }
+function fecharModalEmpresa() { document.getElementById('modal-empresa').classList.remove('active'); }
+function abrirModalUsuario() { document.getElementById('modal-usuario').classList.add('active'); }
+function fecharModalUsuario() { document.getElementById('modal-usuario').classList.remove('active'); }
+function abrirModalApiKey() {
+  document.getElementById('modal-input-key').value = obterApiKey();
+  document.getElementById('modal-api-key').classList.add('active');
+}
+function fecharModalApiKey() { document.getElementById('modal-api-key').classList.remove('active'); }
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', () => {
+  const key = obterApiKey();
+  document.getElementById('input-admin-api-key').value = key;
+  carregarEmpresas();
+  carregarUsuarios();
+});
+</script>
+</body>
+</html>
