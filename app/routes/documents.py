@@ -3,6 +3,7 @@ import json
 import hashlib
 import time
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Header, Query
+from pydantic import BaseModel, Field
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
@@ -299,6 +300,73 @@ def deletar_documento(
 
         return {
             "mensagem": f"Documento '{documento['nome_arquivo']}' e seus chunks foram excluídos com sucesso."
+        }
+    except Exception as e:
+        conexao.rollback()
+        raise e
+    finally:
+        conexao.close()
+
+
+class DocumentoNivelAcessoRequest(BaseModel):
+    nivel_acesso: str = Field(..., description="Novo nível de acesso: 'publico' ou 'interno'")
+    usuario_perfil: str | None = Field(None, description="Perfil do usuário solicitante ('admin' ou 'master')")
+    usuario_id: int | None = Field(None, description="ID do usuário solicitante")
+
+
+@router.patch("/{documento_id}/nivel-acesso")
+def atualizar_nivel_acesso_documento(
+    documento_id: int,
+    dados: DocumentoNivelAcessoRequest,
+    usuario_id: int | None = Query(None),
+    x_user_id: int | None = Header(None, alias="X-User-Id")
+):
+    """
+    PARTE 16: Altera o nível de acesso ('publico' ou 'interno') de um documento já indexado.
+    Exige perfil admin ou master.
+    """
+    uid = usuario_id or x_user_id or dados.usuario_id
+    if dados.usuario_perfil:
+        if dados.usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem alterar o nível de acesso de documentos."
+            )
+    elif uid:
+        validar_perfil_admin_ou_master(uid)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identificação do usuário (usuario_id, cabeçalho X-User-Id ou usuario_perfil) é obrigatória para alterar permissão do documento."
+        )
+
+    novo_nivel = dados.nivel_acesso.strip().lower()
+    if novo_nivel not in ("publico", "interno"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nível de acesso inválido. Escolha 'publico' ou 'interno'."
+        )
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"SELECT id, nome_arquivo FROM documentos WHERE id = {ph}", (documento_id,))
+        doc = cursor.fetchone()
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Documento não encontrado."
+            )
+
+        cursor.execute(f"UPDATE documentos SET nivel_acesso = {ph} WHERE id = {ph}", (novo_nivel, documento_id))
+        conexao.commit()
+
+        return {
+            "mensagem": f"Nível de acesso do documento '{doc['nome_arquivo']}' alterado para '{novo_nivel}' com sucesso!",
+            "documento_id": documento_id,
+            "nivel_acesso": novo_nivel
         }
     except Exception as e:
         conexao.rollback()

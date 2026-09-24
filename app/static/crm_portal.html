@@ -36,18 +36,19 @@
       min-height: calc(100vh - 180px);
     }
     .kanban-col {
-      background: rgba(26, 31, 46, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 12px;
       width: 270px;
       min-width: 270px;
       display: flex;
       flex-direction: column;
       max-height: calc(100vh - 190px);
+      box-shadow: var(--shadow-sm);
     }
     .kanban-col-header {
       padding: 12px 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -63,16 +64,17 @@
       flex: 1;
     }
     .kanban-card {
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.07);
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-left: 3px solid #38bdf8;
       border-radius: 8px;
       padding: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       transition: transform 0.15s, box-shadow 0.15s;
     }
     .kanban-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
     .kanban-card.stage-novo { border-left-color: #38bdf8; }
     .kanban-card.stage-qualificado { border-left-color: #818cf8; }
@@ -82,11 +84,11 @@
     .kanban-card.stage-perdido { border-left-color: #f87171; }
     .kanban-select {
       width: 100%;
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 4px 6px;
+      padding: 5px 8px;
       font-size: 11px;
       margin-top: 8px;
       outline: none;
@@ -138,9 +140,8 @@
         <div class="nav-item" onclick="switchTab('documentos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
           Base de Conhecimento
-          <span class="nav-badge" id="badge-total-documentos">0</span>
         </div>
-        <div class="nav-item" onclick="switchTab('analytics', this)">
+        <div class="nav-item" id="nav-item-analytics" onclick="switchTab('analytics', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Analytics RAG
         </div>
@@ -163,13 +164,12 @@
         <div class="nav-item" id="nav-item-equipe" onclick="switchTab('equipe', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Minha Equipe
-          <span class="nav-badge" id="badge-total-equipe">0</span>
         </div>
       </div>
 
       <div class="nav-section">
         <div class="nav-label">Sistema</div>
-        <div class="nav-item" onclick="switchTab('config', this)">
+        <div class="nav-item" id="nav-item-config" onclick="switchTab('config', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.41 13.44l-1.54 1.54a10 10 0 0 1-13.44-1.41l-1.54-1.54A10 10 0 0 1 5.36 3.44l1.54-1.54a10 10 0 0 1 12.17 3.03z"/></svg>
           Configurações
         </div>
@@ -460,7 +460,7 @@
       <div class="dash-header">
         <div>
           <div class="page-title">Base de Conhecimento</div>
-          <div class="page-sub">Documentos corporativos vetorizados com Gemini para RAG</div>
+          <div class="page-sub" id="kb-sub-label">Documentos corporativos vetorizados com Gemini para RAG · <strong id="kb-total-count" style="color:var(--text);">0</strong> documentos</div>
         </div>
         <button class="btn-green" id="btn-topo-upload-doc" onclick="document.getElementById('input-file-doc').click()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -473,9 +473,9 @@
       <div class="kb-body" style="margin-top:20px;">
         <!-- AREA DE UPLOAD RBAC (PARTE 1b e PARTE 4a) -->
         <div id="kb-upload-container">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:rgba(255,255,255,0.02); padding:10px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-            <div style="font-size:12px; color:#cbd5e1; font-weight:600;">Nível de Acesso (RBAC) do Documento:</div>
-            <select id="upload-nivel-acesso" class="login-input" style="padding:6px 12px; font-size:12px; max-width:240px; background:#0f172a; color:white;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:12px; color:var(--text); font-weight:600;">Nível de Acesso (RBAC) do Documento:</div>
+            <select id="upload-nivel-acesso" class="login-input" style="padding:6px 12px; font-size:12px; max-width:240px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
               <option value="publico">🌐 Público (Telegram e Portal)</option>
               <option value="interno">🔒 Interno (Apenas Colaboradores no Portal)</option>
             </select>
@@ -587,6 +587,29 @@
       </div>
       <div class="config-content">
         <div class="config-grid">
+          <!-- BYOK: CHAVE PRÓPRIA DE IA (PARTE 18) -->
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon" style="background:#534AB7; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              </div>
+              Chave de API Própria (BYOK)
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              Cadastre sua chave do <strong>Google AI Studio (Gemini)</strong>. Se não configurada, o sistema utilizará automaticamente a chave padrão da plataforma.
+            </div>
+            <div class="config-field">
+              <div class="cf-label">Chave Google Gemini API</div>
+              <div style="display:flex; gap:8px;">
+                <input type="password" class="cf-input" id="config-gemini-key" placeholder="AIzaSy... (ou deixe vazio para padrão)" />
+                <button class="btn-green" style="white-space:nowrap; padding:0 14px; font-size:12px;" onclick="salvarChaveGeminiEmpresa()">Salvar Chave</button>
+              </div>
+              <div id="gemini-key-status" style="font-size:11px; margin-top:6px; color:var(--text-muted);">
+                Consultando status da chave...
+              </div>
+            </div>
+          </div>
+
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon" style="background:#229ED9; color:white;">
@@ -598,7 +621,7 @@
               <div class="flow-dot dot-green"></div>
               Consultando status oficial...
             </div>
-            <div id="webhook-info-extra" style="font-size:11px; margin-top:6px; color:#94a3b8;">
+            <div id="webhook-info-extra" style="font-size:11px; margin-top:6px; color:var(--text-muted);">
               Aguardando consulta à API do Telegram...
             </div>
             <div style="margin-top:14px;">
@@ -653,7 +676,7 @@
       <div class="dash-header">
         <div>
           <div class="page-title">Minha Equipe</div>
-          <div class="page-sub" id="equipe-sub-label">Colaboradores com acesso ao ambiente desta empresa</div>
+          <div class="page-sub" id="equipe-sub-label">Colaboradores com acesso ao ambiente desta empresa · <strong id="equipe-total-count" style="color:var(--text);">0</strong> colaboradores</div>
         </div>
         <button class="btn-green" onclick="abrirModalMembroEquipe()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -684,6 +707,12 @@ let listaEmpresasCadastradas = [];
 let equipeCarregada = [];
 
 function switchTab(tabId, navEl) {
+  // PARTE 15: Restrição de acesso para funcionários (Analytics e Configurações)
+  if ((tabId === 'analytics' || tabId === 'config') && usuarioAtual && usuarioAtual.perfil === 'funcionario') {
+    alert('Acesso restrito. Apenas administradores podem acessar esta seção.');
+    return;
+  }
+
   document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => el.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
 
@@ -694,13 +723,17 @@ function switchTab(tabId, navEl) {
   if (tabId === 'documentos') carregarDocumentos();
   if (tabId === 'equipe') carregarEquipe();
   if (tabId === 'chat') carregarConversasTelegram();
+  if (tabId === 'chatrag') carregarHistoricoRecenteChatRAG();
   if (tabId === 'dashboard') {
     carregarConversasTelegram();
     carregarDashboardMetricas();
   }
   if (tabId === 'fluxos') carregarKanbanNegocios();
   if (tabId === 'contratos') carregarContratosCRM();
-  if (tabId === 'config') carregarStatusWebhook();
+  if (tabId === 'config') {
+    carregarStatusWebhook();
+    carregarConfiguracoesEmpresa();
+  }
   if (tabId === 'analytics') carregarAnalytics();
 }
 
@@ -723,8 +756,13 @@ async function carregarConversasTelegram() {
     const data = await res.json();
     listaConversasTelegram = data.conversas || [];
 
+    // PARTE 20: Badge lateral exibe APENAS a contagem de mensagens NÃO LIDAS
     const badgeChats = document.getElementById('badge-total-conversas');
-    if (badgeChats) badgeChats.textContent = listaConversasTelegram.length;
+    const totalNaoLidas = data.total_nao_lidas !== undefined ? data.total_nao_lidas : listaConversasTelegram.reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
+    if (badgeChats) {
+      badgeChats.textContent = totalNaoLidas;
+      badgeChats.style.display = totalNaoLidas > 0 ? 'inline-block' : 'none';
+    }
 
     renderizarListaConversasTelegram();
     renderizarDashboardConversasTelegram();
@@ -832,6 +870,24 @@ function recarregarConversasTelegram() {
 
 async function selecionarConversaTelegram(chatId) {
   conversaAtivaChatId = chatId;
+
+  // PARTE 20: Marcar mensagens desta conversa como lidas e atualizar contador de não lidas
+  try {
+    fetch(`/telegram/conversas/${chatId}/marcar-lida`, { method: 'PATCH' }).catch(e => console.error('Erro ao marcar lida:', e));
+    const convIdx = listaConversasTelegram.findIndex(c => c.chat_id === chatId);
+    if (convIdx !== -1) {
+      listaConversasTelegram[convIdx].nao_lidas = 0;
+    }
+    const badgeChats = document.getElementById('badge-total-conversas');
+    const totalNaoLidas = listaConversasTelegram.reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
+    if (badgeChats) {
+      badgeChats.textContent = totalNaoLidas;
+      badgeChats.style.display = totalNaoLidas > 0 ? 'inline-block' : 'none';
+    }
+  } catch (e) {
+    console.error('Erro ao atualizar status de lida:', e);
+  }
+
   renderizarListaConversasTelegram();
 
   const conv = listaConversasTelegram.find(c => c.chat_id === chatId);
@@ -898,23 +954,25 @@ function atualizarUIAssumirDevolver(nomeAtendente) {
       btn.style.display = 'inline-flex';
       btn.style.background = '#854F0B';
       btn.style.color = '#fef3c7';
+      btn.style.border = '1px solid #b45309';
       btn.textContent = '🤖 Devolver para IA';
     }
     if (modoEl) {
       modoEl.textContent = 'Atendimento Humano (' + (nomeAtendente || (usuarioAtual ? usuarioAtual.nome : 'Operador')) + ')';
-      modoEl.style.color = '#fbbf24';
+      modoEl.style.color = '#d97706';
     }
     if (lpAtend) lpAtend.textContent = nomeAtendente || (usuarioAtual ? usuarioAtual.nome : 'Atendente');
   } else {
     if (btn) {
       btn.style.display = 'inline-flex';
-      btn.style.background = 'rgba(255,255,255,0.08)';
-      btn.style.color = '#e2e8f0';
+      btn.style.background = 'var(--surface)';
+      btn.style.color = 'var(--text)';
+      btn.style.border = '1px solid var(--border)';
       btn.textContent = '🧑 Assumir Atendimento';
     }
     if (modoEl) {
       modoEl.textContent = 'Assistente IA (Autônomo)';
-      modoEl.style.color = '#38bdf8';
+      modoEl.style.color = '#0284c7';
     }
     if (lpAtend) lpAtend.textContent = 'Assistente IA';
   }
@@ -1019,11 +1077,11 @@ function renderizarMiniKanbanDashboard(estagios) {
   container.innerHTML = cols.map(c => {
     const info = estagios[c.id] || { quantidade: 0, valor: 0 };
     return `
-      <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px;">
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px;">
         <div style="font-size:11px; font-weight:700; color:${c.cor}; text-transform:uppercase; margin-bottom:4px;">
           ${c.label} (${info.quantidade})
         </div>
-        <div style="font-size:12px; font-weight:600; color:#f1f5f9;">
+        <div style="font-size:12px; font-weight:600; color:var(--text);">
           ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(info.valor)}
         </div>
       </div>
@@ -1070,20 +1128,20 @@ function renderizarKanban(negocios) {
       <div class="kanban-col">
         <div class="kanban-col-header" style="color:${col.cor};">
           <span>${col.label} (${itens.length})</span>
-          <span style="font-size:11px; color:#94a3b8;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaValor)}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaValor)}</span>
         </div>
         <div class="kanban-col-body">
           ${itens.length === 0 ? `
-            <div style="padding:24px 10px; text-align:center; color:#64748b; font-size:11px;">
+            <div style="padding:24px 10px; text-align:center; color:var(--text-muted); font-size:11px;">
               Vazio
             </div>
           ` : itens.map(n => `
             <div class="kanban-card stage-${col.id}">
               <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div style="font-weight:600; color:#f1f5f9; font-size:13px;">${n.cliente_nome || 'Lead'}</div>
-                <span style="font-size:10px; color:#64748b;">#${n.id}</span>
+                <div style="font-weight:600; color:var(--text); font-size:13px;">${n.cliente_nome || 'Lead'}</div>
+                <span style="font-size:10px; color:var(--text-muted);">#${n.id}</span>
               </div>
-              <div style="font-size:11px; color:#94a3b8; margin:4px 0;">
+              <div style="font-size:11px; color:var(--text-muted); margin:4px 0;">
                 📦 ${n.produto_nome || 'Produto não definido'}
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -1190,7 +1248,7 @@ async function carregarAnalytics() {
         rankEl.innerHTML = `
           <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
             <thead>
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.08); color:#94a3b8;">
+              <tr style="border-bottom:1px solid var(--border); color:var(--text-muted);">
                 <th style="padding:8px 4px;">#</th>
                 <th style="padding:8px 4px;">Documento</th>
                 <th style="padding:8px 4px; text-align:center;">Usos</th>
@@ -1199,9 +1257,9 @@ async function carregarAnalytics() {
             </thead>
             <tbody>
               ${ranking.map((item, idx) => `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
-                  <td style="padding:8px 4px; color:#64748b;">${idx + 1}</td>
-                  <td style="padding:8px 4px; font-weight:500; color:#e2e8f0;">📄 ${item.nome_arquivo}</td>
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:8px 4px; color:var(--text-muted);">${idx + 1}</td>
+                  <td style="padding:8px 4px; font-weight:500; color:var(--text);">📄 ${item.nome_arquivo}</td>
                   <td style="padding:8px 4px; text-align:center;"><span class="nav-badge" style="background:#229ED9;">${item.total_consultas}</span></td>
                   <td style="padding:8px 4px; text-align:right; color:#34d399; font-weight:600;">${(item.similaridade_media * 100).toFixed(1)}%</td>
                 </tr>
@@ -1212,7 +1270,7 @@ async function carregarAnalytics() {
       }
     }
 
-    // 3. Histórico de Perguntas
+    // 3. Histórico de Perguntas (PARTE 14: exibindo autor, email, data e hora)
     const resHist = await fetch(`/analytics/historico-perguntas?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}&limite=15`);
     const histEl = document.getElementById('analytics-historico-container');
     if (resHist.ok && histEl) {
@@ -1223,18 +1281,30 @@ async function carregarAnalytics() {
       } else {
         histEl.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-right:6px;">
-            ${itens.map(item => `
-              <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px 12px; font-size:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                  <span style="font-weight:600; color:#38bdf8;">[${(item.canal || 'portal').toUpperCase()}]</span>
-                  <span class="contract-status-badge ${item.teve_contexto ? 'cs-signed' : 'cs-pending'}" style="font-size:10px;">
-                    ${item.teve_contexto ? '✓ Base de Conhecimento' : '✦ Conhecimento Geral'}
-                  </span>
+            ${itens.map(item => {
+              const autor = (item.canal || 'portal') === 'portal'
+                ? (item.usuario_nome ? `${item.usuario_nome} (${item.usuario_email || ''})` : 'Usuário do Portal')
+                : (item.telegram_chat_id ? `Lead Telegram #${item.telegram_chat_id}` : 'Lead Telegram');
+              const dataHora = item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '';
+              return `
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:12px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-weight:700; color:#38bdf8;">[${(item.canal || 'portal').toUpperCase()}]</span>
+                      <span style="font-size:11px; color:var(--text-muted);">👤 ${autor}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:11px; color:var(--text-muted);">🕒 ${dataHora}</span>
+                      <span class="contract-status-badge ${item.teve_contexto ? 'cs-signed' : 'cs-pending'}" style="font-size:10px;">
+                        ${item.teve_contexto ? '✓ Base de Conhecimento' : '✦ Conhecimento Geral'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style="color:var(--text); font-weight:600; margin-bottom:4px;">❓ ${item.pergunta}</div>
+                  <div style="color:var(--text-muted); font-size:11px; line-height:1.4;">💬 ${item.resposta.substring(0, 160)}${item.resposta.length > 160 ? '...' : ''}</div>
                 </div>
-                <div style="color:#f1f5f9; font-weight:500; margin-bottom:4px;">❓ ${item.pergunta}</div>
-                <div style="color:#94a3b8; font-size:11px; line-height:1.4;">💬 ${item.resposta.substring(0, 140)}...</div>
-              </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         `;
       }
@@ -1281,6 +1351,68 @@ async function carregarStatusWebhook() {
   }
 }
 
+// PARTE 18: BYOK (Bring Your Own Key) para Gemini API
+async function carregarConfiguracoesEmpresa() {
+  const keyInput = document.getElementById('config-gemini-key');
+  const statusEl = document.getElementById('gemini-key-status');
+  if (!keyInput || !statusEl) return;
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await fetch(`/empresa/configuracoes?empresa_id=${empresaId}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (!res.ok) throw new Error('Não foi possível carregar configurações');
+    const data = await res.json();
+    if (data.possui_chave_propria) {
+      keyInput.placeholder = data.gemini_api_key_mascarada || '••••••••';
+      keyInput.value = '';
+      statusEl.innerHTML = `<span style="color:#34d399;">✓ Chave própria configurada (${data.gemini_api_key_mascarada})</span>`;
+    } else {
+      keyInput.placeholder = 'AIzaSy... (ou deixe vazio para padrão)';
+      keyInput.value = '';
+      statusEl.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão da plataforma (FluxIA Shared)</span>`;
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#ef4444;">Erro ao verificar chave: ${err.message}</span>`;
+  }
+}
+
+async function salvarChaveGeminiEmpresa() {
+  const keyInput = document.getElementById('config-gemini-key');
+  if (!keyInput) return;
+
+  const novaChave = keyInput.value.trim();
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await fetch('/empresa/api-key', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        gemini_api_key: novaChave,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar chave');
+    alert(data.mensagem || 'Chave atualizada com sucesso!');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    alert('Erro ao salvar chave Gemini: ' + err.message);
+  }
+}
+
 async function registrarWebhookTelegram() {
   const urlAtual = window.location.origin;
   const urlSugerida = prompt('Confirme a URL pública do seu serviço para registrar o Webhook do Telegram:', urlAtual);
@@ -1315,6 +1447,7 @@ async function dispararFollowupManual() {
 async function carregarDocumentos() {
   const container = document.getElementById('kb-table-container');
   const badge = document.getElementById('badge-total-documentos');
+  const totalCountEl = document.getElementById('kb-total-count');
   const empresaId = obterEmpresaAtivaId();
 
   try {
@@ -1323,6 +1456,7 @@ async function carregarDocumentos() {
     const data = await res.json();
     documentosCarregados = data.documentos || [];
     if (badge) badge.textContent = documentosCarregados.length;
+    if (totalCountEl) totalCountEl.textContent = documentosCarregados.length;
     renderizarDocumentos(documentosCarregados);
   } catch (err) {
     container.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Erro ao carregar: ${err.message}</div>`;
@@ -1353,9 +1487,16 @@ function renderizarDocumentos(docs) {
           <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt}</div>
         </div>
         <div class="kb-status">
-          <span class="contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}" style="font-size:11px;">
-            ${isPublic ? '🌐 Público' : '🔒 Interno'}
-          </span>
+          ${ehAdmin ? `
+            <select class="kanban-select" style="padding:4px 8px; font-size:11px; border-radius:6px; cursor:pointer;" onchange="alterarNivelAcessoDocumento(${d.id}, this.value)">
+              <option value="publico" ${isPublic ? 'selected' : ''}>🌐 Público</option>
+              <option value="interno" ${!isPublic ? 'selected' : ''}>🔒 Interno</option>
+            </select>
+          ` : `
+            <span class="contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}" style="font-size:11px;">
+              ${isPublic ? '🌐 Público' : '🔒 Interno'}
+            </span>
+          `}
         </div>
         <div class="kb-actions">
           ${ehAdmin ? `
@@ -1367,6 +1508,32 @@ function renderizarDocumentos(docs) {
       </div>
     `;
   }).join('');
+}
+
+// PARTE 16: Alterar nível de acesso de documento existente
+async function alterarNivelAcessoDocumento(documentoId, novoNivel) {
+  try {
+    const uid = usuarioAtual ? usuarioAtual.id : null;
+    const res = await fetch(`/documents/${documentoId}/nivel-acesso`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        nivel_acesso: novoNivel,
+        usuario_perfil: usuarioAtual ? usuarioAtual.perfil : 'funcionario',
+        usuario_id: uid
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao atualizar nível de acesso');
+    const doc = documentosCarregados.find(d => d.id === documentoId);
+    if (doc) doc.nivel_acesso = novoNivel;
+  } catch (err) {
+    alert('Erro ao alterar nível de acesso: ' + err.message);
+    carregarDocumentos();
+  }
 }
 
 function filtrarDocumentos() {
@@ -1429,7 +1596,86 @@ async function excluirDocumento(id, nome) {
   }
 }
 
-// ===== CHAT INTERNO RAG (PARTE 11) =====
+// ===== CHAT INTERNO RAG (PARTE 11 e PARTE 17) =====
+let historicoRecenteChatRAG = [];
+let conversaAtivaHistoricaId = null;
+
+function formatarMarkdownParaHtml(texto) {
+  if (!texto) return '';
+  let html = texto
+    .replace(/```([\s\S]*?)```/g, '<pre style="background:var(--bg); padding:8px 12px; border-radius:6px; overflow-x:auto; font-size:12px; margin:6px 0; border:1px solid var(--border);"><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code style="background:var(--bg); padding:2px 4px; border-radius:4px; font-size:12px; border:1px solid var(--border);">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/^[*-]\s+(.+)$/gm, '<li style="margin-left:16px;">$1</li>')
+    .replace(/\n/g, '<br>');
+  return html;
+}
+
+async function carregarHistoricoRecenteChatRAG() {
+  const container = document.getElementById('rag-history-list');
+  if (!container || !usuarioAtual) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await fetch(`/chat/historico-recente?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}&limite=3`);
+    if (!res.ok) return;
+    const data = await res.json();
+    historicoRecenteChatRAG = data.conversas || [];
+
+    let html = `
+      <div class="rag-hist-item ${!conversaAtivaHistoricaId ? 'active' : ''}" onclick="limparChatRAG()" style="cursor:pointer;">
+        ✦ Nova Consulta
+      </div>
+    `;
+
+    html += historicoRecenteChatRAG.map(c => {
+      const isActive = conversaAtivaHistoricaId === c.id;
+      const dataHora = c.criado_em ? new Date(c.criado_em).toLocaleDateString('pt-BR') : '';
+      return `
+        <div class="rag-hist-item ${isActive ? 'active' : ''}" onclick="visualizarConversaHistoricaChat(${c.id})" style="cursor:pointer;" title="${c.pergunta}">
+          <div style="font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">❓ ${c.pergunta}</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${dataHora} · ${c.teve_contexto ? 'Base' : 'Geral'}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Erro ao carregar histórico recente do chat:', err);
+  }
+}
+
+function visualizarConversaHistoricaChat(id) {
+  const c = historicoRecenteChatRAG.find(item => item.id === id);
+  if (!c) return;
+  conversaAtivaHistoricaId = id;
+  carregarHistoricoRecenteChatRAG();
+
+  const container = document.getElementById('rag-chat-messages');
+  if (!container) return;
+
+  const badgeFonte = c.teve_contexto 
+    ? '<span class="contract-status-badge cs-signed" style="font-size:10px; margin-bottom:6px; display:inline-block;">✓ Base de Conhecimento Interna</span>'
+    : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
+
+  const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-2.5-flash'}</span>`;
+
+  container.innerHTML = `
+    <div class="msg-bubble msg-user">
+      <div class="msg-text">${c.pergunta.replace(/\n/g, '<br>')}</div>
+      <div class="msg-time">${c.criado_em ? new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Anterior'}</div>
+    </div>
+    <div class="msg-bubble msg-bot">
+      ${badgeFonte}
+      <div class="msg-text">${formatarMarkdownParaHtml(c.resposta)}</div>
+      <div style="margin-top:6px;">${modeloTag}</div>
+      <div class="msg-time">${c.criado_em ? new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Anterior'}</div>
+    </div>
+  `;
+  container.scrollTop = container.scrollHeight;
+}
+
 async function enviarPerguntaRAG() {
   const input = document.getElementById('rag-input-text');
   const pergunta = input.value.trim();
@@ -1475,17 +1721,23 @@ async function enviarPerguntaRAG() {
       : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
 
     const docsTexto = (data.documentos_consultados && data.documentos_consultados.length > 0)
-      ? `<div style="font-size:11px; color:#94a3b8; margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
+      ? `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
       : '';
+
+    const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-2.5-flash'}</span>`;
 
     if (loadEl) {
       loadEl.innerHTML = `
         ${badgeFonte}
-        <div class="msg-text">${data.resposta.replace(/\n/g, '<br>')}</div>
+        <div class="msg-text">${formatarMarkdownParaHtml(data.resposta)}</div>
         ${docsTexto}
+        <div style="margin-top:6px;">${modeloTag}</div>
         <div class="msg-time">Agora</div>
       `;
     }
+
+    // Atualiza sidebar de histórico recente
+    carregarHistoricoRecenteChatRAG();
   } catch (err) {
     const loadEl = document.getElementById(loadingId);
     if (loadEl) loadEl.innerHTML = `<div class="msg-text" style="color:#ef4444;">Erro ao processar consulta: ${err.message}</div>`;
@@ -1494,6 +1746,8 @@ async function enviarPerguntaRAG() {
 }
 
 function limparChatRAG() {
+  conversaAtivaHistoricaId = null;
+  carregarHistoricoRecenteChatRAG();
   const container = document.getElementById('rag-chat-messages');
   if (container) {
     container.innerHTML = `
@@ -1505,19 +1759,19 @@ function limparChatRAG() {
   }
 }
 
-// ===== EQUIPE =====
+// ===== EQUIPE (BUG CRÍTICO E PARTE 12) =====
 async function carregarEquipe() {
   const container = document.getElementById('equipe-table-container');
+  const countEl = document.getElementById('equipe-total-count');
   const empresaId = obterEmpresaAtivaId();
 
   try {
-    const res = await fetch(`/usuarios/?empresa_id=${empresaId}`);
+    const res = await fetch(`/usuarios/equipe?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar equipe');
     const data = await res.json();
     equipeCarregada = data.usuarios || [];
 
-    const badge = document.getElementById('badge-total-equipe');
-    if (badge) badge.textContent = equipeCarregada.length;
+    if (countEl) countEl.textContent = equipeCarregada.length;
 
     renderizarEquipe(equipeCarregada);
   } catch (err) {
@@ -1539,7 +1793,7 @@ function renderizarEquipe(usuarios) {
       <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700;">${(u.nome || 'U').substring(0,2).toUpperCase()}</div>
       <div class="kb-info">
         <div class="kb-name">${u.nome}</div>
-        <div class="kb-meta">${u.email} · Perfil: <strong>${(u.perfil || 'cliente').toUpperCase()}</strong></div>
+        <div class="kb-meta">${u.email} · Perfil: <strong>${(u.perfil || 'funcionario').toUpperCase()}</strong></div>
       </div>
       <div class="kb-status">
         <span class="contract-status-badge ${u.status === 'ativo' ? 'cs-signed' : 'cs-pending'}">
@@ -1566,7 +1820,7 @@ async function salvarNovoColaborador() {
   }
 
   try {
-    const res = await fetch('/usuarios/', {
+    const res = await fetch('/usuarios/equipe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1590,7 +1844,7 @@ async function salvarNovoColaborador() {
 // ===== RESUMO IA =====
 async function gerarNovoResumoIA() {
   const container = document.getElementById('container-resumos-ia');
-  container.innerHTML = `<div style="text-align:center; padding:30px; color:#38bdf8;">✦ Consolidando conversas do Telegram e gerando insights com Gemini...</div>`;
+  container.innerHTML = `<div style="text-align:center; padding:30px; color:#0284c7;">✦ Consolidando conversas do Telegram e gerando insights com Gemini...</div>`;
 
   try {
     const res = await fetch(`/chat/`, {
@@ -1603,12 +1857,12 @@ async function gerarNovoResumoIA() {
     });
     const data = await res.json();
     container.innerHTML = `
-      <div style="line-height:1.6; color:#f1f5f9; font-size:13px;">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">
+      <div style="line-height:1.6; color:var(--text); font-size:13px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px;">
           <strong style="color:#229ED9;">Síntese Executiva Gerada por IA</strong>
-          <span style="font-size:11px; color:#94a3b8;">${new Date().toLocaleDateString('pt-BR')}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${new Date().toLocaleDateString('pt-BR')}</span>
         </div>
-        ${data.resposta.replace(/\n/g, '<br>')}
+        ${formatarMarkdownParaHtml(data.resposta)}
       </div>
     `;
   } catch (e) {
@@ -1662,6 +1916,17 @@ function aplicarDadosUsuario() {
   if (btnUpload) {
     btnUpload.style.display = ehAdminOuMaster ? 'inline-flex' : 'none';
   }
+
+  // PARTE 15: Ocultar telas restritas no menu para funcionários (Analytics RAG e Configurações)
+  const navAnalytics = document.getElementById('nav-item-analytics');
+  const navConfig = document.getElementById('nav-item-config');
+  if (usuarioAtual.perfil === 'funcionario') {
+    if (navAnalytics) navAnalytics.style.display = 'none';
+    if (navConfig) navConfig.style.display = 'none';
+  } else {
+    if (navAnalytics) navAnalytics.style.display = 'flex';
+    if (navConfig) navConfig.style.display = 'flex';
+  }
 }
 
 async function atualizarInterfaceTenant() {
@@ -1696,7 +1961,7 @@ async function atualizarInterfaceTenant() {
               `).join('')}
             </select>
           </div>
-          <span style="font-size:11px; color:#94a3b8;">Alternador de Ambientes</span>
+          <span style="font-size:11px; color:var(--text-muted);">Alternador de Ambientes</span>
         `;
       }
     } catch (e) {
@@ -1737,38 +2002,37 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<!-- MODAL NOVO COLABORADOR -->
+<!-- MODAL NOVO COLABORADOR (PARTE 12: sem cliente) -->
 <div class="modal-overlay" id="modal-membro-equipe">
-  <div class="modal-content" style="background:#1a1f2e; color:white; border:1px solid rgba(255,255,255,0.08); border-radius:12px;">
-    <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.08); padding:16px 20px;">
-      <div class="modal-title" style="color:white; font-weight:700; font-family:'Syne',sans-serif;">Adicionar Colaborador à Equipe</div>
-      <button class="btn-icon" style="background:none; border:none; color:white; font-size:16px; cursor:pointer;" onclick="fecharModalMembroEquipe()">✕</button>
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg);">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px;">
+      <div class="modal-title" style="color:var(--text); font-weight:700; font-family:'Syne',sans-serif;">Adicionar Colaborador à Equipe</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalMembroEquipe()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px;">
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Nome Completo *</div>
-        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-nome" placeholder="Ex: Maria Oliveira" required />
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome Completo *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-nome" placeholder="Ex: Maria Oliveira" required />
       </div>
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">E-mail Corporativo *</div>
-        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-email" type="email" placeholder="maria@empresa.com" required />
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">E-mail Corporativo *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-email" type="email" placeholder="maria@empresa.com" required />
       </div>
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Senha Inicial *</div>
-        <input class="login-input" style="padding:10px 14px;" id="equipe-novo-senha" type="password" placeholder="Mínimo 4 caracteres" required />
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Senha Inicial *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-senha" type="password" placeholder="Mínimo 4 caracteres" required />
       </div>
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">Perfil de Acesso (RBAC) *</div>
-        <select class="login-input" style="padding:10px 14px; background:#0f172a; color:white;" id="equipe-novo-perfil">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Perfil de Acesso (RBAC) *</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-perfil">
           <option value="funcionario">Funcionário (Acesso ao CRM, Chat RAG e Documentos)</option>
           <option value="admin">Administrador (Gestão de Equipe e Configurações)</option>
-          <option value="cliente">Cliente (Acesso apenas a Documentos Públicos)</option>
         </select>
-        <div style="font-size:11px; color:#64748b; margin-top:4px;">* Acesso restrito aos dados deste ambiente. Apenas o desenvolvedor master pode criar usuários Master.</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">* Acesso restrito aos dados deste ambiente. Clientes são gerenciados exclusivamente pelo CRM.</div>
       </div>
     </div>
-    <div class="modal-footer" style="border-top:1px solid rgba(255,255,255,0.08); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
-      <button class="btn-secondary" style="background:transparent; color:#cbd5e1; border-color:rgba(255,255,255,0.1);" onclick="fecharModalMembroEquipe()">Cancelar</button>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" style="background:transparent; color:var(--text); border-color:var(--border);" onclick="fecharModalMembroEquipe()">Cancelar</button>
       <button class="btn-green" onclick="salvarNovoColaborador()">Cadastrar Colaborador</button>
     </div>
   </div>

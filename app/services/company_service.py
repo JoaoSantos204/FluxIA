@@ -6,13 +6,24 @@ logger = logging.getLogger(__name__)
 CONFIGURACAO_PADRAO = {
     "empresa_id": 1,
     "numero_suporte_humano": "(11) 99999-9999",
-    "mensagem_suporte": "Por favor, entre em contato com nossa equipe de atendimento."
+    "mensagem_suporte": "Por favor, entre em contato com nossa equipe de atendimento.",
+    "gemini_api_key": None
 }
+
+
+def mascarar_api_key(chave: str | None) -> str:
+    """Mascara a chave de API para exibição segura na interface (ex: AIzaSy...****)."""
+    if not chave or not chave.strip():
+        return ""
+    chave_limpa = chave.strip()
+    if len(chave_limpa) <= 8:
+        return "********"
+    return f"{chave_limpa[:6]}...{chave_limpa[-4:]}"
 
 
 def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     """
-    Busca as configurações da empresa (como telefone e mensagem de suporte humano).
+    Busca as configurações da empresa (como telefone, mensagem de suporte e chave BYOK).
     Caso não exista configuração cadastrada, retorna os valores padrão do sistema.
     """
     conexao = conectar()
@@ -21,7 +32,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
     try:
         cursor.execute(f"""
-            SELECT empresa_id, numero_suporte_humano, mensagem_suporte
+            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -30,16 +41,26 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
         linha = cursor.fetchone()
 
         if linha:
+            chave_real = linha["gemini_api_key"] if "gemini_api_key" in linha.keys() else None
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
-                "mensagem_suporte": linha["mensagem_suporte"] or CONFIGURACAO_PADRAO["mensagem_suporte"]
+                "mensagem_suporte": linha["mensagem_suporte"] or CONFIGURACAO_PADRAO["mensagem_suporte"],
+                "gemini_api_key": chave_real,
+                "gemini_api_key_mascarada": mascarar_api_key(chave_real),
+                "possui_chave_propria": bool(chave_real and chave_real.strip())
             }
 
-        return CONFIGURACAO_PADRAO.copy()
+        padrao = CONFIGURACAO_PADRAO.copy()
+        padrao["gemini_api_key_mascarada"] = ""
+        padrao["possui_chave_propria"] = False
+        return padrao
     except Exception as e:
         logger.error(f"[CompanyService] Erro ao buscar configurações da empresa {empresa_id}: {e}")
-        return CONFIGURACAO_PADRAO.copy()
+        padrao = CONFIGURACAO_PADRAO.copy()
+        padrao["gemini_api_key_mascarada"] = ""
+        padrao["possui_chave_propria"] = False
+        return padrao
     finally:
         conexao.close()
 
@@ -77,6 +98,45 @@ def atualizar_configuracao_empresa(empresa_id: int, numero_suporte_humano: str, 
     except Exception as e:
         conexao.rollback()
         logger.error(f"[CompanyService] Erro ao atualizar configurações da empresa {empresa_id}: {e}")
+        raise e
+    finally:
+        conexao.close()
+
+
+def atualizar_gemini_api_key(empresa_id: int, gemini_api_key: str | None) -> dict:
+    """
+    Atualiza ou cadastra a chave Google Gemini própria (BYOK) da empresa.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    chave_limpa = gemini_api_key.strip() if gemini_api_key and gemini_api_key.strip() else None
+
+    try:
+        cursor.execute(f"SELECT id FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET gemini_api_key = {ph}
+                WHERE empresa_id = {ph}
+            """, (chave_limpa, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (empresa_id, gemini_api_key)
+                VALUES ({ph}, {ph})
+            """, (empresa_id, chave_limpa))
+
+        conexao.commit()
+        return {
+            "empresa_id": empresa_id,
+            "gemini_api_key_mascarada": mascarar_api_key(chave_limpa),
+            "possui_chave_propria": bool(chave_limpa)
+        }
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao salvar chave Gemini da empresa {empresa_id}: {e}")
         raise e
     finally:
         conexao.close()

@@ -31,7 +31,7 @@ class EquipeUsuarioCreateRequest(BaseModel):
     nome: str = Field(..., min_length=2, description="Nome completo")
     email: str = Field(..., description="E-mail do colaborador")
     senha: str = Field(..., min_length=4, description="Senha inicial")
-    perfil: str = Field(default="funcionario", description="Perfil: 'admin', 'funcionario' ou 'cliente'")
+    perfil: str = Field(default="funcionario", description="Perfil: 'admin' ou 'funcionario'")
 
 
 class PerfilUpdateRequest(BaseModel):
@@ -59,6 +59,7 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest):
     """
     Cadastra um colaborador na empresa do admin.
     Regra estrita: Administradores de empresa NÃO podem criar perfil 'master'.
+    Clientes não são usuários de acesso à plataforma (apenas CRM).
     """
     perfil_normalizado = dados.perfil.strip().lower()
     if perfil_normalizado == "master":
@@ -67,10 +68,10 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest):
             detail="Apenas o desenvolvedor master pode criar usuários com perfil master."
         )
 
-    if perfil_normalizado not in ["admin", "funcionario", "cliente"]:
+    if perfil_normalizado not in ["admin", "funcionario"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Perfil inválido. Escolha 'admin', 'funcionario' ou 'cliente'."
+            detail="Perfil inválido. Escolha 'admin' ou 'funcionario'."
         )
 
     resultado = cadastrar_usuario(

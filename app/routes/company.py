@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from app.services.company_service import (
     obter_configuracao_empresa, 
     atualizar_configuracao_empresa,
+    atualizar_gemini_api_key,
     listar_empresas,
     cadastrar_empresa,
     deletar_empresa
 )
-from app.services.security_service import verificar_admin_api_key
+from app.services.security_service import verificar_admin_api_key, validar_perfil_admin_ou_master
 
 router = APIRouter(
     prefix="/empresa",
@@ -21,20 +23,83 @@ class EmpresaCreateRequest(BaseModel):
     cnpj_ou_identificador: str | None = Field(default=None, description="CNPJ ou identificador único")
 
 
-
 class ConfiguracaoSuporteRequest(BaseModel):
     empresa_id: int = Field(default=1, description="ID da empresa")
     numero_suporte_humano: str = Field(..., description="Telefone ou WhatsApp do suporte humano")
     mensagem_suporte: str = Field(..., description="Mensagem de orientação de suporte")
 
 
+class GeminiApiKeyRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    gemini_api_key: Optional[str] = Field(default="", description="Chave de API do Gemini")
+    usuario_id: Optional[int] = Field(default=None, description="ID do usuário que realiza a alteração")
+    usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário que realiza a alteração ('admin' ou 'master')")
+
+
 @router.get("/configuracoes")
-def consultar_configuracoes(empresa_id: int = 1):
+def consultar_configuracoes(
+    empresa_id: int = 1,
+    usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
     """
-    Retorna as configurações atuais de suporte da empresa.
+    Retorna as configurações atuais de suporte e IA da empresa.
+    Exige perfil admin ou master.
     """
+    if usuario_perfil:
+        if usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem acessar as configurações da empresa."
+            )
+    else:
+        uid = usuario_id or x_user_id
+        if uid:
+            validar_perfil_admin_ou_master(uid)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identificação do usuário (usuario_id, cabeçalho X-User-Id ou usuario_perfil) é obrigatória para acessar as configurações."
+            )
+
     config = obter_configuracao_empresa(empresa_id=empresa_id)
     return config
+
+
+@router.post("/api-key")
+def salvar_api_key_empresa(
+    dados: GeminiApiKeyRequest,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Cadastra ou atualiza a chave de API própria (BYOK) da empresa.
+    Exige perfil admin ou master.
+    """
+    if dados.usuario_perfil:
+        if dados.usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem alterar a chave de API da empresa."
+            )
+    else:
+        uid = dados.usuario_id or x_user_id
+        if not uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identificação do usuário (usuario_id, cabeçalho X-User-Id ou usuario_perfil) é obrigatória para salvar a chave de API."
+            )
+        validar_perfil_admin_ou_master(uid)
+
+    resultado = atualizar_gemini_api_key(
+        empresa_id=dados.empresa_id,
+        gemini_api_key=dados.gemini_api_key
+    )
+
+    return {
+        "mensagem": "Chave de API da empresa atualizada com sucesso!",
+        "configuracao": resultado
+    }
 
 
 @router.put("/configuracoes", dependencies=[Depends(verificar_admin_api_key)])

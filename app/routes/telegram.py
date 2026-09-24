@@ -10,7 +10,7 @@ import re
 
 from app.services.ai_service import AIService
 from app.services.embedding_service import gerar_embedding
-from app.services.history_service import salvar_interacao, obter_ultimas_interacoes
+from app.services.history_service import salvar_interacao, obter_ultimas_interacoes, marcar_interacoes_como_lidas
 from app.services.company_service import obter_configuracao_empresa
 from app.database.database import conectar, _cursor, _placeholder
 from app.routes.analytics import registrar_pergunta_historico
@@ -221,15 +221,30 @@ async def telegram_webhook(request: Request):
     ph = _placeholder()
 
     try:
+        # 0. Garante que o registro do cliente exista no CRM
+        cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
+        cliente = cursor.fetchone()
+        if not cliente:
+            nome_lead = f"Lead Telegram #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
+            cursor.execute(f"""
+                INSERT INTO clientes (empresa_id, nome, telegram_chat_id, origem, aguardando_contato)
+                VALUES ({ph}, {ph}, {ph}, 'telegram', {ph})
+            """, (empresa_id, nome_lead, chat_id, False))
+            conexao.commit()
+            cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
+            cliente = cursor.fetchone()
+
+        cliente_id = cliente["id"]
+
         # 1. Checa atribuição de atendente humano (Bot vs Humano)
         cursor.execute(f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph}", (chat_id,))
         conv_status = cursor.fetchone()
         if conv_status and conv_status.get("status") == "humano":
             # Modo humano ativo: não dispara IA nem resposta automática, apenas registra
             cursor.execute(f"""
-                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia)
-                VALUES ({ph}, {ph}, {ph})
-            """, (chat_id, texto_recebido, ""))
+                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida)
+                VALUES ({ph}, {ph}, {ph}, {ph})
+            """, (chat_id, texto_recebido, "", False))
             conexao.commit()
             return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
 
@@ -244,6 +259,7 @@ async def telegram_webhook(request: Request):
                 "• `/suporte` - Falar com um consultor humano"
             )
             enviar_mensagem_telegram(chat_id, msg_start)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_start, lida=False)
             return {"status": "ok"}
 
         if comando in ["/ajuda", "/help", "ajuda", "help"]:
@@ -254,6 +270,7 @@ async def telegram_webhook(request: Request):
                 "• Se precisar falar com um atendente humano, use o comando `/suporte`."
             )
             enviar_mensagem_telegram(chat_id, msg_ajuda)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False)
             return {"status": "ok"}
 
         if comando in ["/suporte", "/support", "suporte", "support"]:
@@ -262,24 +279,90 @@ async def telegram_webhook(request: Request):
             orientacao = config_suporte.get("mensagem_suporte", "Entre em contato com nossa equipe.")
             msg_suporte = f"📞 **Suporte e Atendimento:**\n\n{orientacao}\n📱 Contato: `{telefone}`"
             enviar_mensagem_telegram(chat_id, msg_suporte)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False)
             return {"status": "ok"}
 
-        # 3. Busca histórico recente de conversas
+        # 3. PARTE 13: Estado 'aguardando dados de contato'
+        if cliente.get("aguardando_contato"):
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto_recebido)
+            phone_match = re.search(r'(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\s?)?\d{4,5}[-\s]?\d{4}', texto_recebido)
+
+            novo_email = email_match.group(0).lower() if email_match else cliente.get("email")
+            novo_telefone = phone_match.group(0).strip() if phone_match else cliente.get("telefone")
+
+            # O restante do texto é interpretado como o nome
+            texto_sem_contatos = texto_recebido
+            if email_match:
+                texto_sem_contatos = texto_sem_contatos.replace(email_match.group(0), "")
+            if phone_match:
+                texto_sem_contatos = texto_sem_contatos.replace(phone_match.group(0), "")
+
+            texto_nome = re.sub(r'(?i)(meu nome [eé]|sou o|sou a|me chamo|nome:?|e-mail:?|email:?|telefone:?|tel:?|cel:?|whatsapp:?)', '', texto_sem_contatos)
+            texto_nome = re.sub(r'[,;\n\r\t]+', ' ', texto_nome).strip()
+            nome_final = texto_nome if len(texto_nome) >= 2 else (cliente.get("nome") or f"Lead #{chat_id}")
+
+            cursor.execute(f"""
+                UPDATE clientes
+                SET nome = {ph}, email = {ph}, telefone = {ph}, aguardando_contato = {ph}
+                WHERE id = {ph}
+            """, (nome_final, novo_email, novo_telefone, False, cliente_id))
+            conexao.commit()
+
+            msg_confirmacao = (
+                f"Perfeito, {nome_final}! Anotei seus dados de contato com sucesso "
+                f"(E-mail: {novo_email or 'não informado'} | Telefone: {novo_telefone or 'não informado'}).\n\n"
+                "Nossa equipe de atendimento foi acionada e entrará em contato em breve para te auxiliar melhor! "
+                "Se precisar de mais informações sobre nossos serviços, estou à sua disposição."
+            )
+            enviar_mensagem_telegram(chat_id, msg_confirmacao)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False)
+            return {"status": "ok", "mensagem": "Dados de contato salvos com sucesso"}
+
+        # 4. RAG: Busca estritamente pública
         historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3)
         config_suporte = obter_configuracao_empresa(empresa_id=empresa_id)
 
-        # 4. RAG: Busca estritamente pública
         contexto_publico, docs_usados = buscar_contexto_relevante(
             pergunta=texto_recebido,
             empresa_id=empresa_id
         )
 
-        # 5. Geração de resposta com Gemini
+        # PARTE 13: Se NÃO for encontrado contexto relevante na base pública e faltar contato do cliente
+        tem_contexto = bool(contexto_publico and len(contexto_publico.strip()) > 10)
+        tem_nome_cadastrado = cliente.get("nome") and not str(cliente["nome"]).startswith("Lead")
+        tem_email_cadastrado = bool(cliente.get("email") and cliente["email"].strip())
+        tem_tel_cadastrado = bool(cliente.get("telefone") and cliente["telefone"].strip())
+
+        if not tem_contexto and not (tem_nome_cadastrado and tem_email_cadastrado and tem_tel_cadastrado):
+            # Coloca em estado aguardando_contato e pede os dados de forma conversacional
+            cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (True, cliente_id))
+            conexao.commit()
+
+            msg_pedir_contato = (
+                "Não encontrei isso na nossa base pública, um atendente pode te ajudar melhor — "
+                "pode me passar seu nome, e-mail e telefone para contato?"
+            )
+            enviar_mensagem_telegram(chat_id, msg_pedir_contato)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_pedir_contato, lida=False)
+            registrar_pergunta_historico(
+                canal="telegram",
+                empresa_id=empresa_id,
+                pergunta=texto_recebido,
+                resposta=msg_pedir_contato,
+                telegram_chat_id=chat_id,
+                documentos_utilizados=[],
+                teve_contexto=False,
+                fonte_resposta="base_conhecimento"
+            )
+            return {"status": "ok", "acao": "solicitado_dados_contato"}
+
+        # 5. Geração de resposta com Gemini (utilizando empresa_id para BYOK)
         resposta_ia = ai_service.gerar_resposta(
             pergunta=texto_recebido,
             contexto=contexto_publico,
             historico=historico_recente,
-            config_suporte=config_suporte
+            config_suporte=config_suporte,
+            empresa_id=empresa_id
         )
 
         # 6. Envia resposta ao Telegram
@@ -289,11 +372,11 @@ async def telegram_webhook(request: Request):
         salvar_interacao(
             telegram_chat_id=chat_id,
             mensagem_usuario=texto_recebido,
-            resposta_ia=resposta_ia
+            resposta_ia=resposta_ia,
+            lida=False
         )
 
         # 8. Log no Analytics (Perguntas Histórico)
-        teve_contexto = bool(contexto_publico and len(contexto_publico.strip()) > 10)
         registrar_pergunta_historico(
             canal="telegram",
             empresa_id=empresa_id,
@@ -301,28 +384,9 @@ async def telegram_webhook(request: Request):
             resposta=resposta_ia,
             telegram_chat_id=chat_id,
             documentos_utilizados=docs_usados,
-            teve_contexto=teve_contexto,
+            teve_contexto=tem_contexto,
             fonte_resposta="base_conhecimento"
         )
-
-        # 9. Automação CRM: Cliente e Negócio nascem e evoluem automaticamente
-        # A. Garante cliente cadastrado
-        cursor.execute(f"SELECT id, nome FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
-        cliente = cursor.fetchone()
-        if not cliente:
-            nome_lead = f"Lead Telegram #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
-            cursor.execute(f"""
-                INSERT INTO clientes (empresa_id, nome, telegram_chat_id, origem)
-                VALUES ({ph}, {ph}, {ph}, 'telegram')
-            """, (empresa_id, nome_lead, chat_id))
-
-            if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-                cliente_id = cursor.lastrowid
-            else:
-                cursor.execute(f"SELECT id FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
-                cliente_id = cursor.fetchone()["id"]
-        else:
-            cliente_id = cliente["id"]
 
         # B. Busca ou cria negócio em andamento para este cliente
         cursor.execute(f"""
@@ -598,6 +662,15 @@ def listar_conversas_telegram(empresa_id: int | None = None):
         cursor.execute(query)
         linhas = cursor.fetchall()
 
+        # Consulta mensagens não lidas agrupadas por chat_id
+        cursor.execute(f"""
+            SELECT telegram_chat_id, COUNT(*) AS nao_lidas
+            FROM historico_conversas
+            WHERE (lida = {ph} OR lida IS NULL) AND mensagem_usuario != ''
+            GROUP BY telegram_chat_id
+        """, (False,))
+        nao_lidas_map = {r["telegram_chat_id"]: r["nao_lidas"] for r in cursor.fetchall()}
+
         conversas = []
         for l in linhas:
             chat_id = l["telegram_chat_id"]
@@ -613,7 +686,9 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             if ultima_row:
                 ultima_msg = ultima_row["mensagem_usuario"] or ultima_row["resposta_ia"] or ""
 
-            nome_exibicao = l["cliente_nome"] if l["cliente_nome"] else f"Lead Telegram #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
+            # PARTE 19: Retornar nome do cliente cadastrado ou 'Lead #<chat_id>'
+            nome_exibicao = l["cliente_nome"] if l["cliente_nome"] else f"Lead #{chat_id}"
+            qtd_nao_lidas = nao_lidas_map.get(chat_id, 0)
 
             conversas.append({
                 "chat_id": chat_id,
@@ -623,16 +698,35 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 "atendente_id": l["atendente_id"],
                 "nome_atendente": l["nome_atendente"] or ("Assistente IA" if l["status_atendimento"] == "bot" else "Atendente"),
                 "total_mensagens": l["total_interacoes"],
+                "nao_lidas": qtd_nao_lidas,
                 "ultima_mensagem": ultima_msg,
                 "data_ultima_mensagem": str(l["data_ultima_mensagem"])
             })
 
-        return {"total": len(conversas), "conversas": conversas}
+        total_nao_lidas = sum(c["nao_lidas"] for c in conversas)
+        return {
+            "total": len(conversas),
+            "total_nao_lidas": total_nao_lidas,
+            "conversas": conversas
+        }
     except Exception as e:
         logger.error(f"[Telegram] Erro ao listar conversas: {e}")
-        return {"total": 0, "conversas": []}
+        return {"total": 0, "total_nao_lidas": 0, "conversas": []}
     finally:
         conexao.close()
+
+
+@router.patch("/conversas/{chat_id}/marcar-lida")
+def marcar_conversa_lida(chat_id: str):
+    """
+    PARTE 20: Marca todas as mensagens desta conversa como lidas pelo atendente.
+    """
+    qtd = marcar_interacoes_como_lidas(str(chat_id))
+    return {
+        "sucesso": True,
+        "chat_id": chat_id,
+        "mensagens_marcadas": qtd
+    }
 
 
 @router.get("/conversas/{chat_id}/mensagens")

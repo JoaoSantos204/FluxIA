@@ -83,6 +83,30 @@ class AIService:
         self.primary_model = "gemini-3.5-flash-lite"
         self.fallback_model = "gemini-3.6-flash"
 
+    def obter_client(self, empresa_id: int | None = None) -> genai.Client:
+        """
+        Retorna o client do Google Gemini.
+        Se a empresa possuir chave própria de API (BYOK) cadastrada em configuracoes_empresa,
+        utiliza essa chave; caso contrário, utiliza a chave padrão da plataforma (GEMINI_API_KEY).
+        """
+        chave = None
+        if empresa_id:
+            try:
+                from app.services.company_service import obter_configuracao_empresa
+                cfg = obter_configuracao_empresa(empresa_id)
+                chave = cfg.get("gemini_api_key")
+            except Exception as e:
+                logger.warning(f"[AIService] Falha ao consultar chave da empresa {empresa_id}: {e}")
+
+        if not chave or not chave.strip():
+            return self.client
+
+        try:
+            return genai.Client(api_key=chave.strip())
+        except Exception as e:
+            logger.warning(f"[AIService] Erro ao instanciar client com chave da empresa {empresa_id}: {e}. Usando client padrão.")
+            return self.client
+
     def montar_system_prompt(self, config_suporte: dict | None = None) -> str:
         return montar_system_prompt(config_suporte)
 
@@ -95,6 +119,7 @@ class AIService:
         contexto: str,
         historico: list | None = None,
         config_suporte: dict | None = None,
+        empresa_id: int | None = None,
         retries: int = 3,
         delay: int = 2
     ) -> str:
@@ -124,11 +149,12 @@ class AIService:
         )
 
         models_to_try = [self.primary_model, self.fallback_model]
+        client_ativo = self.obter_client(empresa_id)
 
         for model in models_to_try:
             for tentativa in range(1, retries + 1):
                 try:
-                    resposta = self.client.models.generate_content(
+                    resposta = client_ativo.models.generate_content(
                         model=model,
                         contents=user_content,
                         config=config
@@ -156,6 +182,7 @@ class AIService:
         contexto: str,
         historico: list | None = None,
         config_suporte: dict | None = None,
+        empresa_id: int | None = None,
         retries: int = 3,
         delay: int = 2
     ) -> tuple[str, str]:
@@ -193,11 +220,12 @@ class AIService:
         )
 
         models_to_try = [self.primary_model, self.fallback_model]
+        client_ativo = self.obter_client(empresa_id)
 
         for model in models_to_try:
             for tentativa in range(1, retries + 1):
                 try:
-                    resposta = self.client.models.generate_content(
+                    resposta = client_ativo.models.generate_content(
                         model=model,
                         contents=user_content,
                         config=config

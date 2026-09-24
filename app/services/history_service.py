@@ -4,7 +4,7 @@ from app.database.database import conectar, _cursor, _placeholder
 logger = logging.getLogger(__name__)
 
 
-def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: str) -> int | None:
+def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: str, lida: bool = False) -> int | None:
     """
     Grava uma interação (pergunta do usuário e resposta da IA) no histórico de conversas.
     """
@@ -14,9 +14,9 @@ def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: 
 
     try:
         cursor.execute(f"""
-            INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia)
-            VALUES ({ph}, {ph}, {ph})
-        """, (str(telegram_chat_id), mensagem_usuario, resposta_ia))
+            INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida)
+            VALUES ({ph}, {ph}, {ph}, {ph})
+        """, (str(telegram_chat_id), mensagem_usuario, resposta_ia, lida))
         conexao.commit()
 
         # lastrowid no SQLite; fallback para Postgres
@@ -35,6 +35,31 @@ def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: 
         conexao.rollback()
         logger.error(f"[HistoryService] Erro ao salvar histórico de conversa: {e}")
         return None
+    finally:
+        conexao.close()
+
+
+def marcar_interacoes_como_lidas(telegram_chat_id: str) -> int:
+    """
+    Marca todas as mensagens de um determinado chat_id como lidas pelo atendente.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            UPDATE historico_conversas
+            SET lida = {ph}
+            WHERE telegram_chat_id = {ph} AND (lida = {ph} OR lida IS NULL)
+        """, (True, str(telegram_chat_id), False))
+        afetados = cursor.rowcount if hasattr(cursor, 'rowcount') else 0
+        conexao.commit()
+        return afetados
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[HistoryService] Erro ao marcar mensagens como lidas para {telegram_chat_id}: {e}")
+        return 0
     finally:
         conexao.close()
 

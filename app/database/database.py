@@ -130,6 +130,7 @@ def _criar_banco_sqlite(cursor):
             telegram_chat_id TEXT NOT NULL,
             mensagem_usuario TEXT NOT NULL,
             resposta_ia TEXT NOT NULL,
+            lida BOOLEAN DEFAULT 0,
             data_interacao DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -141,6 +142,7 @@ def _criar_banco_sqlite(cursor):
             empresa_id INTEGER DEFAULT 1,
             numero_suporte_humano TEXT DEFAULT '(11) 99999-9999',
             mensagem_suporte TEXT DEFAULT 'Por favor, entre em contato com nossa equipe de atendimento.',
+            gemini_api_key TEXT,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id)
         )
     """)
@@ -167,6 +169,7 @@ def _criar_banco_sqlite(cursor):
             email TEXT,
             telegram_chat_id TEXT UNIQUE,
             origem TEXT DEFAULT 'telegram',
+            aguardando_contato BOOLEAN DEFAULT 0,
             criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
         )
@@ -260,6 +263,21 @@ def _criar_banco_sqlite(cursor):
                     ELSE 'cliente'
                 END
             """)
+
+    cursor.execute("PRAGMA table_info(clientes)")
+    colunas_cli = [c["name"] for c in cursor.fetchall()]
+    if "aguardando_contato" not in colunas_cli:
+        cursor.execute("ALTER TABLE clientes ADD COLUMN aguardando_contato BOOLEAN DEFAULT 0")
+
+    cursor.execute("PRAGMA table_info(historico_conversas)")
+    colunas_hist = [c["name"] for c in cursor.fetchall()]
+    if "lida" not in colunas_hist:
+        cursor.execute("ALTER TABLE historico_conversas ADD COLUMN lida BOOLEAN DEFAULT 0")
+
+    cursor.execute("PRAGMA table_info(configuracoes_empresa)")
+    colunas_cfg = [c["name"] for c in cursor.fetchall()]
+    if "gemini_api_key" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN gemini_api_key TEXT")
 
     # Dados iniciais
     cursor.execute("SELECT COUNT(*) AS total FROM empresas")
@@ -361,6 +379,7 @@ def _criar_banco_postgres(cursor):
             telegram_chat_id TEXT NOT NULL,
             mensagem_usuario TEXT NOT NULL,
             resposta_ia TEXT NOT NULL,
+            lida BOOLEAN DEFAULT FALSE,
             data_interacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -372,6 +391,7 @@ def _criar_banco_postgres(cursor):
             empresa_id INTEGER DEFAULT 1,
             numero_suporte_humano TEXT DEFAULT '(11) 99999-9999',
             mensagem_suporte TEXT DEFAULT 'Por favor, entre em contato com nossa equipe de atendimento.',
+            gemini_api_key TEXT,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id)
         )
     """)
@@ -398,6 +418,7 @@ def _criar_banco_postgres(cursor):
             email TEXT,
             telegram_chat_id TEXT UNIQUE,
             origem TEXT DEFAULT 'telegram',
+            aguardando_contato BOOLEAN DEFAULT FALSE,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
         )
@@ -477,6 +498,15 @@ def _criar_banco_postgres(cursor):
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='perfil') THEN
                 ALTER TABLE usuarios ADD COLUMN perfil TEXT DEFAULT 'cliente';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clientes' AND column_name='aguardando_contato') THEN
+                ALTER TABLE clientes ADD COLUMN aguardando_contato BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='historico_conversas' AND column_name='lida') THEN
+                ALTER TABLE historico_conversas ADD COLUMN lida BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='gemini_api_key') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN gemini_api_key TEXT;
             END IF;
         END $$;
     """)

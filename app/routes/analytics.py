@@ -48,16 +48,36 @@ def registrar_pergunta_historico(
         logger.error(f"[Analytics] Falha ao registrar pergunta no histórico: {e}")
 
 
+def _validar_acesso_analytics(
+    usuario_id: Optional[int] = None,
+    x_user_id: Optional[int] = None,
+    usuario_perfil: Optional[str] = None
+):
+    if usuario_perfil:
+        if usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem acessar o Analytics RAG."
+            )
+        return
+    uid = usuario_id or x_user_id
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identificação do usuário (usuario_id, cabeçalho X-User-Id ou usuario_perfil) é obrigatória para acessar o Analytics."
+        )
+    validar_perfil_admin_ou_master(uid)
+
+
 @router.get("/documentos-mais-usados")
 def documentos_mais_usados(
     empresa_id: int = Query(1),
     usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
-    """Retorna os documentos mais acionados pelo RAG com frequência e similaridade média."""
-    uid = usuario_id or x_user_id
-    if uid:
-        validar_perfil_admin_ou_master(uid)
+    """Retorna os documentos mais acionados pelo RAG com frequência e similaridade média. Restrito a admin/master."""
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
 
     conexao = conectar()
     cursor = _cursor(conexao)
@@ -112,12 +132,11 @@ def documentos_mais_usados(
 def metricas_assertividade(
     empresa_id: int = Query(1),
     usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
-    """Calcula taxa de cobertura e assertividade da base de conhecimento vs conhecimento geral."""
-    uid = usuario_id or x_user_id
-    if uid:
-        validar_perfil_admin_ou_master(uid)
+    """Calcula taxa de cobertura e assertividade da base de conhecimento vs conhecimento geral. Restrito a admin/master."""
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
 
     conexao = conectar()
     cursor = _cursor(conexao)
@@ -173,38 +192,39 @@ def listar_historico_perguntas(
     limite: int = Query(20, ge=1, le=100),
     canal: Optional[str] = Query(None),
     usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
-    """Lista paginada do histórico completo de perguntas e respostas com metadados."""
-    uid = usuario_id or x_user_id
-    if uid:
-        validar_perfil_admin_ou_master(uid)
+    """Lista paginada do histórico completo de perguntas e respostas com metadados e autor. Restrito a admin/master."""
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        filtros = [f"empresa_id = {ph}"]
+        filtros = [f"p.empresa_id = {ph}"]
         params = [empresa_id]
 
         if canal:
-            filtros.append(f"canal = {ph}")
+            filtros.append(f"p.canal = {ph}")
             params.append(canal.strip().lower())
 
         where = "WHERE " + " AND ".join(filtros)
         offset = (pagina - 1) * limite
 
-        cursor.execute(f"SELECT COUNT(*) AS total FROM perguntas_historico {where}", tuple(params))
+        cursor.execute(f"SELECT COUNT(*) AS total FROM perguntas_historico p {where}", tuple(params))
         total_registros = cursor.fetchone()["total"]
 
         params.extend([limite, offset])
         cursor.execute(f"""
-            SELECT id, canal, empresa_id, usuario_id, telegram_chat_id,
-                   pergunta, resposta, documentos_utilizados, teve_contexto,
-                   fonte_resposta, criado_em
-            FROM perguntas_historico
+            SELECT p.id, p.canal, p.empresa_id, p.usuario_id, p.telegram_chat_id,
+                   p.pergunta, p.resposta, p.documentos_utilizados, p.teve_contexto,
+                   p.fonte_resposta, p.criado_em,
+                   u.nome AS usuario_nome, u.email AS usuario_email
+            FROM perguntas_historico p
+            LEFT JOIN usuarios u ON u.id = p.usuario_id
             {where}
-            ORDER BY id DESC
+            ORDER BY p.id DESC
             LIMIT {ph} OFFSET {ph}
         """, tuple(params))
 
