@@ -1,11 +1,14 @@
 import os
 import time
+import logging
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 load_dotenv()
+logger = logging.getLogger(__name__)
+
 
 def montar_system_prompt(config_suporte: dict | None = None) -> str:
     suporte = config_suporte or {}
@@ -17,8 +20,8 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
     dúvidas dos usuários de forma natural, precisa e profissional.
 
     Diretrizes de Resposta:
-    1. Fonte de Informação (RAG):
-        - Utilize as informações fornecidas no contexto da base de conhecimento para responder às perguntas.
+    1. Fonte de Informação (RAG Público):
+        - Utilize prioritariamente as informações fornecidas no contexto da base de conhecimento pública para responder às perguntas.
         - NUNCA invente procedimentos corporativos, dados cadastrais, regras internas, preços ou informações técnicas ausentes no contexto.
 
     2. Transição para Atendimento/Suporte Humano:
@@ -28,17 +31,41 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
             * Adicione a recomendação: "{mensagem_suporte}".
 
     3. Fluidez Conversacional e Encerramento das Respostas:
-        - NUNCA finalize suas respostas perguntando "Como posso ajudar você hoje?", "Em que posso te ajudar?" ou qualquer saudação de início de conversa, pois a interação já está em andamento.
+        - NUNCA finalize suas respostas perguntando "Como posso ajudar você hoje?", "Em que posso te ajudar?" ou qualquer saudação de início de conversa.
         - Para concluir a resposta de forma prestativa e natural, finalize sempre perguntando se o usuário precisa de mais alguma assistência, usando variações como:
             * "Posso ajudar em algo mais?"
             * "Ficou alguma dúvida ou ajudo em algo mais?"
             * "Posso te auxiliar com mais alguma informação?"
-        - Se houver histórico recente da conversa, evite saudações repetitivas no início (como "Olá", "Bom dia", "Tudo bem?"). Vá direto à explicação e encerre com presteza.
+        - Se houver histórico recente da conversa, evite saudações repetitivas no início.
 
     4. Tom e Estilo:
         - Responda sempre em Português do Brasil.
         - Mantenha um tom profissional, amigável e acolhedor.
-        - NUNCA use jargões de engenharia de software na resposta como "de acordo com o chunk", "conforme o embedding", "via RAG" ou "na base de dados". Responda de forma humanizada.
+        - NUNCA use jargões de engenharia de software como "chunk", "embedding" ou "similaridade cosseno".
+    """
+
+
+def montar_system_prompt_interno(config_suporte: dict | None = None) -> str:
+    suporte = config_suporte or {}
+    telefone = suporte.get("numero_suporte_humano", "(11) 99999-9999")
+
+    return f"""
+    Você é o Assistente Interno de IA e Copiloto Operacional da plataforma FluxIA.
+    Sua missão é auxiliar colaboradores, gerentes e diretores no dia a dia, respondendo perguntas
+    sobre a empresa e auxiliando em tarefas gerais de negócios, análise, redação e suporte.
+
+    Diretrizes de Resposta:
+    1. Prioridade para a Base de Conhecimento Interna:
+        - Se houver trechos de documentos fornecidos no contexto da empresa, utilize-os como fonte prioritária da verdade.
+    2. Assistente Híbrido com Conhecimento Geral:
+        - Se a pergunta do colaborador NÃO for encontrada nos documentos internos ou não houver documentos correspondentes, você NÃO DEVE RECUSAR a resposta.
+        - Ao invés de recusar, responda utilizando seu amplo conhecimento geral (técnico, comercial, operacional ou de boas práticas).
+        - Sempre que responder com conhecimento geral (sem embasamento nos documentos internos da empresa), esclareça de forma natural e profissional:
+          "[Nota: Esta informação foi respondida com base em conhecimento geral de mercado, pois não há documento interno registrado sobre este tópico específico]".
+    3. Tom e Estilo:
+        - Mantenha um tom executivo, objetivo, inteligente e colaborativo.
+        - Idioma: Português do Brasil.
+        - NUNCA mencione termos técnicos internos de IA como 'chunks', 'embeddings' ou 'limiar de similaridade'.
     """
 
 
@@ -59,22 +86,8 @@ class AIService:
     def montar_system_prompt(self, config_suporte: dict | None = None) -> str:
         return montar_system_prompt(config_suporte)
 
-    def tratar_mensagem_erro(self, erro: Exception) -> str:
-        """
-        Analisa a exceção da API e converte para uma mensagem simplificada no log.
-        """
-        msg_erro = str(erro).lower()
-
-        if "503" in msg_erro or "unavailable" in msg_erro or "high demand" in msg_erro:
-            return "Alta demanda temporária nos servidores do modelo."
-        elif "404" in msg_erro or "not_found" in msg_erro or "not found" in msg_erro:
-            return "Modelo não encontrado ou incompatível com esta versão da API."
-        elif "timeout" in msg_erro or "deadline" in msg_erro:
-            return "Tempo limite de conexão excedido (Timeout)."
-        elif "401" in msg_erro or "403" in msg_erro or "api_key" in msg_erro:
-            return "Falha de autenticação (Chave de API inválida ou sem permissão)."
-        else:
-            return f"Erro inesperado no processamento: {type(erro).__name__}" 
+    def montar_system_prompt_interno(self, config_suporte: dict | None = None) -> str:
+        return montar_system_prompt_interno(config_suporte)
 
     def gerar_resposta(
         self,
@@ -85,10 +98,6 @@ class AIService:
         retries: int = 3,
         delay: int = 2
     ) -> str:
-        """
-        Gera uma resposta baseada no contexto e histórico recente utilizando o SDK do Gemini
-        com suporte a RBAC, histórico conversacional e transição para suporte humano.
-        """
         partes = []
 
         if contexto and len(contexto.strip()) >= 10:
@@ -116,9 +125,7 @@ class AIService:
 
         models_to_try = [self.primary_model, self.fallback_model]
 
-        # Tenta modelo por modelo
         for model in models_to_try:
-            print(f"[AIService] Testando modelo: {model}")
             for tentativa in range(1, retries + 1):
                 try:
                     resposta = self.client.models.generate_content(
@@ -133,16 +140,78 @@ class AIService:
                         raise Exception("Resposta vazia retornada pela API.")
 
                 except Exception as e:
-                    print(f"[AIService] Modelo '{model}' - Tentativa {tentativa}/{retries} falhou: {e}")
+                    logger.warning(f"[AIService] Modelo '{model}' - Tentativa {tentativa}/{retries} falhou: {e}")
                     if tentativa < retries:
                         time.sleep(delay)
-                    else:
-                        print(f"[AIService] Esgotadas as tentativas para '{model}'. Tentando próximo modelo...")
 
-        # Se TODOS os modelos falharem em TODAS as tentativas, retorna mensagem de fallback com suporte humano
         telefone = (config_suporte or {}).get("numero_suporte_humano", "(11) 99999-9999")
         return (
             f"Desculpe, nossos serviços de inteligência estão com alta demanda no momento. "
             f"Caso precise de assistência imediata, por favor contate nossa equipe de suporte pelo telefone: {telefone}."
         )
 
+    def gerar_resposta_interna(
+        self,
+        pergunta: str,
+        contexto: str,
+        historico: list | None = None,
+        config_suporte: dict | None = None,
+        retries: int = 3,
+        delay: int = 2
+    ) -> tuple[str, str]:
+        """
+        Gera resposta para o Chat Interno do Portal.
+        Se houver contexto na base, responde como 'base_conhecimento'.
+        Se não houver contexto, NÃO recusa: responde como 'conhecimento_geral'.
+        Retorna (texto_resposta, fonte_resposta).
+        """
+        tem_contexto = bool(contexto and len(contexto.strip()) >= 15)
+        fonte = "base_conhecimento" if tem_contexto else "conhecimento_geral"
+
+        partes = []
+        if tem_contexto:
+            partes.append(f"--- CONTEXTO DOS DOCUMENTOS INTERNOS DA EMPRESA ---\n{contexto}")
+        else:
+            partes.append("--- CONTEXTO DOS DOCUMENTOS INTERNOS DA EMPRESA ---\n[Nenhum documento interno específico encontrado para esta dúvida. Utilize conhecimento geral corporativo.]")
+
+        if historico:
+            linhas_hist = []
+            for interacao in historico:
+                usuario_msg = interacao.get("mensagem_usuario", "")
+                ia_msg = interacao.get("resposta_ia", "")
+                linhas_hist.append(f"Colaborador: {usuario_msg}\nCopiloto: {ia_msg}")
+            partes.append("--- HISTÓRICO RECENTE ---\n" + "\n\n".join(linhas_hist))
+
+        partes.append(f"--- PERGUNTA DO COLABORADOR ---\n{pergunta}")
+        user_content = "\n\n".join(partes)
+
+        prompt_sistema = self.montar_system_prompt_interno(config_suporte)
+
+        config = types.GenerateContentConfig(
+            system_instruction=prompt_sistema,
+            temperature=0.4
+        )
+
+        models_to_try = [self.primary_model, self.fallback_model]
+
+        for model in models_to_try:
+            for tentativa in range(1, retries + 1):
+                try:
+                    resposta = self.client.models.generate_content(
+                        model=model,
+                        contents=user_content,
+                        config=config
+                    )
+                    if resposta and resposta.text:
+                        return resposta.text.strip(), fonte
+                    else:
+                        raise Exception("Resposta vazia retornada pela API.")
+                except Exception as e:
+                    logger.warning(f"[AIService Interno] Modelo '{model}' tentativa {tentativa}/{retries} falhou: {e}")
+                    if tentativa < retries:
+                        time.sleep(delay)
+
+        return (
+            "No momento o serviço de inteligência artificial está temporariamente instável. Por favor, tente novamente em instantes.",
+            fonte
+        )

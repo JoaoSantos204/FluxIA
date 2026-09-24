@@ -25,6 +25,74 @@
       }
     })();
   </script>
+  <style>
+    /* KANBAN CRM ESTILOS */
+    .kanban-board {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 24px;
+      align-items: flex-start;
+      min-height: calc(100vh - 180px);
+    }
+    .kanban-col {
+      background: rgba(26, 31, 46, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      width: 270px;
+      min-width: 270px;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 190px);
+    }
+    .kanban-col-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .kanban-col-body {
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .kanban-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-left: 3px solid #38bdf8;
+      border-radius: 8px;
+      padding: 12px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .kanban-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+    .kanban-card.stage-novo { border-left-color: #38bdf8; }
+    .kanban-card.stage-qualificado { border-left-color: #818cf8; }
+    .kanban-card.stage-proposta { border-left-color: #fbbf24; }
+    .kanban-card.stage-negociacao { border-left-color: #f97316; }
+    .kanban-card.stage-fechado { border-left-color: #34d399; }
+    .kanban-card.stage-perdido { border-left-color: #f87171; }
+    .kanban-select {
+      width: 100%;
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 4px 6px;
+      font-size: 11px;
+      margin-top: 8px;
+      outline: none;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
 <div class="app">
@@ -72,13 +140,17 @@
           Base de Conhecimento
           <span class="nav-badge" id="badge-total-documentos">0</span>
         </div>
+        <div class="nav-item" onclick="switchTab('analytics', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Analytics RAG
+        </div>
       </div>
 
       <div class="nav-section">
-        <div class="nav-label">Vendas</div>
+        <div class="nav-label">Vendas & CRM</div>
         <div class="nav-item" onclick="switchTab('fluxos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-          Fluxos
+          Funil (Kanban CRM)
         </div>
         <div class="nav-item" onclick="switchTab('contratos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -178,74 +250,25 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
           <div class="metric-label">Receita em Pipeline</div>
-          <div class="metric-value">R$394k</div>
-          <div class="metric-change up">↑ +R$52k</div>
+          <div class="metric-value" id="card-receita-pipeline">R$ 0,00</div>
+          <div class="metric-change up" id="card-receita-sub">Negócios em Aberto</div>
         </div>
         <div class="metric-card">
           <div class="metric-icon mi-purple">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
           </div>
           <div class="metric-label">Taxa de Conversão</div>
-          <div class="metric-value">31%</div>
-          <div class="metric-change up">↑ +4% vs mês ant.</div>
+          <div class="metric-value" id="card-taxa-conversao">0%</div>
+          <div class="metric-change up">Fechados vs Total</div>
         </div>
       </div>
 
       <div class="dash-body">
         <div>
           <div class="pipeline-mini">
-            <div class="section-title">Pipeline de Vendas (Kanban)</div>
-            <div class="pipeline-cols">
-              <div>
-                <div class="pipe-col-head ph-new">Novo (41)</div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Marcos Silva</div>
-                  <div class="lmc-val">R$ 8.500</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">há 2h</span></div>
-                </div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Ana Ferreira</div>
-                  <div class="lmc-val">R$ 12.000</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">há 5h</span></div>
-                </div>
-              </div>
-              <div>
-                <div class="pipe-col-head ph-qual">Qualif. (38)</div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Tech Corp</div>
-                  <div class="lmc-val">R$ 45.000</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">há 1h</span></div>
-                </div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Loja Beta</div>
-                  <div class="lmc-val">R$ 6.200</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">ontem</span></div>
-                </div>
-              </div>
-              <div>
-                <div class="pipe-col-head ph-prop">Proposta (29)</div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">StartupX</div>
-                  <div class="lmc-val">R$ 28.000</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">há 3h</span></div>
-                </div>
-              </div>
-              <div>
-                <div class="pipe-col-head ph-neg">Negoc. (22)</div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Grupo Delta</div>
-                  <div class="lmc-val">R$ 96.000</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">há 30min</span></div>
-                </div>
-              </div>
-              <div>
-                <div class="pipe-col-head ph-close">Fechado (18)</div>
-                <div class="lead-mini-card">
-                  <div class="lmc-name">Alfa Ltda</div>
-                  <div class="lmc-val">R$ 34.000</div>
-                  <div class="lmc-wpp"><div class="wpp-dot"></div><span style="font-size:10px;color:#888">hoje</span></div>
-                </div>
-              </div>
+            <div class="section-title">Funil de Vendas Rápido</div>
+            <div class="pipeline-cols" id="dash-mini-kanban">
+              <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px; width:100%;">Carregando dados do funil...</div>
             </div>
           </div>
         </div>
@@ -280,9 +303,12 @@
           <div class="ch-avatar" id="chat-header-avatar" style="background:#229ED9; color:white;">✈️</div>
           <div class="ch-info">
             <div class="ch-name" id="chat-header-name">Selecione uma conversa</div>
-            <div class="ch-status" id="chat-header-status">Canal: Telegram Bot</div>
+            <div class="ch-status" id="chat-header-status">Canal: Telegram · Modo: <span id="chat-header-modo" style="font-weight:600; color:#38bdf8;">Assistente IA</span></div>
           </div>
-          <div class="chat-actions">
+          <div class="chat-actions" style="display:flex; align-items:center; gap:8px;">
+            <button id="btn-toggle-atendimento" class="btn-secondary" style="padding:5px 12px; font-size:11px; display:none;" onclick="alternarModoAtendimento()">
+              🧑 Assumir Atendimento
+            </button>
             <button class="btn-secondary" style="padding:5px 12px; font-size:11px;" onclick="recarregarConversasTelegram()">
               🔄 Atualizar
             </button>
@@ -316,153 +342,56 @@
         </div>
 
         <div class="lp-section">
-          <div class="lp-title">Dados do Contato</div>
-          <div class="lp-field"><span class="lp-field-key">E-mail</span><span class="lp-field-val" id="lp-email">-</span></div>
-          <div class="lp-field"><span class="lp-field-key">Perfil</span><span class="lp-field-val" id="lp-perfil">-</span></div>
+          <div class="lp-title">Dados do Lead</div>
+          <div class="lp-field"><span class="lp-field-key">Telefone</span><span class="lp-field-val" id="lp-telefone">-</span></div>
+          <div class="lp-field"><span class="lp-field-key">Atendente</span><span class="lp-field-val" id="lp-atendente-val" style="color:#38bdf8; font-weight:600;">Assistente IA</span></div>
           <div class="lp-field"><span class="lp-field-key">Ambiente</span><span class="lp-field-val" id="lp-empresa">-</span></div>
-          <div class="lp-field"><span class="lp-field-key">Canal</span><span class="lp-field-val" style="color:#229ED9; font-weight:600;">Telegram Oficial</span></div>
+          <div class="lp-field"><span class="lp-field-key">Canal</span><span class="lp-field-val" style="color:#229ED9; font-weight:600;">Telegram Bot</span></div>
         </div>
 
         <div class="lp-section">
-          <div class="lp-title">Status da Conexão</div>
-          <div class="lp-field"><span class="lp-field-key">Webhook</span><span class="lp-field-val" style="color:#25D366;">● Conectado</span></div>
+          <div class="lp-title">Métricas da Conversa</div>
+          <div class="lp-field"><span class="lp-field-key">Status IA</span><span class="lp-field-val" id="lp-status-ia" style="color:#25D366;">● Operacional</span></div>
           <div class="lp-field"><span class="lp-field-key">Total Mensagens</span><span class="lp-field-val" id="lp-total-msgs">0</span></div>
         </div>
       </div>
     </div>
 
-    <!-- RESUMOS -->
+    <!-- RESUMOS IA -->
     <div class="screen" id="screen-resumos">
       <div class="flow-header">
         <div>
-          <div class="page-title">Resumos IA</div>
-          <div class="page-sub">Análise automática de todas as conversas do WhatsApp</div>
+          <div class="page-title">Resumos Gerados por IA</div>
+          <div class="page-sub">Insights automáticos das interações do Telegram</div>
         </div>
-        <button class="btn-green">Gerar Todos</button>
+        <button class="btn-green" onclick="gerarNovoResumoIA()">+ Gerar Novo Resumo</button>
       </div>
-      <div class="summ-content">
-        <div class="summ-card">
-          <div class="summ-card-head">
-            <div class="sc-avatar ca-1">MR</div>
-            <div class="sc-info">
-              <div class="sc-name">Marcos Ribeiro · Tech Corp</div>
-              <div class="sc-date">Conversa recente · 14 mensagens</div>
-            </div>
-            <div class="sc-meta">
-              <span class="contract-status-badge cs-pending">Demo Agendada</span>
-            </div>
-          </div>
-          <div class="summ-body">
-            <div class="summ-ai-header">
-              <span class="summ-ai-badge">✦ IA</span>
-              <span class="summ-ai-title">Resumo gerado automaticamente</span>
-            </div>
-            <ul class="summ-points">
-              <li><div class="sp-dot"></div>Lead demonstrou interesse imediato após ver o site, mencionou uso de planilhas como dor principal</li>
-              <li><div class="sp-dot"></div>Time de 8 vendedores · Orçamento confirmado para plano Business (R$497/mês)</li>
-              <li><div class="sp-dot"></div>Diretor tem poder de decisão · Urgência alta ("esta semana")</li>
-            </ul>
-            <div class="summ-tags">
-              <span class="summ-tag st-green">Alta probabilidade</span>
-              <span class="summ-tag st-amber">Demo pendente</span>
-              <span class="summ-tag st-purple">R$ 45k</span>
+      <div class="dash-body" style="grid-template-columns: 1fr; margin-top:20px;">
+        <div class="metric-card" style="padding:24px;">
+          <div id="container-resumos-ia">
+            <div style="text-align:center; padding:40px; color:var(--text-muted); font-size:13px;">
+              Clique no botão acima para consolidar as conversas recentes do Telegram em um resumo executivo gerado por IA.
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- FLUXOS -->
+    <!-- FLUXOS & KANBAN CRM -->
     <div class="screen" id="screen-fluxos">
       <div class="flow-header">
         <div>
-          <div class="page-title">Fluxos Automatizados</div>
-          <div class="page-sub">Vendas · Qualificação · Contratos</div>
+          <div class="page-title">Funil de Vendas (Kanban CRM)</div>
+          <div class="page-sub">Gestão visual do ciclo de vida dos leads e oportunidades</div>
         </div>
-        <button class="btn-green">+ Novo Fluxo</button>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-secondary" onclick="carregarKanbanNegocios()" style="font-size:12px;">🔄 Atualizar Funil</button>
+        </div>
       </div>
-      <div class="flow-content">
-        <div class="flow-cards">
-          <div class="flow-card">
-            <div class="flow-card-head">
-              <div class="flow-icon fi-green">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-              </div>
-              <div>
-                <div class="flow-name">Qualificação de Leads</div>
-                <div class="flow-desc">Perguntas automáticas via WhatsApp</div>
-              </div>
-            </div>
-            <div class="flow-card-body">
-              <div class="flow-stats">
-                <div class="fs-item"><div class="fs-val">142</div><div class="fs-lbl">leads processados</div></div>
-                <div class="fs-item"><div class="fs-val">68%</div><div class="fs-lbl">qualificados</div></div>
-              </div>
-              <div class="flow-bar"><div class="flow-bar-fill" style="width:68%;background:var(--green)"></div></div>
-              <div class="flow-status">
-                <div class="flow-on"><div class="flow-dot dot-green"></div>Ativo</div>
-                <div class="toggle-sw" onclick="this.classList.toggle('off')"></div>
-              </div>
-            </div>
-          </div>
 
-          <div class="flow-card">
-            <div class="flow-card-head">
-              <div class="flow-icon fi-purple">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#534AB7" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              </div>
-              <div>
-                <div class="flow-name">Assinatura de Contratos</div>
-                <div class="flow-desc">Envio e coleta de assinatura digital</div>
-              </div>
-            </div>
-            <div class="flow-card-body">
-              <div class="flow-stats">
-                <div class="fs-item"><div class="fs-val">23</div><div class="fs-lbl">contratos enviados</div></div>
-                <div class="fs-item"><div class="fs-val">87%</div><div class="fs-lbl">assinados</div></div>
-              </div>
-              <div class="flow-bar"><div class="flow-bar-fill" style="width:87%;background:#7F77DD"></div></div>
-              <div class="flow-status">
-                <div class="flow-on"><div class="flow-dot dot-green"></div>Ativo</div>
-                <div class="toggle-sw" onclick="this.classList.toggle('off')"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="flow-builder-preview">
-          <div class="section-title">Fluxo: Qualificação de Leads — Visualização</div>
-          <div class="fnode-row">
-            <div class="fnode fn-green">
-              <div class="fn-icon">💬</div>
-              <div class="fn-label">Entrada WPP</div>
-              <div class="fn-sub">Lead envia msg</div>
-            </div>
-            <div class="fn-arrow"></div>
-            <div class="fnode fn-blue">
-              <div class="fn-icon">✦</div>
-              <div class="fn-label">IA Analisa</div>
-              <div class="fn-sub">Classifica intenção</div>
-            </div>
-            <div class="fn-arrow"></div>
-            <div class="fnode fn-amber">
-              <div class="fn-icon">❓</div>
-              <div class="fn-label">Perguntas</div>
-              <div class="fn-sub">Budget / dor</div>
-            </div>
-            <div class="fn-arrow"></div>
-            <div class="fnode fn-purple">
-              <div class="fn-icon">⭐</div>
-              <div class="fn-label">Score Lead</div>
-              <div class="fn-sub">Pontua 0-100</div>
-            </div>
-            <div class="fn-arrow"></div>
-            <div class="fnode fn-green">
-              <div class="fn-icon">→</div>
-              <div class="fn-label">Direciona</div>
-              <div class="fn-sub">Vendedor / auto</div>
-            </div>
-          </div>
+      <div class="kanban-board" id="kanban-board-container" style="margin-top:20px;">
+        <div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px; width:100%;">
+          Carregando funil de vendas...
         </div>
       </div>
     </div>
@@ -471,42 +400,15 @@
     <div class="screen" id="screen-contratos">
       <div class="flow-header">
         <div>
-          <div class="page-title">Contratos & Propostas</div>
-          <div class="page-sub">Gestão e assinatura digital via WhatsApp</div>
+          <div class="page-title">Contratos & Formalizações</div>
+          <div class="page-sub">Contratos originados de negócios fechados no CRM</div>
         </div>
-        <button class="btn-green">+ Novo Contrato</button>
+        <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">🔄 Atualizar Lista</button>
       </div>
       <div class="contract-content">
-        <div class="contract-stats">
-          <div class="cs-card"><div class="cs-num">23</div><div class="cs-lbl">Total este mês</div></div>
-          <div class="cs-card"><div class="cs-num" style="color:#0F6E56">18</div><div class="cs-lbl">Assinados</div></div>
-          <div class="cs-card"><div class="cs-num" style="color:#854F0B">4</div><div class="cs-lbl">Pendentes</div></div>
-          <div class="cs-card"><div class="cs-num" style="color:#534AB7">R$287k</div><div class="cs-lbl">Valor total</div></div>
-        </div>
-
-        <div class="contract-list">
-          <div class="contract-card">
-            <div class="contract-icon fi-green">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-            </div>
-            <div class="contract-info">
-              <div class="contract-name">Contrato de Serviço — Plano Business</div>
-              <div class="contract-client">Grupo Delta · Assinado por Carlos Oliveira</div>
-            </div>
-            <div class="contract-val">R$ 96.000/ano</div>
-            <span class="contract-status-badge cs-signed">Assinado</span>
-          </div>
-
-          <div class="contract-card">
-            <div class="contract-icon fi-amber">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#854F0B" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-            </div>
-            <div class="contract-info">
-              <div class="contract-name">Proposta Comercial — Plano Business</div>
-              <div class="contract-client">Ana Ferreira · Loja Beta</div>
-            </div>
-            <div class="contract-val">R$ 5.964/ano</div>
-            <span class="contract-status-badge cs-pending">Aguardando</span>
+        <div class="contract-list" id="lista-contratos-crm" style="margin-top:20px;">
+          <div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">
+            Carregando contratos da empresa...
           </div>
         </div>
       </div>
@@ -518,88 +420,85 @@
         <div class="rag-new-btn-wrap">
           <button class="btn-green" style="width:100%; justify-content:center;" onclick="limparChatRAG()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Nova Conversa
+            Nova Consulta
           </button>
         </div>
-        <div class="rag-history">
-          <div class="rag-history-date">Perguntas Rápidas</div>
-          <div class="rag-history-item active" onclick="enviarPerguntaPronta('Qual o resumo dos documentos cadastrados?')">Qual o resumo dos documentos?</div>
-          <div class="rag-history-item" onclick="enviarPerguntaPronta('Qual o SLA de atendimento?')">Qual o SLA de atendimento?</div>
-          <div class="rag-history-item" onclick="enviarPerguntaPronta('Quais as regras de suporte humano?')">Regras de suporte humano</div>
+        <div class="rag-history-list" id="rag-history-list">
+          <div class="rag-hist-item active">Sessão Atual</div>
         </div>
       </div>
 
-      <div class="rag-window">
-        <div class="rag-header">
-          <div class="rag-bot-avatar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/></svg>
+      <div class="chat-window">
+        <div class="chat-header">
+          <div class="ch-avatar" style="background:#534AB7; color:white;">✦</div>
+          <div class="ch-info">
+            <div class="ch-name">Copiloto IA Interno</div>
+            <div class="ch-status">Assistente Híbrido · Base de Conhecimento + Conhecimento Geral</div>
           </div>
-          <div class="rag-header-info">
-            <div class="rag-header-name">Assistente RAG · FluxIA</div>
-            <div class="rag-header-status"><div class="rag-status-dot"></div> Conectado ao back-end (/chat/)</div>
-          </div>
-          <div class="chat-actions">
-            <div class="btn-icon" title="Limpar conversa" onclick="limparChatRAG()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </div>
+
+        <div class="chat-messages" id="rag-chat-messages">
+          <div class="msg-bubble msg-bot">
+            <div class="msg-text">
+              Olá! Eu sou o assistente interno da **FluxIA**. Posso tirar dúvidas consultando os documentos e procedimentos da sua empresa ou te auxiliar com respostas gerais. Como posso ajudar?
             </div>
+            <div class="msg-time">Agora</div>
           </div>
         </div>
 
-        <div class="rag-messages" id="rag-messages-box">
-          <div class="rag-msg assistant">
-            <div class="rag-msg-label"><div class="rag-status-dot"></div> Assistente RAG</div>
-            <div class="rag-bubble">
-              Olá! Eu sou o assistente inteligente do <strong>FluxIA</strong>. Posso responder qualquer dúvida baseando-me nos documentos indexados na sua Base de Conhecimento. Como posso te ajudar hoje?
-            </div>
-          </div>
-        </div>
-
-        <div class="rag-suggested">
-          <div class="rag-sugg-chip" onclick="enviarPerguntaPronta('Quais serviços a empresa oferece?')">Quais serviços a empresa oferece?</div>
-          <div class="rag-sugg-chip" onclick="enviarPerguntaPronta('Qual o contato para suporte humano?')">Qual o contato de suporte?</div>
-          <div class="rag-sugg-chip" onclick="enviarPerguntaPronta('Como funciona o bot do Telegram?')">Como funciona o bot do Telegram?</div>
-        </div>
-
-        <div class="rag-input-area">
-          <textarea class="input-box" id="rag-input-text" placeholder="Pergunte algo sobre seus documentos indexados..." rows="1" onkeydown="handleRagKeyDown(event)"></textarea>
-          <button class="send-btn" id="btn-enviar-rag" onclick="enviarMensagemRAG()">
+        <div class="chat-input-area">
+          <textarea class="input-box" id="rag-input-text" placeholder="Pergunte qualquer dúvida sobre os documentos ou processos da empresa..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarPerguntaRAG();}"></textarea>
+          <button class="send-btn" style="background:#534AB7;" onclick="enviarPerguntaRAG()" title="Enviar Pergunta">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- BASE DE CONHECIMENTO (DOCUMENTOS RAG REAIS) -->
+    <!-- DOCUMENTOS (BASE DE CONHECIMENTO) -->
     <div class="screen" id="screen-documentos">
       <div class="dash-header">
         <div>
           <div class="page-title">Base de Conhecimento</div>
-          <div class="page-sub">Documentos reais indexados no motor semântico RAG da API</div>
+          <div class="page-sub">Documentos corporativos vetorizados com Gemini para RAG</div>
         </div>
-        <button class="btn-green" onclick="document.getElementById('input-file-doc').click()">
+        <button class="btn-green" id="btn-topo-upload-doc" onclick="document.getElementById('input-file-doc').click()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Fazer Upload de Documento
         </button>
       </div>
 
-      <input type="file" id="input-file-doc" style="display:none;" accept=".pdf,.docx,.txt" onchange="enviarUploadDocumento(this.files[0])" />
+      <input type="file" id="input-file-doc" style="display:none;" accept=".pdf,.docx,.txt,.pptx,.png,.jpg,.jpeg" onchange="enviarUploadDocumento(this.files[0])" />
 
       <div class="kb-body" style="margin-top:20px;">
-        <div class="kb-upload" onclick="document.getElementById('input-file-doc').click()" ondragover="event.preventDefault(); this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault(); this.classList.remove('dragover'); enviarUploadDocumento(event.dataTransfer.files[0])">
-          <div class="kb-upload-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <!-- AREA DE UPLOAD RBAC (PARTE 1b e PARTE 4a) -->
+        <div id="kb-upload-container">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:rgba(255,255,255,0.02); padding:10px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:12px; color:#cbd5e1; font-weight:600;">Nível de Acesso (RBAC) do Documento:</div>
+            <select id="upload-nivel-acesso" class="login-input" style="padding:6px 12px; font-size:12px; max-width:240px; background:#0f172a; color:white;">
+              <option value="publico">🌐 Público (Telegram e Portal)</option>
+              <option value="interno">🔒 Interno (Apenas Colaboradores no Portal)</option>
+            </select>
           </div>
-          <div class="kb-upload-title" id="upload-status-title">Arraste arquivos aqui ou clique para selecionar</div>
-          <div class="kb-upload-sub">O back-end irá dividir o texto em chunks e gerar embeddings com a API Gemini</div>
-          <div class="kb-upload-formats">
-            <span class="kb-format-tag">PDF</span>
-            <span class="kb-format-tag">DOCX</span>
-            <span class="kb-format-tag">TXT</span>
-            <span class="kb-format-tag">Máx. 10MB</span>
+
+          <div class="kb-upload" id="area-upload-doc" onclick="document.getElementById('input-file-doc').click()" ondragover="event.preventDefault(); this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault(); this.classList.remove('dragover'); enviarUploadDocumento(event.dataTransfer.files[0])">
+            <div class="kb-upload-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="kb-upload-title" id="upload-status-title">Arraste arquivos aqui ou clique para selecionar</div>
+            <div class="kb-upload-sub">Divisão automática em chunks, OCR multimodal e vetorização com Gemini</div>
+            <div class="kb-upload-formats">
+              <span class="kb-format-tag">PDF</span>
+              <span class="kb-format-tag">DOCX</span>
+              <span class="kb-format-tag">TXT</span>
+              <span class="kb-format-tag" style="background:#534AB7; color:white;">PPTX</span>
+              <span class="kb-format-tag" style="background:#229ED9; color:white;">PNG/JPG</span>
+              <span class="kb-format-tag">Máx. 10MB</span>
+            </div>
           </div>
         </div>
 
-        <div class="kb-toolbar">
+        <div class="kb-toolbar" style="margin-top:20px;">
           <input class="search-input kb-search" id="busca-doc-input" placeholder="Buscar documento..." oninput="filtrarDocumentos()" />
           <button class="btn-secondary" onclick="carregarDocumentos()" style="font-size:12px;">Atualizar Lista</button>
         </div>
@@ -612,33 +511,106 @@
       </div>
     </div>
 
-    <!-- CONFIG -->
+    <!-- ANALYTICS DA BASE DE CONHECIMENTO (PARTE 10) -->
+    <div class="screen" id="screen-analytics">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Analytics da Base de Conhecimento</div>
+          <div class="page-sub">Assertividade semântica do RAG, ranking de documentos e histórico de perguntas</div>
+        </div>
+        <button class="btn-secondary" onclick="carregarAnalytics()" style="font-size:12px;">
+          🔄 Atualizar Métricas
+        </button>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-icon mi-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="metric-label">Total de Perguntas</div>
+          <div class="metric-value" id="analytics-total-perguntas">0</div>
+          <div class="metric-change up">Canais Telegram & Portal</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon mi-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="metric-label">Taxa de Assertividade</div>
+          <div class="metric-value" id="analytics-taxa-assertividade">0%</div>
+          <div class="metric-change up">Perguntas com contexto RAG</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon mi-purple">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          </div>
+          <div class="metric-label">Base de Conhecimento</div>
+          <div class="metric-value" id="analytics-base-count">0</div>
+          <div class="metric-change up">Respondidas via Documentos</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon mi-amber">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </div>
+          <div class="metric-label">Conhecimento Geral</div>
+          <div class="metric-value" id="analytics-geral-count">0</div>
+          <div class="metric-change">Respondidas sem Documentos</div>
+        </div>
+      </div>
+
+      <!-- TABELAS: RANKING E HISTORICO -->
+      <div class="dash-body" style="grid-template-columns: 1fr 1.3fr; gap:20px;">
+        <div class="metric-card" style="padding:20px;">
+          <div class="section-title" style="margin-bottom:14px;">📚 Documentos Mais Acionados pelo RAG</div>
+          <div id="analytics-ranking-container">
+            <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando ranking...</div>
+          </div>
+        </div>
+
+        <div class="metric-card" style="padding:20px;">
+          <div class="section-title" style="margin-bottom:14px;">💬 Histórico Recente de Perguntas</div>
+          <div id="analytics-historico-container">
+            <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando histórico...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG (PARTE 2c) -->
     <div class="screen" id="screen-config">
       <div class="flow-header">
         <div>
           <div class="page-title">Configurações</div>
-          <div class="page-sub">WhatsApp · IA · Notificações · Equipe</div>
+          <div class="page-sub">Telegram · IA · Webhook Oficial · Equipe</div>
         </div>
       </div>
       <div class="config-content">
         <div class="config-grid">
           <div class="config-card">
             <div class="cc-title">
-              <div class="cc-icon fi-green"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/></svg></div>
-              Conexão WhatsApp & Telegram
+              <div class="cc-icon" style="background:#229ED9; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              </div>
+              Conexão Webhook Telegram
             </div>
-            <div class="status-connected">
+            <div id="webhook-status-badge" class="status-connected">
               <div class="flow-dot dot-green"></div>
-              Webhook Ativo na Nuvem
+              Consultando status oficial...
+            </div>
+            <div id="webhook-info-extra" style="font-size:11px; margin-top:6px; color:#94a3b8;">
+              Aguardando consulta à API do Telegram...
             </div>
             <div style="margin-top:14px;">
               <div class="config-field">
-                <div class="cf-label">Endpoint Webhook Telegram</div>
-                <input class="cf-input" value="/telegram/webhook" readonly />
+                <div class="cf-label">URL Oficial Registrada</div>
+                <input class="cf-input" id="webhook-url-input" value="Carregando..." readonly />
               </div>
               <div class="config-field">
-                <div class="cf-label">Servidor Central</div>
-                <input class="cf-input" value="Render (FastAPI)" readonly />
+                <div class="cf-label">Ação de Sincronização</div>
+                <button class="btn-green" style="width:100%; justify-content:center; padding:10px;" onclick="registrarWebhookTelegram()">
+                  ⚡ Registrar / Atualizar Webhook no Telegram
+                </button>
               </div>
             </div>
           </div>
@@ -646,21 +618,30 @@
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon fi-blue"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
-              Parâmetros de IA (Gemini RAG)
+              Arquitetura & Inteligência Artificial
             </div>
             <div class="cf-row">
               <div>
-                <div class="cf-row-label">Busca Semântica por Similaridade</div>
-                <div class="cf-row-sub">Embeddings em memória e vetorização</div>
+                <div class="cf-row-label">Busca Semântica (Cosine Similarity)</div>
+                <div class="cf-row-sub">Vetorização e embeddings via Google GenAI</div>
               </div>
-              <div class="toggle-sw"></div>
+              <span class="contract-status-badge cs-signed">Ativo</span>
             </div>
             <div class="cf-row">
               <div>
-                <div class="cf-row-label">Filtro de Acesso por RBAC</div>
-                <div class="cf-row-sub">Clientes acessam apenas docs públicos</div>
+                <div class="cf-row-label">Filtro de Segurança por RBAC</div>
+                <div class="cf-row-sub">Clientes e bots restritos apenas a documentos públicos</div>
               </div>
-              <div class="toggle-sw"></div>
+              <span class="contract-status-badge cs-signed">Ativo</span>
+            </div>
+            <div class="cf-row">
+              <div>
+                <div class="cf-row-label">Follow-up Automático ("Aquecimento")</div>
+                <div class="cf-row-sub">Agendador interno APScheduler ativo (1x/hora)</div>
+              </div>
+              <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="dispararFollowupManual()">
+                ▶ Testar Agora
+              </button>
             </div>
           </div>
         </div>
@@ -680,22 +661,14 @@
         </button>
       </div>
 
-      <div class="table-container" style="margin-top: 20px;">
-        <table class="leads-table">
-          <thead>
-            <tr>
-              <th>Colaborador</th>
-              <th>E-mail</th>
-              <th>Perfil de Acesso</th>
-              <th>Status</th>
-              <th>Data de Cadastro</th>
-              <th style="text-align:right;">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tabela-equipe-body">
-            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Carregando equipe...</td></tr>
-          </tbody>
-        </table>
+      <div class="dash-body" style="grid-template-columns: 1fr; margin-top:20px;">
+        <div class="metric-card" style="padding:20px;">
+          <div class="kb-table" id="equipe-table-container">
+            <div style="padding:30px; text-align:center; color:var(--text-muted);">
+              Carregando colaboradores...
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -703,6 +676,12 @@
 
 <script>
 let documentosCarregados = [];
+let listaConversasTelegram = [];
+let conversaAtivaChatId = null;
+let modoAtendimentoAtual = 'bot';
+let usuarioAtual = null;
+let listaEmpresasCadastradas = [];
+let equipeCarregada = [];
 
 function switchTab(tabId, navEl) {
   document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => el.classList.remove('active'));
@@ -714,16 +693,28 @@ function switchTab(tabId, navEl) {
 
   if (tabId === 'documentos') carregarDocumentos();
   if (tabId === 'equipe') carregarEquipe();
-  if (tabId === 'chat' || tabId === 'dashboard') carregarConversasTelegram();
+  if (tabId === 'chat') carregarConversasTelegram();
+  if (tabId === 'dashboard') {
+    carregarConversasTelegram();
+    carregarDashboardMetricas();
+  }
+  if (tabId === 'fluxos') carregarKanbanNegocios();
+  if (tabId === 'contratos') carregarContratosCRM();
+  if (tabId === 'config') carregarStatusWebhook();
+  if (tabId === 'analytics') carregarAnalytics();
 }
 
-// ===== CONVERSAS DINÂMICAS DO TELEGRAM =====
-let listaConversasTelegram = [];
-let conversaAtivaChatId = null;
+function obterEmpresaAtivaId() {
+  if (usuarioAtual && usuarioAtual.perfil === 'master') {
+    const salvo = localStorage.getItem('fluxia_active_empresa_id');
+    return salvo ? parseInt(salvo) : (usuarioAtual.empresa_id || 1);
+  }
+  return (usuarioAtual && usuarioAtual.empresa_id) ? parseInt(usuarioAtual.empresa_id) : 1;
+}
 
+// ===== CONVERSAS DO TELEGRAM & ATENDENTE HUMANO =====
 async function carregarConversasTelegram() {
   const containerList = document.getElementById('lista-conversas-telegram');
-  const dashList = document.getElementById('dashboard-recent-chats');
   const empresaId = obterEmpresaAtivaId();
 
   try {
@@ -734,10 +725,6 @@ async function carregarConversasTelegram() {
 
     const badgeChats = document.getElementById('badge-total-conversas');
     if (badgeChats) badgeChats.textContent = listaConversasTelegram.length;
-    const cardLeads = document.getElementById('card-total-leads');
-    if (cardLeads) cardLeads.textContent = listaConversasTelegram.length;
-    const cardAtivas = document.getElementById('card-conversas-ativas');
-    if (cardAtivas) cardAtivas.textContent = listaConversasTelegram.length;
 
     renderizarListaConversasTelegram();
     renderizarDashboardConversasTelegram();
@@ -758,7 +745,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
       <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
         <div style="font-size:28px; margin-bottom:8px;">✈️</div>
         <strong>Nenhum lead no Telegram</strong><br>
-        Quando clientes interagirem com seu Bot no Telegram, as conversas aparecerão aqui em tempo real.
+        Quando clientes interagirem com seu Bot, as conversas aparecerão aqui em tempo real.
       </div>
     `;
     return;
@@ -768,20 +755,24 @@ function renderizarListaConversasTelegram(filtradas = null) {
     const initials = (c.nome || 'TG').substring(0, 2).toUpperCase();
     const isActive = c.chat_id === conversaAtivaChatId;
     const hora = (c.data_ultima_mensagem || '').substring(11, 16);
+    const isHuman = c.status_atendimento === 'humano';
 
     return `
-      <div class="chat-row ${isActive ? 'active' : ''}" onclick="selecionarConversaTelegram('${c.chat_id}')">
-        <div class="cr-avatar ca-1" style="background:#229ED9; color:white;">${initials}</div>
-        <div class="cr-info">
-          <div class="cr-name">${c.nome}</div>
-          <div class="cr-msg">${c.ultima_mensagem || 'Iniciou conversa no Telegram'}</div>
-          <span class="cr-stage stage-qual" style="background:rgba(34,158,217,0.15); color:#229ED9; border:1px solid rgba(34,158,217,0.3);">
-            Telegram · ${c.perfil.toUpperCase()}
-          </span>
-        </div>
-        <div class="cr-meta">
-          <div class="cr-time">${hora}</div>
-          <div class="cr-badge" style="background:#229ED9;">${c.total_mensagens}</div>
+      <div class="chat-item ${isActive ? 'active' : ''}" onclick="selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer;">
+        <div class="ci-avatar" style="background:#229ED9; color:white;">${initials}</div>
+        <div class="ci-info">
+          <div class="ci-name" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>${c.nome}</span>
+            <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
+          </div>
+          <div class="ci-msg" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px;">
+            ${c.ultima_mensagem || 'Iniciou interação'}
+          </div>
+          <div style="margin-top:4px;">
+            <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 6px;">
+              ${isHuman ? '🧑 ' + (c.nome_atendente || 'Humano') : '🤖 IA Autônoma'}
+            </span>
+          </div>
         </div>
       </div>
     `;
@@ -793,28 +784,27 @@ function renderizarDashboardConversasTelegram() {
   if (!container) return;
 
   if (listaConversasTelegram.length === 0) {
-    container.innerHTML = `
-      <div style="padding:24px; text-align:center; color:var(--text-muted); font-size:12px;">
-        Nenhuma conversa registrada no Telegram ainda.
-      </div>
-    `;
+    container.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Nenhuma interação recente no Telegram.</div>`;
     return;
   }
 
   container.innerHTML = listaConversasTelegram.slice(0, 5).map(c => {
-    const initials = (c.nome || 'TG').substring(0, 2).toUpperCase();
     const hora = (c.data_ultima_mensagem || '').substring(11, 16);
-
+    const isHuman = c.status_atendimento === 'humano';
     return `
-      <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')">
-        <div class="chat-avatar ca-1" style="background:#229ED9; color:white;">${initials}</div>
-        <div class="chat-info">
-          <div class="chat-name">${c.nome}</div>
-          <div class="chat-preview">${c.ultima_mensagem || 'Interação no Telegram'}</div>
-        </div>
-        <div class="chat-meta">
-          <div class="chat-time">${hora}</div>
-          <div class="chat-unread" style="background:#229ED9;">${c.total_mensagens}</div>
+      <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer;">
+        <div class="ci-avatar" style="background:#229ED9; color:white;">${(c.nome || 'TG').substring(0,2).toUpperCase()}</div>
+        <div class="ci-info">
+          <div class="ci-name" style="display:flex; justify-content:space-between;">
+            <span>${c.nome}</span>
+            <span style="font-size:10px; color:var(--text-muted);">${hora}</span>
+          </div>
+          <div class="ci-msg">${c.ultima_mensagem || 'Sem mensagens'}</div>
+          <div style="margin-top:2px;">
+            <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:1px 5px;">
+              ${isHuman ? '🧑 Humano' : '🤖 IA'}
+            </span>
+          </div>
         </div>
       </div>
     `;
@@ -822,77 +812,145 @@ function renderizarDashboardConversasTelegram() {
 }
 
 function filtrarConversasTelegram(termo) {
-  const t = termo.toLowerCase().trim();
-  if (!t) {
+  if (!termo || !termo.trim()) {
     renderizarListaConversasTelegram();
     return;
   }
+  const t = termo.toLowerCase();
   const filtradas = listaConversasTelegram.filter(c => 
-    c.nome.toLowerCase().includes(t) ||
-    c.chat_id.includes(t) ||
-    (c.email && c.email.toLowerCase().includes(t)) ||
+    (c.nome && c.nome.toLowerCase().includes(t)) ||
+    (c.chat_id && c.chat_id.includes(t)) ||
     (c.ultima_mensagem && c.ultima_mensagem.toLowerCase().includes(t))
   );
   renderizarListaConversasTelegram(filtradas);
+}
+
+function recarregarConversasTelegram() {
+  carregarConversasTelegram();
+  if (conversaAtivaChatId) carregarMensagensTelegram(conversaAtivaChatId);
 }
 
 async function selecionarConversaTelegram(chatId) {
   conversaAtivaChatId = chatId;
   renderizarListaConversasTelegram();
 
-  const c = listaConversasTelegram.find(item => item.chat_id === chatId);
-  if (c) {
-    document.getElementById('chat-header-name').textContent = c.nome;
-    document.getElementById('chat-header-status').textContent = `Chat ID: ${c.chat_id} · Telegram`;
-    document.getElementById('chat-header-avatar').textContent = (c.nome || 'TG').substring(0, 2).toUpperCase();
-
-    // Atualiza detalhes do lead à direita
-    const elAvatar = document.getElementById('lp-avatar');
-    const elName = document.getElementById('lp-name');
-    const elChatId = document.getElementById('lp-chat-id');
-    const elEmail = document.getElementById('lp-email');
-    const elPerfil = document.getElementById('lp-perfil');
-    const elEmpresa = document.getElementById('lp-empresa');
-    const elTotal = document.getElementById('lp-total-msgs');
-
-    if (elAvatar) elAvatar.textContent = (c.nome || 'TG').substring(0, 2).toUpperCase();
-    if (elName) elName.textContent = c.nome;
-    if (elChatId) elChatId.textContent = `Chat ID: ${c.chat_id}`;
-    if (elEmail) elEmail.textContent = c.email;
-    if (elPerfil) elPerfil.textContent = c.perfil.toUpperCase();
-    if (elEmpresa) elEmpresa.textContent = `Empresa #${c.empresa_id}`;
-    if (elTotal) elTotal.textContent = c.total_mensagens;
+  const conv = listaConversasTelegram.find(c => c.chat_id === chatId);
+  if (conv) {
+    document.getElementById('chat-header-name').textContent = conv.nome;
+    document.getElementById('chat-header-avatar').textContent = (conv.nome || 'TG').substring(0, 2).toUpperCase();
+    document.getElementById('lp-name').textContent = conv.nome;
+    document.getElementById('lp-chat-id').textContent = `Chat ID: ${conv.chat_id}`;
+    document.getElementById('lp-avatar').textContent = (conv.nome || 'TG').substring(0, 2).toUpperCase();
+    document.getElementById('lp-telefone').textContent = conv.telefone || '-';
+    document.getElementById('lp-empresa').textContent = document.getElementById('label-empresa-atual').textContent;
+    document.getElementById('lp-total-msgs').textContent = conv.total_mensagens || 0;
   }
 
-  const box = document.getElementById('lead-chat-messages');
-  box.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">Carregando histórico do Telegram...</div>`;
+  await carregarMensagensTelegram(chatId);
+}
+
+async function carregarMensagensTelegram(chatId) {
+  const container = document.getElementById('lead-chat-messages');
+  if (!container) return;
 
   try {
     const res = await fetch(`/telegram/conversas/${chatId}/mensagens`);
-    if (!res.ok) throw new Error('Erro ao carregar mensagens.');
+    if (!res.ok) throw new Error('Falha ao obter mensagens');
     const data = await res.json();
-    const mensagens = data.mensagens || [];
+    const msgs = data.mensagens || [];
 
-    if (mensagens.length === 0) {
-      box.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted);">Nenhuma mensagem registrada nesta conversa.</div>`;
+    // Modo de atendimento da conversa
+    modoAtendimentoAtual = data.status_atendimento || 'bot';
+    atualizarUIAssumirDevolver(data.nome_atendente);
+
+    if (msgs.length === 0) {
+      container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">
+          Nenhuma mensagem registrada com este lead ainda.
+        </div>
+      `;
       return;
     }
 
-    box.innerHTML = mensagens.map(m => {
+    container.innerHTML = msgs.map(m => {
       const isUser = m.remetente === 'usuario';
       return `
-        <div class="msg ${isUser ? 'in' : 'out'}">
-          <div class="msg-bubble" style="${!isUser ? 'background:#185FA5; color:white;' : ''}">
-            ${m.texto}
-          </div>
-          <div class="msg-time">${m.hora} ${!isUser ? '✓✓' : ''}</div>
+        <div class="msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}" style="${!isUser ? 'border-left: 3px solid #229ED9;' : ''}">
+          <div class="msg-text">${m.texto.replace(/\n/g, '<br>')}</div>
+          <div class="msg-time">${m.hora}</div>
         </div>
       `;
     }).join('');
 
-    box.scrollTop = box.scrollHeight;
-  } catch (err) {
-    box.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Erro ao carregar histórico: ${err.message}</div>`;
+    container.scrollTop = container.scrollHeight;
+  } catch (e) {
+    console.error('Erro ao buscar mensagens:', e);
+  }
+}
+
+function atualizarUIAssumirDevolver(nomeAtendente) {
+  const btn = document.getElementById('btn-toggle-atendimento');
+  const modoEl = document.getElementById('chat-header-modo');
+  const lpAtend = document.getElementById('lp-atendente-val');
+
+  if (modoAtendimentoAtual === 'humano') {
+    if (btn) {
+      btn.style.display = 'inline-flex';
+      btn.style.background = '#854F0B';
+      btn.style.color = '#fef3c7';
+      btn.textContent = '🤖 Devolver para IA';
+    }
+    if (modoEl) {
+      modoEl.textContent = 'Atendimento Humano (' + (nomeAtendente || (usuarioAtual ? usuarioAtual.nome : 'Operador')) + ')';
+      modoEl.style.color = '#fbbf24';
+    }
+    if (lpAtend) lpAtend.textContent = nomeAtendente || (usuarioAtual ? usuarioAtual.nome : 'Atendente');
+  } else {
+    if (btn) {
+      btn.style.display = 'inline-flex';
+      btn.style.background = 'rgba(255,255,255,0.08)';
+      btn.style.color = '#e2e8f0';
+      btn.textContent = '🧑 Assumir Atendimento';
+    }
+    if (modoEl) {
+      modoEl.textContent = 'Assistente IA (Autônomo)';
+      modoEl.style.color = '#38bdf8';
+    }
+    if (lpAtend) lpAtend.textContent = 'Assistente IA';
+  }
+}
+
+async function alternarModoAtendimento() {
+  if (!conversaAtivaChatId || !usuarioAtual) return;
+
+  if (modoAtendimentoAtual === 'bot') {
+    if (!confirm('Deseja assumir o atendimento deste cliente? A IA deixará de responder automaticamente.')) return;
+    try {
+      const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/assumir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atendente_id: usuarioAtual.id })
+      });
+      if (!res.ok) throw new Error('Falha ao assumir');
+      modoAtendimentoAtual = 'humano';
+      atualizarUIAssumirDevolver(usuarioAtual.nome);
+      carregarConversasTelegram();
+    } catch (e) {
+      alert(e.message);
+    }
+  } else {
+    if (!confirm('Deseja devolver o atendimento para a IA autônoma?')) return;
+    try {
+      const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/devolver`, {
+        method: 'POST'
+      });
+      if (!res.ok) throw new Error('Falha ao devolver');
+      modoAtendimentoAtual = 'bot';
+      atualizarUIAssumirDevolver();
+      carregarConversasTelegram();
+    } catch (e) {
+      alert(e.message);
+    }
   }
 }
 
@@ -900,24 +958,12 @@ async function enviarMensagemOperadorTelegram() {
   const input = document.getElementById('lead-input-text');
   const texto = input.value.trim();
   if (!texto) return;
-
   if (!conversaAtivaChatId) {
-    alert('Selecione uma conversa do Telegram à esquerda antes de responder.');
+    alert('Selecione uma conversa ativa antes de enviar.');
     return;
   }
 
-  const box = document.getElementById('lead-chat-messages');
-  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  const msgDiv = document.createElement('div');
-  msgDiv.className = 'msg out';
-  msgDiv.innerHTML = `
-    <div class="msg-bubble" style="background:#185FA5; color:white;">${texto}</div>
-    <div class="msg-time">${now} ✓</div>
-  `;
-  box.appendChild(msgDiv);
   input.value = '';
-  box.scrollTop = box.scrollHeight;
 
   try {
     const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/enviar`, {
@@ -928,153 +974,395 @@ async function enviarMensagemOperadorTelegram() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Falha ao enviar mensagem');
 
-    setTimeout(() => {
-      selecionarConversaTelegram(conversaAtivaChatId);
-    }, 600);
+    await carregarMensagensTelegram(conversaAtivaChatId);
+    carregarConversasTelegram();
   } catch (e) {
-    alert('Erro ao enviar mensagem pelo Telegram: ' + e.message);
+    alert('Erro ao enviar para o Telegram: ' + e.message);
   }
 }
 
-function recarregarConversasTelegram() {
-  carregarConversasTelegram();
-}
+// ===== DASHBOARD MÉTRICAS (PARTE 9b) =====
+async function carregarDashboardMetricas() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await fetch(`/dashboard/metricas?empresa_id=${empresaId}`);
+    if (!res.ok) return;
+    const m = await res.json();
 
-// ===== CHAT IA RAG INTEGRADO =====
-function handleRagKeyDown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    enviarMensagemRAG();
+    const elLeads = document.getElementById('card-total-leads');
+    if (elLeads) elLeads.textContent = m.total_clientes;
+
+    const elReceita = document.getElementById('card-receita-pipeline');
+    if (elReceita) elReceita.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.receita_pipeline || 0);
+
+    const elConversao = document.getElementById('card-taxa-conversao');
+    if (elConversao) elConversao.textContent = `${m.taxa_conversao}%`;
+
+    renderizarMiniKanbanDashboard(m.estagios || {});
+  } catch (e) {
+    console.error('Erro ao carregar métricas:', e);
   }
 }
 
-function enviarPerguntaPronta(pergunta) {
-  switchTab('chatrag', document.querySelectorAll('.sidebar-nav .nav-item')[3]);
-  document.getElementById('rag-input-text').value = pergunta;
-  enviarMensagemRAG();
-}
+function renderizarMiniKanbanDashboard(estagios) {
+  const container = document.getElementById('dash-mini-kanban');
+  if (!container) return;
 
-function limparChatRAG() {
-  document.getElementById('rag-messages-box').innerHTML = `
-    <div class="rag-msg assistant">
-      <div class="rag-msg-label"><div class="rag-status-dot"></div> Assistente RAG</div>
-      <div class="rag-bubble">
-        Conversa reiniciada. Pode perguntar qualquer coisa sobre os documentos indexados!
+  const cols = [
+    { id: 'novo', label: 'Novo', cor: '#38bdf8' },
+    { id: 'qualificado', label: 'Qualificado', cor: '#818cf8' },
+    { id: 'proposta', label: 'Proposta', cor: '#fbbf24' },
+    { id: 'negociacao', label: 'Negociação', cor: '#f97316' },
+    { id: 'fechado', label: 'Fechado', cor: '#34d399' }
+  ];
+
+  container.innerHTML = cols.map(c => {
+    const info = estagios[c.id] || { quantidade: 0, valor: 0 };
+    return `
+      <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px;">
+        <div style="font-size:11px; font-weight:700; color:${c.cor}; text-transform:uppercase; margin-bottom:4px;">
+          ${c.label} (${info.quantidade})
+        </div>
+        <div style="font-size:12px; font-weight:600; color:#f1f5f9;">
+          ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(info.valor)}
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }).join('');
 }
 
-async function enviarMensagemRAG() {
-  const input = document.getElementById('rag-input-text');
-  const btn = document.getElementById('btn-enviar-rag');
-  const texto = input.value.trim();
-  if (!texto) return;
-
-  const box = document.getElementById('rag-messages-box');
-
-  // Adiciona mensagem do usuário
-  const userDiv = document.createElement('div');
-  userDiv.className = 'rag-msg user';
-  userDiv.innerHTML = `<div class="rag-bubble">${texto}</div>`;
-  box.appendChild(userDiv);
-  input.value = '';
-
-  // Indicador de carregamento
-  const typingDiv = document.createElement('div');
-  typingDiv.className = 'rag-msg assistant';
-  typingDiv.id = 'rag-loading-typing';
-  typingDiv.innerHTML = `
-    <div class="rag-msg-label"><div class="rag-status-dot"></div> Assistente RAG · consultando base...</div>
-    <div class="rag-typing"><span></span><span></span><span></span></div>
-  `;
-  box.appendChild(typingDiv);
-  box.scrollTop = box.scrollHeight;
+// ===== KANBAN CRM DINÂMICO (PARTE 9c) =====
+async function carregarKanbanNegocios() {
+  const empresaId = obterEmpresaAtivaId();
+  const container = document.getElementById('kanban-board-container');
+  if (!container) return;
 
   try {
-    const res = await fetch('/chat/', {
+    const res = await fetch(`/negocios?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar negócios');
+    const data = await res.json();
+    const negocios = data.negocios || [];
+    renderizarKanban(negocios);
+  } catch (e) {
+    console.error('Erro ao carregar kanban:', e);
+    container.innerHTML = `<div style="padding:20px; color:#ef4444;">Erro ao carregar funil de vendas: ${e.message}</div>`;
+  }
+}
+
+function renderizarKanban(negocios) {
+  const container = document.getElementById('kanban-board-container');
+  if (!container) return;
+
+  const colunas = [
+    { id: 'novo', label: 'Novo Lead', cor: '#38bdf8' },
+    { id: 'qualificado', label: 'Qualificado', cor: '#818cf8' },
+    { id: 'proposta', label: 'Proposta Enviada', cor: '#fbbf24' },
+    { id: 'negociacao', label: 'Negociação', cor: '#f97316' },
+    { id: 'fechado', label: 'Fechado 🎉', cor: '#34d399' },
+    { id: 'perdido', label: 'Perdido', cor: '#f87171' }
+  ];
+
+  container.innerHTML = colunas.map(col => {
+    const itens = negocios.filter(n => (n.estagio || 'novo').toLowerCase() === col.id);
+    const somaValor = itens.reduce((acc, curr) => acc + (parseFloat(curr.valor_estimado) || 0), 0);
+
+    return `
+      <div class="kanban-col">
+        <div class="kanban-col-header" style="color:${col.cor};">
+          <span>${col.label} (${itens.length})</span>
+          <span style="font-size:11px; color:#94a3b8;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaValor)}</span>
+        </div>
+        <div class="kanban-col-body">
+          ${itens.length === 0 ? `
+            <div style="padding:24px 10px; text-align:center; color:#64748b; font-size:11px;">
+              Vazio
+            </div>
+          ` : itens.map(n => `
+            <div class="kanban-card stage-${col.id}">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="font-weight:600; color:#f1f5f9; font-size:13px;">${n.cliente_nome || 'Lead'}</div>
+                <span style="font-size:10px; color:#64748b;">#${n.id}</span>
+              </div>
+              <div style="font-size:11px; color:#94a3b8; margin:4px 0;">
+                📦 ${n.produto_nome || 'Produto não definido'}
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <div style="font-weight:700; color:#34d399; font-size:13px;">
+                  ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0)}
+                </div>
+                ${n.proposta_enviada ? '<span class="contract-status-badge cs-signed" style="font-size:9px;">Proposta</span>' : ''}
+              </div>
+              <select class="kanban-select" onchange="atualizarEstagioNegocio(${n.id}, this.value)">
+                ${colunas.map(c => `
+                  <option value="${c.id}" ${c.id === col.id ? 'selected' : ''}>Mover: ${c.label}</option>
+                `).join('')}
+              </select>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function atualizarEstagioNegocio(negocioId, novoEstagio) {
+  try {
+    const res = await fetch(`/negocios/${negocioId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estagio: novoEstagio })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao mover estágio');
+    }
+    carregarKanbanNegocios();
+    carregarDashboardMetricas();
+  } catch (e) {
+    alert('Erro ao atualizar negócio: ' + e.message);
+  }
+}
+
+// ===== CONTRATOS CRM =====
+async function carregarContratosCRM() {
+  const empresaId = obterEmpresaAtivaId();
+  const container = document.getElementById('lista-contratos-crm');
+  if (!container) return;
+
+  try {
+    const res = await fetch(`/negocios?empresa_id=${empresaId}&estagio=fechado`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const fechados = data.negocios || [];
+
+    if (fechados.length === 0) {
+      container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">
+          Nenhum contrato formalizado ainda. Negócios movidos para o estágio "Fechado" gerarão contratos automaticamente.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = fechados.map(n => `
+      <div class="contract-card" style="margin-bottom:12px;">
+        <div class="contract-icon fi-green">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        </div>
+        <div class="contract-info">
+          <div class="contract-name">Contrato Comercial — ${n.produto_nome || 'FluxIA'}</div>
+          <div class="contract-client">Cliente: ${n.cliente_nome} · Lead #${n.cliente_id}</div>
+        </div>
+        <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0)}</div>
+        <span class="contract-status-badge cs-signed">Formalizado</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Erro ao carregar contratos:', e);
+  }
+}
+
+// ===== ANALYTICS RAG (PARTE 10) =====
+async function carregarAnalytics() {
+  const empresaId = obterEmpresaAtivaId();
+  if (!usuarioAtual) return;
+
+  try {
+    // 1. Assertividade
+    const resAss = await fetch(`/analytics/assertividade?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}`);
+    if (resAss.ok) {
+      const dataAss = await resAss.json();
+      document.getElementById('analytics-total-perguntas').textContent = dataAss.total_perguntas || 0;
+      document.getElementById('analytics-taxa-assertividade').textContent = `${dataAss.taxa_assertividade || 0}%`;
+      document.getElementById('analytics-base-count').textContent = (dataAss.distribuicao_fonte || {}).base_conhecimento || 0;
+      document.getElementById('analytics-geral-count').textContent = (dataAss.distribuicao_fonte || {}).conhecimento_geral || 0;
+    }
+
+    // 2. Ranking de Documentos
+    const resRank = await fetch(`/analytics/documentos-mais-usados?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}`);
+    const rankEl = document.getElementById('analytics-ranking-container');
+    if (resRank.ok && rankEl) {
+      const dataRank = await resRank.json();
+      const ranking = dataRank.ranking || [];
+      if (ranking.length === 0) {
+        rankEl.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Nenhuma consulta registrada nos documentos ainda.</div>`;
+      } else {
+        rankEl.innerHTML = `
+          <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+            <thead>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08); color:#94a3b8;">
+                <th style="padding:8px 4px;">#</th>
+                <th style="padding:8px 4px;">Documento</th>
+                <th style="padding:8px 4px; text-align:center;">Usos</th>
+                <th style="padding:8px 4px; text-align:right;">Similaridade</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ranking.map((item, idx) => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <td style="padding:8px 4px; color:#64748b;">${idx + 1}</td>
+                  <td style="padding:8px 4px; font-weight:500; color:#e2e8f0;">📄 ${item.nome_arquivo}</td>
+                  <td style="padding:8px 4px; text-align:center;"><span class="nav-badge" style="background:#229ED9;">${item.total_consultas}</span></td>
+                  <td style="padding:8px 4px; text-align:right; color:#34d399; font-weight:600;">${(item.similaridade_media * 100).toFixed(1)}%</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    // 3. Histórico de Perguntas
+    const resHist = await fetch(`/analytics/historico-perguntas?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}&limite=15`);
+    const histEl = document.getElementById('analytics-historico-container');
+    if (resHist.ok && histEl) {
+      const dataHist = await resHist.json();
+      const itens = dataHist.itens || [];
+      if (itens.length === 0) {
+        histEl.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Nenhuma pergunta registrada no histórico ainda.</div>`;
+      } else {
+        histEl.innerHTML = `
+          <div style="display:flex; flex-direction:column; gap:10px; max-height:400px; overflow-y:auto; padding-right:6px;">
+            ${itens.map(item => `
+              <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px 12px; font-size:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:600; color:#38bdf8;">[${(item.canal || 'portal').toUpperCase()}]</span>
+                  <span class="contract-status-badge ${item.teve_contexto ? 'cs-signed' : 'cs-pending'}" style="font-size:10px;">
+                    ${item.teve_contexto ? '✓ Base de Conhecimento' : '✦ Conhecimento Geral'}
+                  </span>
+                </div>
+                <div style="color:#f1f5f9; font-weight:500; margin-bottom:4px;">❓ ${item.pergunta}</div>
+                <div style="color:#94a3b8; font-size:11px; line-height:1.4;">💬 ${item.resposta.substring(0, 140)}...</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao carregar analytics:', e);
+  }
+}
+
+// ===== CONFIGURAÇÕES & WEBHOOK (PARTE 2c) =====
+async function carregarStatusWebhook() {
+  const badgeEl = document.getElementById('webhook-status-badge');
+  const urlEl = document.getElementById('webhook-url-input');
+  const extraEl = document.getElementById('webhook-info-extra');
+
+  try {
+    const res = await fetch('/telegram/status-webhook');
+    if (!res.ok) throw new Error('Falha ao consultar status');
+    const data = await res.json();
+
+    if (data.configurado) {
+      if (badgeEl) {
+        badgeEl.className = 'status-connected';
+        badgeEl.innerHTML = '<div class="flow-dot dot-green"></div> Webhook Oficial Registrado & Ativo';
+      }
+      if (urlEl) urlEl.value = data.url_registrada || '';
+      if (extraEl) {
+        let msg = `Pendentes: ${data.pendentes || 0}`;
+        if (data.ultimo_erro) msg += ` | Último Erro: ${data.ultimo_erro}`;
+        extraEl.textContent = msg;
+        extraEl.style.color = data.ultimo_erro ? '#f87171' : '#34d399';
+      }
+    } else {
+      if (badgeEl) {
+        badgeEl.className = 'status-connected';
+        badgeEl.style.color = '#fbbf24';
+        badgeEl.innerHTML = '<div class="flow-dot" style="background:#fbbf24;"></div> Webhook Não Registrado';
+      }
+      if (urlEl) urlEl.value = 'Nenhuma URL registrada no Telegram';
+      if (extraEl) extraEl.textContent = data.erro || 'Clique no botão abaixo para registrar o webhook oficial.';
+    }
+  } catch (e) {
+    console.error('Erro ao buscar status do webhook:', e);
+  }
+}
+
+async function registrarWebhookTelegram() {
+  const urlAtual = window.location.origin;
+  const urlSugerida = prompt('Confirme a URL pública do seu serviço para registrar o Webhook do Telegram:', urlAtual);
+  if (!urlSugerida) return;
+
+  try {
+    const res = await fetch('/telegram/configurar-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensagem: texto, empresa_id: obterEmpresaAtivaId() })
+      body: JSON.stringify({ url: urlSugerida.trim() })
     });
     const data = await res.json();
-    typingDiv.remove();
-
-    const botDiv = document.createElement('div');
-    botDiv.className = 'rag-msg assistant';
-    botDiv.innerHTML = `
-      <div class="rag-msg-label"><div class="rag-status-dot"></div> Assistente RAG</div>
-      <div class="rag-bubble">${data.resposta || 'Sem resposta disponível.'}</div>
-    `;
-    box.appendChild(botDiv);
-  } catch (err) {
-    typingDiv.remove();
-    const errDiv = document.createElement('div');
-    errDiv.className = 'rag-msg assistant';
-    errDiv.innerHTML = `
-      <div class="rag-msg-label" style="color:#ef4444;">⚠️ Erro ao consultar IA</div>
-      <div class="rag-bubble" style="color:#ef4444;">Não foi possível obter resposta no momento. Verifique se o servidor está ativo.</div>
-    `;
-    box.appendChild(errDiv);
+    if (!res.ok) throw new Error(data.detail || 'Falha ao registrar');
+    alert(`✓ Webhook configurado com sucesso!\nURL: ${data.url_registrada}`);
+    carregarStatusWebhook();
+  } catch (e) {
+    alert('Erro ao registrar webhook: ' + e.message);
   }
-  box.scrollTop = box.scrollHeight;
 }
 
-// ===== BASE DE CONHECIMENTO (DOCUMENTOS REAIS) =====
+async function dispararFollowupManual() {
+  try {
+    const res = await fetch('/crm/executar-followup?horas_inatividade=0', { method: 'POST' });
+    const data = await res.json();
+    alert(`✓ Rotina de Follow-up Executada!\nTotal de leads reengajados: ${data.total_enviados || 0}`);
+  } catch (e) {
+    alert('Erro ao acionar follow-up: ' + e.message);
+  }
+}
+
+// ===== BASE DE CONHECIMENTO (PARTE 1a, 1b e PARTE 4a) =====
 async function carregarDocumentos() {
   const container = document.getElementById('kb-table-container');
+  const badge = document.getElementById('badge-total-documentos');
+  const empresaId = obterEmpresaAtivaId();
+
   try {
-    const empresaId = obterEmpresaAtivaId();
     const res = await fetch(`/documents/?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar documentos');
     const data = await res.json();
     documentosCarregados = data.documentos || [];
+    if (badge) badge.textContent = documentosCarregados.length;
     renderizarDocumentos(documentosCarregados);
-    document.getElementById('badge-total-documentos').textContent = documentosCarregados.length;
   } catch (err) {
-    container.innerHTML = `
-      <div style="padding:30px; text-align:center; color:#A32D2D;">
-        Erro ao carregar documentos da API.
-      </div>
-    `;
+    container.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Erro ao carregar: ${err.message}</div>`;
   }
 }
 
 function renderizarDocumentos(docs) {
   const container = document.getElementById('kb-table-container');
+  if (!container) return;
+
   if (docs.length === 0) {
-    container.innerHTML = `
-      <div style="padding:40px; text-align:center; color:var(--text-muted);">
-        Nenhum documento indexado ainda. Faça upload de um arquivo PDF, DOCX ou TXT acima!
-      </div>
-    `;
+    container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhum documento indexado nesta empresa ainda.</div>`;
     return;
   }
 
+  const ehAdmin = usuarioAtual && ['admin', 'master'].includes(usuarioAtual.perfil);
+
   container.innerHTML = docs.map(d => {
-    const ext = (d.tipo_arquivo || '').toLowerCase();
-    let fileClass = 'kb-fi-txt';
-    let fileIcon = 'TXT';
-    if (ext.includes('pdf')) { fileClass = 'kb-fi-pdf'; fileIcon = 'PDF'; }
-    else if (ext.includes('doc')) { fileClass = 'kb-fi-doc'; fileIcon = 'DOC'; }
+    const dataFmt = (d.data_upload || '').substring(0, 10);
+    const nivel = (d.nivel_acesso || 'publico').toLowerCase();
+    const isPublic = nivel === 'publico';
 
     return `
       <div class="kb-row">
-        <div class="kb-file-icon ${fileClass}">${fileIcon}</div>
+        <div class="kb-icon">📄</div>
         <div class="kb-info">
           <div class="kb-name">${d.nome_arquivo}</div>
-          <div class="kb-meta">
-            <span class="kb-cat-tag">Acesso: ${d.nivel_acesso}</span>
-            <span>Empresa ID: ${d.empresa_id}</span>
-            <span>Upload: ${(d.data_upload || '').substring(0, 16)}</span>
-          </div>
+          <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt}</div>
         </div>
         <div class="kb-status">
-          <span class="contract-status-badge cs-signed">Indexado</span>
+          <span class="contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}" style="font-size:11px;">
+            ${isPublic ? '🌐 Público' : '🔒 Interno'}
+          </span>
         </div>
         <div class="kb-actions">
-          <div class="btn-icon" title="Excluir" onclick="excluirDocumento(${d.id}, '${d.nome_arquivo}')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-          </div>
+          ${ehAdmin ? `
+            <div class="btn-icon" title="Excluir" onclick="excluirDocumento(${d.id}, '${d.nome_arquivo}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
@@ -1089,27 +1377,30 @@ function filtrarDocumentos() {
 
 async function enviarUploadDocumento(arquivo) {
   if (!arquivo) return;
+  if (!usuarioAtual) return;
+
   const statusEl = document.getElementById('upload-status-title');
-  statusEl.textContent = `Processando e vetorizando ${arquivo.name}...`;
+  statusEl.textContent = `Processando, vetorizando e gerando embeddings para ${arquivo.name}...`;
+
+  const nivelEl = document.getElementById('upload-nivel-acesso');
+  const nivelEscolhido = nivelEl ? nivelEl.value : 'publico';
 
   const formData = new FormData();
   formData.append('arquivo', arquivo);
-  formData.append('nivel_acesso', 'publico');
+  formData.append('nivel_acesso', nivelEscolhido);
   formData.append('empresa_id', obterEmpresaAtivaId());
-
-  const apiKey = localStorage.getItem('FLUXIA_ADMIN_KEY') || 'fluxia-admin-secret-key-2026';
+  formData.append('usuario_id', usuarioAtual.id);
 
   try {
     const res = await fetch('/documents/upload', {
       method: 'POST',
-      headers: { 'X-Admin-API-Key': apiKey },
       body: formData
     });
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erro ao enviar documento');
 
-    statusEl.textContent = `✓ ${arquivo.name} indexado com sucesso! (${data.total_chunks} chunks criados)`;
+    statusEl.textContent = `✓ ${arquivo.name} (${nivelEscolhido.toUpperCase()}) indexado com sucesso! (${data.total_chunks} chunks gerados)`;
     setTimeout(() => {
       statusEl.textContent = 'Arraste arquivos aqui ou clique para selecionar';
     }, 4000);
@@ -1121,200 +1412,146 @@ async function enviarUploadDocumento(arquivo) {
 
 async function excluirDocumento(id, nome) {
   if (!confirm(`Deseja realmente remover o documento "${nome}"?`)) return;
-  const apiKey = localStorage.getItem('FLUXIA_ADMIN_KEY') || 'fluxia-admin-secret-key-2026';
+  if (!usuarioAtual) return;
 
   try {
-    const res = await fetch(`/documents/${id}`, {
+    const res = await fetch(`/documents/${id}?usuario_id=${usuarioAtual.id}`, {
       method: 'DELETE',
-      headers: { 'X-Admin-API-Key': apiKey }
+      headers: { 'X-User-Id': String(usuarioAtual.id) }
     });
-    if (!res.ok) throw new Error('Erro ao excluir');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Erro ao excluir');
+    }
     carregarDocumentos();
   } catch (err) {
     alert(err.message);
   }
 }
 
-// ===== AUTENTICAÇÃO E SESSÃO =====
-let usuarioAtual = null;
-let listaEmpresasCadastradas = [];
-let equipeCarregada = [];
+// ===== CHAT INTERNO RAG (PARTE 11) =====
+async function enviarPerguntaRAG() {
+  const input = document.getElementById('rag-input-text');
+  const pergunta = input.value.trim();
+  if (!pergunta) return;
 
-function obterEmpresaAtivaId() {
-  if (usuarioAtual && usuarioAtual.perfil === 'master') {
-    const salvo = localStorage.getItem('fluxia_active_empresa_id');
-    return salvo ? parseInt(salvo) : (usuarioAtual.empresa_id || 1);
-  }
-  return (usuarioAtual && usuarioAtual.empresa_id) ? parseInt(usuarioAtual.empresa_id) : 1;
-}
+  input.value = '';
+  const container = document.getElementById('rag-chat-messages');
 
-function trocarEmpresaAtiva(novoId) {
-  localStorage.setItem('fluxia_active_empresa_id', novoId);
-  atualizarInterfaceTenant();
-  carregarDocumentos();
-  const telaEquipe = document.getElementById('screen-equipe');
-  if (telaEquipe && telaEquipe.classList.contains('active')) {
-    carregarEquipe();
-  }
-}
+  // Bolha do Usuário
+  container.innerHTML += `
+    <div class="msg-bubble msg-user">
+      <div class="msg-text">${pergunta.replace(/\n/g, '<br>')}</div>
+      <div class="msg-time">Agora</div>
+    </div>
+  `;
+  container.scrollTop = container.scrollHeight;
 
-async function atualizarInterfaceTenant() {
-  if (!usuarioAtual) return;
-  const empresaIdAtiva = obterEmpresaAtivaId();
+  // Placeholder carregando
+  const loadingId = 'loading-' + Date.now();
+  container.innerHTML += `
+    <div class="msg-bubble msg-bot" id="${loadingId}">
+      <div class="msg-text" style="color:var(--text-muted); font-style:italic;">Consultando base de conhecimento e gerando resposta com IA...</div>
+    </div>
+  `;
+  container.scrollTop = container.scrollHeight;
 
   try {
-    const res = await fetch('/empresa/');
-    if (res.ok) {
-      const data = await res.json();
-      listaEmpresasCadastradas = data.empresas || [];
+    const res = await fetch('/chat/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mensagem: pergunta,
+        empresa_id: obterEmpresaAtivaId(),
+        usuario_id: usuarioAtual ? usuarioAtual.id : null
+      })
+    });
+    const data = await res.json();
+    const loadEl = document.getElementById(loadingId);
+
+    const isBase = (data.fonte === 'base_conhecimento');
+    const badgeFonte = isBase 
+      ? '<span class="contract-status-badge cs-signed" style="font-size:10px; margin-bottom:6px; display:inline-block;">✓ Base de Conhecimento Interna</span>'
+      : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
+
+    const docsTexto = (data.documentos_consultados && data.documentos_consultados.length > 0)
+      ? `<div style="font-size:11px; color:#94a3b8; margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
+      : '';
+
+    if (loadEl) {
+      loadEl.innerHTML = `
+        ${badgeFonte}
+        <div class="msg-text">${data.resposta.replace(/\n/g, '<br>')}</div>
+        ${docsTexto}
+        <div class="msg-time">Agora</div>
+      `;
     }
-  } catch (e) {
-    console.warn('Não foi possível listar empresas:', e);
+  } catch (err) {
+    const loadEl = document.getElementById(loadingId);
+    if (loadEl) loadEl.innerHTML = `<div class="msg-text" style="color:#ef4444;">Erro ao processar consulta: ${err.message}</div>`;
   }
+  container.scrollTop = container.scrollHeight;
+}
 
-  const containerBadge = document.getElementById('topbar-tenant-container');
-  const navEquipe = document.getElementById('nav-section-empresa');
-  const navAdmin = document.getElementById('nav-item-admin');
-  const topAdmin = document.getElementById('topbar-btn-admin');
-
-  if (usuarioAtual.perfil === 'master') {
-    // Super Admin Master
-    if (navAdmin) navAdmin.style.display = 'flex';
-    if (topAdmin) topAdmin.style.display = 'inline-flex';
-    if (navEquipe) navEquipe.style.display = 'block';
-
-    const optionsHtml = listaEmpresasCadastradas.map(emp => 
-      `<option value="${emp.id}" ${emp.id === empresaIdAtiva ? 'selected' : ''}>${emp.nome} (ID: ${emp.id})</option>`
-    ).join('');
-
-    containerBadge.innerHTML = `
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size:12px; font-weight:600; color:#a78bfa;">Visualizando Ambiente:</span>
-        <select id="select-empresa-switcher" onchange="trocarEmpresaAtiva(this.value)" style="background:#1a1f2e; color:white; border:1px solid rgba(167,139,250,0.4); border-radius:6px; padding:4px 10px; font-size:12px; font-weight:500; cursor:pointer; outline:none;">
-          ${optionsHtml || `<option value="1">Empresa Padrão (ID: 1)</option>`}
-        </select>
+function limparChatRAG() {
+  const container = document.getElementById('rag-chat-messages');
+  if (container) {
+    container.innerHTML = `
+      <div class="msg-bubble msg-bot">
+        <div class="msg-text">Nova sessão iniciada. Como posso ajudar com os documentos da empresa?</div>
+        <div class="msg-time">Agora</div>
       </div>
-      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
     `;
-  } else if (usuarioAtual.perfil === 'admin') {
-    // Admin da Empresa
-    if (navAdmin) navAdmin.style.display = 'none';
-    if (topAdmin) topAdmin.style.display = 'none';
-    if (navEquipe) navEquipe.style.display = 'block';
-
-    const empObj = listaEmpresasCadastradas.find(e => e.id === usuarioAtual.empresa_id);
-    const empNome = empObj ? empObj.nome : `Empresa #${usuarioAtual.empresa_id}`;
-    const empCnpj = empObj?.cnpj_ou_identificador ? ` · CNPJ: ${empObj.cnpj_ou_identificador}` : '';
-
-    containerBadge.innerHTML = `
-      <div class="env-badge">
-        <div class="env-dot"></div>
-        <span id="label-empresa-atual">Ambiente: ${empNome}${empCnpj}</span>
-      </div>
-      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
-    `;
-  } else {
-    // Funcionário ou Cliente
-    if (navAdmin) navAdmin.style.display = 'none';
-    if (topAdmin) topAdmin.style.display = 'none';
-    if (navEquipe) navEquipe.style.display = 'none';
-
-    const empObj = listaEmpresasCadastradas.find(e => e.id === usuarioAtual.empresa_id);
-    const empNome = empObj ? empObj.nome : `Empresa #${usuarioAtual.empresa_id}`;
-
-    containerBadge.innerHTML = `
-      <div class="env-badge">
-        <div class="env-dot"></div>
-        <span id="label-empresa-atual">Ambiente: ${empNome}</span>
-      </div>
-      <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
-    `;
-  }
-
-  const empAtual = listaEmpresasCadastradas.find(e => e.id === empresaIdAtiva);
-  const labelSub = document.getElementById('equipe-sub-label');
-  if (labelSub && empAtual) {
-    labelSub.textContent = `Colaboradores vinculados a ${empAtual.nome} (CNPJ: ${empAtual.cnpj_ou_identificador || 'N/A'})`;
   }
 }
 
-// ===== GESTÃO DE EQUIPE =====
+// ===== EQUIPE =====
 async function carregarEquipe() {
+  const container = document.getElementById('equipe-table-container');
   const empresaId = obterEmpresaAtivaId();
-  const tbody = document.getElementById('tabela-equipe-body');
+
   try {
-    const res = await fetch(`/usuarios/equipe?empresa_id=${empresaId}`);
-    if (!res.ok) throw new Error('Falha ao consultar equipe.');
+    const res = await fetch(`/usuarios/?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar equipe');
     const data = await res.json();
     equipeCarregada = data.usuarios || [];
+
+    const badge = document.getElementById('badge-total-equipe');
+    if (badge) badge.textContent = equipeCarregada.length;
+
     renderizarEquipe(equipeCarregada);
-    document.getElementById('badge-total-equipe').textContent = equipeCarregada.length;
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#ef4444;">Erro ao carregar colaboradores: ${err.message}</td></tr>`;
+    container.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444;">Erro: ${err.message}</div>`;
   }
 }
 
 function renderizarEquipe(usuarios) {
-  const tbody = document.getElementById('tabela-equipe-body');
+  const container = document.getElementById('equipe-table-container');
+  if (!container) return;
+
   if (usuarios.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Nenhum colaborador cadastrado neste ambiente ainda. Clique em "Adicionar Colaborador" acima.</td></tr>`;
+    container.innerHTML = `<div style="padding:30px; text-align:center; color:var(--text-muted);">Nenhum colaborador cadastrado.</div>`;
     return;
   }
 
-  tbody.innerHTML = usuarios.map(u => {
-    const initials = (u.nome || 'U').substring(0, 2).toUpperCase();
-    const isAtivo = u.status === 'ativo';
-    const isSelf = usuarioAtual && usuarioAtual.id === u.id;
-    const isMaster = u.perfil === 'master';
-
-    let badgeClass = 'badge-client';
-    let perfilLabel = 'Cliente';
-    if (u.perfil === 'master') { badgeClass = 'badge-master'; perfilLabel = 'Super Admin (Master)'; }
-    else if (u.perfil === 'admin') { badgeClass = 'badge-admin'; perfilLabel = 'Administrador'; }
-    else if (u.perfil === 'funcionario') { badgeClass = 'badge-func'; perfilLabel = 'Funcionário'; }
-
-    return `
-      <tr>
-        <td>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div class="user-avatar" style="width:28px; height:28px; font-size:10px;">${initials}</div>
-            <div style="font-weight:600;">${u.nome} ${isSelf ? '<span style="font-size:10px; color:var(--green);">(Você)</span>' : ''}</div>
-          </div>
-        </td>
-        <td style="font-size:12px; color:var(--text-muted);">${u.email}</td>
-        <td>
-          <span class="badge ${badgeClass}">${perfilLabel}</span>
-        </td>
-        <td>
-          <span class="badge ${isAtivo ? 'badge-active' : 'badge-inactive'}">
-            ${isAtivo ? '● Ativo' : '○ Inativo'}
-          </span>
-        </td>
-        <td style="font-size:11px; color:var(--text-muted);">${(u.data_criacao || '').substring(0, 10)}</td>
-        <td style="text-align:right;">
-          ${(!isSelf && !isMaster) ? `
-            <button class="btn-danger" style="padding:4px 8px; font-size:11px;" onclick="removerColaborador(${u.id}, '${u.nome}')">
-              Excluir
-            </button>
-          ` : `
-            <span style="font-size:11px; color:var(--text-muted);">-</span>
-          `}
-        </td>
-      </tr>
-    `;
-  }).join('');
+  container.innerHTML = usuarios.map(u => `
+    <div class="kb-row">
+      <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700;">${(u.nome || 'U').substring(0,2).toUpperCase()}</div>
+      <div class="kb-info">
+        <div class="kb-name">${u.nome}</div>
+        <div class="kb-meta">${u.email} · Perfil: <strong>${(u.perfil || 'cliente').toUpperCase()}</strong></div>
+      </div>
+      <div class="kb-status">
+        <span class="contract-status-badge ${u.status === 'ativo' ? 'cs-signed' : 'cs-pending'}">
+          ${(u.status || 'ativo').toUpperCase()}
+        </span>
+      </div>
+    </div>
+  `).join('');
 }
 
-function abrirModalMembroEquipe() {
-  document.getElementById('equipe-novo-nome').value = '';
-  document.getElementById('equipe-novo-email').value = '';
-  document.getElementById('equipe-novo-senha').value = '';
-  document.getElementById('modal-membro-equipe').classList.add('active');
-}
-
-function fecharModalMembroEquipe() {
-  document.getElementById('modal-membro-equipe').classList.remove('active');
-}
+function abrirModalMembroEquipe() { document.getElementById('modal-membro-equipe').classList.add('active'); }
+function fecharModalMembroEquipe() { document.getElementById('modal-membro-equipe').classList.remove('active'); }
 
 async function salvarNovoColaborador() {
   const nome = document.getElementById('equipe-novo-nome').value.trim();
@@ -1329,7 +1566,7 @@ async function salvarNovoColaborador() {
   }
 
   try {
-    const res = await fetch('/usuarios/equipe', {
+    const res = await fetch('/usuarios/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1340,35 +1577,46 @@ async function salvarNovoColaborador() {
         perfil: perfil
       })
     });
-
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Erro ao adicionar colaborador');
-
-    alert('Colaborador adicionado com sucesso!');
+    if (!res.ok) throw new Error(data.detail || 'Erro ao cadastrar');
+    alert('✓ Colaborador cadastrado com sucesso!');
     fecharModalMembroEquipe();
     carregarEquipe();
   } catch (err) {
-    alert(err.message);
+    alert('Erro: ' + err.message);
   }
 }
 
-async function removerColaborador(usuarioId, nome) {
-  if (!confirm(`Deseja realmente remover o colaborador "${nome}" da equipe?`)) return;
-  const empresaId = obterEmpresaAtivaId();
+// ===== RESUMO IA =====
+async function gerarNovoResumoIA() {
+  const container = document.getElementById('container-resumos-ia');
+  container.innerHTML = `<div style="text-align:center; padding:30px; color:#38bdf8;">✦ Consolidando conversas do Telegram e gerando insights com Gemini...</div>`;
 
   try {
-    const res = await fetch(`/usuarios/equipe/${usuarioId}?empresa_id=${empresaId}`, {
-      method: 'DELETE'
+    const res = await fetch(`/chat/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mensagem: "Gere um resumo executivo estruturado com os principais tópicos, dúvidas frequentes de clientes e oportunidades comerciais identificadas.",
+        empresa_id: obterEmpresaAtivaId()
+      })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Erro ao remover colaborador');
-
-    carregarEquipe();
-  } catch (err) {
-    alert(err.message);
+    container.innerHTML = `
+      <div style="line-height:1.6; color:#f1f5f9; font-size:13px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">
+          <strong style="color:#229ED9;">Síntese Executiva Gerada por IA</strong>
+          <span style="font-size:11px; color:#94a3b8;">${new Date().toLocaleDateString('pt-BR')}</span>
+        </div>
+        ${data.resposta.replace(/\n/g, '<br>')}
+      </div>
+    `;
+  } catch (e) {
+    container.innerHTML = `<div style="color:#ef4444;">Erro ao gerar resumo: ${e.message}</div>`;
   }
 }
 
+// ===== AUTENTICAÇÃO E SESSÃO =====
 function verificarAutenticacao() {
   const userJson = localStorage.getItem('fluxia_user');
   if (!userJson) {
@@ -1402,6 +1650,72 @@ function aplicarDadosUsuario() {
   if (nameEl) nameEl.textContent = usuarioAtual.nome;
   if (roleEl) roleEl.textContent = usuarioAtual.perfil.toUpperCase();
   if (avatarEl) avatarEl.textContent = (usuarioAtual.nome || 'U').substring(0, 2).toUpperCase();
+
+  // PARTE 1b: Oculta área de upload para quem não for admin/master
+  const uploadContainer = document.getElementById('kb-upload-container');
+  const btnUpload = document.getElementById('btn-topo-upload-doc');
+  const ehAdminOuMaster = ['admin', 'master'].includes(usuarioAtual.perfil);
+
+  if (uploadContainer) {
+    uploadContainer.style.display = ehAdminOuMaster ? 'block' : 'none';
+  }
+  if (btnUpload) {
+    btnUpload.style.display = ehAdminOuMaster ? 'inline-flex' : 'none';
+  }
+}
+
+async function atualizarInterfaceTenant() {
+  if (!usuarioAtual) return;
+  const container = document.getElementById('topbar-tenant-container');
+  const labelEmpresa = document.getElementById('label-empresa-atual');
+  const navAdmin = document.getElementById('nav-item-admin');
+  const btnAdmin = document.getElementById('topbar-btn-admin');
+  const navEquipeSec = document.getElementById('nav-section-empresa');
+
+  if (usuarioAtual.perfil === 'master') {
+    if (navAdmin) navAdmin.style.display = 'flex';
+    if (btnAdmin) btnAdmin.style.display = 'inline-flex';
+    if (navEquipeSec) navEquipeSec.style.display = 'block';
+
+    try {
+      const res = await fetch('/empresa/');
+      if (res.ok) {
+        const data = await res.json();
+        listaEmpresasCadastradas = data.empresas || [];
+        const ativaId = obterEmpresaAtivaId();
+
+        container.innerHTML = `
+          <div class="env-badge" style="background:rgba(83, 74, 183, 0.25); border-color:rgba(127, 119, 221, 0.4);">
+            <div class="env-dot" style="background:#a78bfa;"></div>
+            <span style="font-weight:600; color:#c4b5fd;">Ambiente Master:</span>
+            <select id="select-switcher-empresa" onchange="trocarEmpresaAtiva(this.value)" style="background:transparent; color:#fff; border:none; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600; outline:none; cursor:pointer;">
+              ${listaEmpresasCadastradas.map(emp => `
+                <option value="${emp.id}" ${emp.id === ativaId ? 'selected' : ''} style="background:#1a1f2e; color:#fff;">
+                  🏢 ${emp.nome} (${emp.cnpj_ou_identificador || 'CNPJ não inf.'})
+                </option>
+              `).join('')}
+            </select>
+          </div>
+          <span style="font-size:11px; color:#94a3b8;">Alternador de Ambientes</span>
+        `;
+      }
+    } catch (e) {
+      console.error('Falha ao carregar empresas:', e);
+    }
+  } else if (usuarioAtual.perfil === 'admin') {
+    if (navEquipeSec) navEquipeSec.style.display = 'block';
+    if (labelEmpresa) labelEmpresa.textContent = `Ambiente: Empresa #${usuarioAtual.empresa_id || 1}`;
+  } else {
+    if (labelEmpresa) labelEmpresa.textContent = `Ambiente: Empresa #${usuarioAtual.empresa_id || 1}`;
+  }
+}
+
+function trocarEmpresaAtiva(novaEmpresaId) {
+  localStorage.setItem('fluxia_active_empresa_id', novaEmpresaId);
+  carregarDocumentos();
+  carregarConversasTelegram();
+  carregarDashboardMetricas();
+  carregarKanbanNegocios();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1413,9 +1727,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const labelData = document.getElementById('data-atual-label');
   if (labelData) labelData.textContent = hoje.charAt(0).toUpperCase() + hoje.slice(1);
+
   carregarDocumentos();
   carregarConversasTelegram();
-  // Atualiza as conversas do Telegram periodicamente
+  carregarDashboardMetricas();
+
+  // Polling automático de conversas
   setInterval(carregarConversasTelegram, 15000);
 });
 </script>

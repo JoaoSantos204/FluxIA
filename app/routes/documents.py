@@ -2,8 +2,7 @@ import os
 import json
 import hashlib
 import time
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Security, Depends
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Header, Query
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
@@ -12,7 +11,7 @@ from app.database.database import conectar, _cursor, _placeholder
 from app.services.document_service import ler_documento
 from app.services.chunk_service import dividir_texto
 from app.services.embedding_service import gerar_embedding
-from app.services.security_service import verificar_admin_api_key, api_key_header
+from app.services.security_service import validar_perfil_admin_ou_master
 
 router = APIRouter(
     prefix="/documents",
@@ -23,24 +22,35 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-EXTENSOES_PERMITIDAS = {".pdf", ".txt", ".docx"}
+EXTENSOES_PERMITIDAS = {".pdf", ".txt", ".docx", ".pptx", ".png", ".jpg", ".jpeg"}
 TAMANHO_MAXIMO = 10 * 1024 * 1024
 
 
-@router.post("/upload", status_code=status.HTTP_201_CREATED, dependencies=[Depends(verificar_admin_api_key)])
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def enviar_documento(
     arquivo: UploadFile = File(...),
     nivel_acesso: str = Form("publico"),
-    empresa_id: int = Form(1)
+    empresa_id: int = Form(1),
+    usuario_id: int = Form(...)
 ):
-    extensao = Path(arquivo.filename).suffix.lower()
+    """
+    Upload de Documento com RBAC Real:
+    Exige usuario_id de quem chama e valida no banco se o perfil é 'admin' ou 'master'.
+    Retorna 403 para 'funcionario' e 'cliente'.
+    Suporta .pdf, .txt, .docx, .pptx e imagens (.png, .jpg, .jpeg via Gemini multimodal).
+    """
+    # 1. Validação de Segurança RBAC
+    usuario = validar_perfil_admin_ou_master(usuario_id)
 
+    # 2. Validação da Extensão
+    extensao = Path(arquivo.filename).suffix.lower()
     if extensao not in EXTENSOES_PERMITIDAS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tipo de arquivo não permitido. Envie um arquivo PDF, TXT ou DOCX."
+            detail=f"Tipo de arquivo não permitido: '{extensao}'. Formatos suportados: PDF, TXT, DOCX, PPTX, PNG, JPG, JPEG."
         )
 
+    # 3. Validação do Nível de Acesso
     nivel_formatado = (nivel_acesso or "publico").strip().lower()
     if nivel_formatado not in {"publico", "interno"}:
         raise HTTPException(
@@ -62,50 +72,60 @@ async def enviar_documento(
     cursor = _cursor(conexao)
     ph = _placeholder()
 
+    caminho_arquivo = None
+
     try:
-        # 1. Checagem de Duplicados
+        # 4. Checagem de Duplicados
         cursor.execute(f"""
             SELECT id, nome_arquivo
             FROM documentos
-            WHERE nome_arquivo = {ph} OR hash_conteudo = {ph}
-        """, (arquivo.filename, hash_conteudo))
+            WHERE (nome_arquivo = {ph} OR hash_conteudo = {ph}) AND empresa_id = {ph}
+        """, (arquivo.filename, hash_conteudo, empresa_id))
         doc_existente = cursor.fetchone()
 
         if doc_existente:
             if doc_existente["nome_arquivo"] == arquivo.filename:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"O arquivo '{arquivo.filename}' já foi enviado anteriormente."
+                    detail=f"O arquivo '{arquivo.filename}' já foi enviado anteriormente para esta empresa."
                 )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Um arquivo com o mesmo conteúdo já existe no sistema."
+                    detail="Um arquivo com o mesmo conteúdo já existe cadastrado nesta empresa."
                 )
 
-        # 2. Salvamento do Arquivo Físico
+        # 5. Salvamento do Arquivo Físico
         nome_seguro = f"{uuid4()}{extensao}"
         caminho_arquivo = UPLOAD_DIR / nome_seguro
 
         with open(caminho_arquivo, "wb") as arquivo_salvo:
             arquivo_salvo.write(conteudo)
 
-        # 3. Extração do Texto
-        texto_documento = ler_documento(caminho_arquivo)
-
-        if not texto_documento.strip():
-            if caminho_arquivo.exists():
+        # 6. Extração do Conteúdo (Texto, Slides PPTX ou OCR de Imagem com Gemini)
+        try:
+            texto_documento = ler_documento(caminho_arquivo)
+        except Exception as err_leitura:
+            if caminho_arquivo and caminho_arquivo.exists():
                 caminho_arquivo.unlink()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Não foi possível extrair conteúdo textual do documento enviado."
+                detail=f"Falha ao processar conteúdo do arquivo '{arquivo.filename}': {err_leitura}"
             )
 
-        # 4. Divisão em Chunks
+        if not texto_documento or not texto_documento.strip():
+            if caminho_arquivo and caminho_arquivo.exists():
+                caminho_arquivo.unlink()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Não foi possível extrair nenhum conteúdo útil do arquivo '{arquivo.filename}'. Verifique se o arquivo não está vazio ou corrompido."
+            )
+
+        # 7. Divisão em Chunks
         chunks = dividir_texto(texto_documento)
         data_upload = datetime.now().isoformat()
 
-        # 5. Inserção do Documento no Banco
+        # 8. Inserção do Documento no Banco
         cursor.execute(f"""
             INSERT INTO documentos (
                 empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo,
@@ -113,15 +133,15 @@ async def enviar_documento(
             ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
         """, (empresa_id, arquivo.filename, extensao, str(caminho_arquivo), texto_documento, hash_conteudo, nivel_formatado, data_upload))
 
-        # Obter documento_id (lastrowid para SQLite; fallback para Postgres)
         if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
             documento_id = cursor.lastrowid
         else:
-            cursor.execute(f"SELECT id FROM documentos WHERE hash_conteudo = {ph}", (hash_conteudo,))
+            cursor.execute(f"SELECT id FROM documentos WHERE hash_conteudo = {ph} AND empresa_id = {ph}", (hash_conteudo, empresa_id))
             row = cursor.fetchone()
             documento_id = row["id"] if row else None
 
-        # 6. Geração de Embeddings e Inserção dos Chunks
+        # 9. Geração de Embeddings e Inserção dos Chunks
+        total_chunks = 0
         for numero, chunk in enumerate(chunks, start=1):
             embedding = gerar_embedding(chunk)
 
@@ -129,49 +149,62 @@ async def enviar_documento(
                 INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding)
                 VALUES ({ph}, {ph}, {ph}, {ph})
             """, (documento_id, numero, chunk, json.dumps(embedding)))
-            # Pequena pausa para evitar estourar a cota da API do Gemini (429 Rate Limit)
-            time.sleep(0.3)
+            total_chunks += 1
 
         conexao.commit()
 
         return {
-            "mensagem": "Documento enviado com sucesso!",
-            "documento_id": documento_id,
+            "id": documento_id,
             "empresa_id": empresa_id,
             "nome_arquivo": arquivo.filename,
+            "tipo_arquivo": extensao,
             "nivel_acesso": nivel_formatado,
-            "quantidade_caracteres": len(texto_documento),
-            "total_chunks": len(chunks)
+            "total_chunks": total_chunks,
+            "mensagem": f"Documento '{arquivo.filename}' ({nivel_formatado.upper()}) processado com sucesso por {usuario['nome']}."
         }
 
+    except HTTPException:
+        conexao.rollback()
+        raise
     except Exception as e:
         conexao.rollback()
-        raise e
-
+        if caminho_arquivo and caminho_arquivo.exists():
+            caminho_arquivo.unlink()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar o documento: {str(e)}"
+        )
     finally:
         conexao.close()
 
 
 @router.get("/")
-def listar_documentos(empresa_id: int | None = None):
+def listar_documentos(empresa_id: int | None = None, nivel_acesso: str | None = None):
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
-        if empresa_id:
-            cursor.execute(f"""
-                SELECT id, empresa_id, nome_arquivo, tipo_arquivo, nivel_acesso, data_upload
-                FROM documentos
-                WHERE empresa_id = {ph}
-                ORDER BY id DESC
-            """, (empresa_id,))
-        else:
-            cursor.execute("""
-                SELECT id, empresa_id, nome_arquivo, tipo_arquivo, nivel_acesso, data_upload
-                FROM documentos
-                ORDER BY id DESC
-            """)
+        filtros = []
+        parametros = []
+
+        if empresa_id is not None:
+            filtros.append(f"empresa_id = {ph}")
+            parametros.append(empresa_id)
+
+        if nivel_acesso is not None:
+            filtros.append(f"nivel_acesso = {ph}")
+            parametros.append(nivel_acesso.strip().lower())
+
+        where_clause = f"WHERE {' AND '.join(filtros)}" if filtros else ""
+
+        cursor.execute(f"""
+            SELECT id, empresa_id, nome_arquivo, tipo_arquivo, nivel_acesso, data_upload
+            FROM documentos
+            {where_clause}
+            ORDER BY id DESC
+        """, tuple(parametros))
+
         documentos = cursor.fetchall()
 
         return {
@@ -193,7 +226,7 @@ def listar_documentos(empresa_id: int | None = None):
 
 
 @router.get("/{documento_id}")
-def obter_documentos(documento_id: int):
+def obter_documento(documento_id: int):
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
@@ -225,14 +258,27 @@ def obter_documentos(documento_id: int):
         conexao.close()
 
 
-@router.delete("/{documento_id}", dependencies=[Depends(verificar_admin_api_key)])
-def deletar_documento(documento_id: int):
+@router.delete("/{documento_id}")
+def deletar_documento(
+    documento_id: int,
+    usuario_id: int | None = Query(None),
+    x_user_id: int | None = Header(None, alias="X-User-Id")
+):
+    """Exclui documento e seus chunks. Exige perfil admin ou master."""
+    uid = usuario_id or x_user_id
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identificação do usuário (usuario_id ou cabeçalho X-User-Id) é obrigatória para exclusão."
+        )
+
+    validar_perfil_admin_ou_master(uid)
+
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
-        # 1. Busca o documento
         cursor.execute(f"SELECT caminho_arquivo, nome_arquivo FROM documentos WHERE id = {ph}", (documento_id,))
         documento = cursor.fetchone()
 
@@ -242,12 +288,10 @@ def deletar_documento(documento_id: int):
                 detail="Documento não encontrado."
             )
 
-        # 2. Apaga o arquivo do disco
         caminho = Path(documento["caminho_arquivo"])
         if caminho.exists():
             caminho.unlink()
 
-        # 3. Elimina os chunks e o documento
         cursor.execute(f"DELETE FROM chunks WHERE documento_id = {ph}", (documento_id,))
         cursor.execute(f"DELETE FROM documentos WHERE id = {ph}", (documento_id,))
 

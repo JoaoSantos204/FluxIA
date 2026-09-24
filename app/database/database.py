@@ -145,6 +145,95 @@ def _criar_banco_sqlite(cursor):
         )
     """)
 
+    # 8. Produtos (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            ativo BOOLEAN DEFAULT 1,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 9. Clientes (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            telefone TEXT,
+            email TEXT,
+            telegram_chat_id TEXT UNIQUE,
+            origem TEXT DEFAULT 'telegram',
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 10. Negócios (CRM Pipeline)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS negocios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            produto_id INTEGER,
+            valor_estimado REAL DEFAULT 0,
+            estagio TEXT DEFAULT 'novo' CHECK (estagio IN ('novo','qualificado','proposta','negociacao','fechado','perdido')),
+            proposta_enviada BOOLEAN DEFAULT 0,
+            ultima_interacao_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            ultimo_followup_em DATETIME,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL
+        )
+    """)
+
+    # 11. Contratos (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contratos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER UNIQUE NOT NULL,
+            status TEXT DEFAULT 'pendente' CHECK (status IN ('pendente','assinado','cancelado')),
+            valor_contrato REAL DEFAULT 0,
+            data_assinatura DATETIME,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 12. Conversas Telegram (Status Atendente Bot vs Humano)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversas_telegram (
+            chat_id TEXT PRIMARY KEY,
+            status TEXT DEFAULT 'bot' CHECK (status IN ('bot','humano')),
+            atendente_id INTEGER,
+            atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (atendente_id) REFERENCES usuarios(id) ON DELETE SET NULL
+        )
+    """)
+
+    # 13. Perguntas Histórico & Analytics
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS perguntas_historico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            canal TEXT CHECK (canal IN ('telegram','portal')),
+            empresa_id INTEGER NOT NULL,
+            usuario_id INTEGER,
+            telegram_chat_id TEXT,
+            pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            documentos_utilizados TEXT,
+            teve_contexto BOOLEAN DEFAULT 0,
+            fonte_resposta TEXT CHECK (fonte_resposta IN ('base_conhecimento','conhecimento_geral') OR fonte_resposta IS NULL),
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+        )
+    """)
+
     # Migrações idempotentes para bancos antigos
     cursor.execute("PRAGMA table_info(chunks)")
     colunas_chunks = [c["name"] for c in cursor.fetchall()]
@@ -185,6 +274,14 @@ def _criar_banco_sqlite(cursor):
         cursor.execute("""
             INSERT INTO configuracoes_empresa (empresa_id, numero_suporte_humano, mensagem_suporte)
             VALUES (1, '(11) 99999-9999', 'Por favor, entre em contato com nossa equipe de atendimento.')
+        """)
+
+    cursor.execute("SELECT COUNT(*) AS total FROM produtos WHERE empresa_id = 1")
+    if cursor.fetchone()["total"] == 0:
+        cursor.execute("""
+            INSERT INTO produtos (empresa_id, nome, descricao, ativo)
+            VALUES (1, 'Plano Pro FluxIA', 'Licença mensal da plataforma CRM com agentes inteligentes e RAG corporativo', 1),
+                   (1, 'Consultoria em IA', 'Implantação especializada e treinamento da equipe para automação de vendas', 1)
         """)
 
 
@@ -230,7 +327,7 @@ def _criar_banco_postgres(cursor):
             conteudo_texto TEXT NOT NULL,
             hash_conteudo TEXT NOT NULL,
             nivel_acesso TEXT DEFAULT 'publico',
-            data_upload TIMESTAMP DEFAULT NOW(),
+            data_upload TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id)
         )
     """)
@@ -264,7 +361,7 @@ def _criar_banco_postgres(cursor):
             telegram_chat_id TEXT NOT NULL,
             mensagem_usuario TEXT NOT NULL,
             resposta_ia TEXT NOT NULL,
-            data_interacao TIMESTAMP DEFAULT NOW()
+            data_interacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -279,10 +376,115 @@ def _criar_banco_postgres(cursor):
         )
     """)
 
-    # Dados iniciais (INSERT ... ON CONFLICT DO NOTHING é idiomático no Postgres)
+    # 8. Produtos (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            ativo BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 9. Clientes (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            telefone TEXT,
+            email TEXT,
+            telegram_chat_id TEXT UNIQUE,
+            origem TEXT DEFAULT 'telegram',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 10. Negócios (CRM Pipeline)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS negocios (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            produto_id INTEGER,
+            valor_estimado NUMERIC(12,2) DEFAULT 0,
+            estagio TEXT DEFAULT 'novo' CHECK (estagio IN ('novo','qualificado','proposta','negociacao','fechado','perdido')),
+            proposta_enviada BOOLEAN DEFAULT FALSE,
+            ultima_interacao_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ultimo_followup_em TIMESTAMP,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL
+        )
+    """)
+
+    # 11. Contratos (CRM)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contratos (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER UNIQUE NOT NULL,
+            status TEXT DEFAULT 'pendente' CHECK (status IN ('pendente','assinado','cancelado')),
+            valor_contrato NUMERIC(12,2) DEFAULT 0,
+            data_assinatura TIMESTAMP,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 12. Conversas Telegram (Status Atendente Bot vs Humano)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversas_telegram (
+            chat_id TEXT PRIMARY KEY,
+            status TEXT DEFAULT 'bot' CHECK (status IN ('bot','humano')),
+            atendente_id INTEGER,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (atendente_id) REFERENCES usuarios(id) ON DELETE SET NULL
+        )
+    """)
+
+    # 13. Perguntas Histórico & Analytics
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS perguntas_historico (
+            id SERIAL PRIMARY KEY,
+            canal TEXT CHECK (canal IN ('telegram','portal')),
+            empresa_id INTEGER NOT NULL,
+            usuario_id INTEGER,
+            telegram_chat_id TEXT,
+            pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            documentos_utilizados TEXT,
+            teve_contexto BOOLEAN DEFAULT FALSE,
+            fonte_resposta TEXT CHECK (fonte_resposta IN ('base_conhecimento','conhecimento_geral') OR fonte_resposta IS NULL),
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+        )
+    """)
+
+    # Migrações idempotentes para Postgres
+    cursor.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='documentos' AND column_name='empresa_id') THEN
+                ALTER TABLE documentos ADD COLUMN empresa_id INTEGER DEFAULT 1;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='documentos' AND column_name='nivel_acesso') THEN
+                ALTER TABLE documentos ADD COLUMN nivel_acesso TEXT DEFAULT 'publico';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='perfil') THEN
+                ALTER TABLE usuarios ADD COLUMN perfil TEXT DEFAULT 'cliente';
+            END IF;
+        END $$;
+    """)
+
+    # Dados iniciais
     cursor.execute("""
         INSERT INTO empresas (id, nome, cnpj_ou_identificador, data_criacao)
-        VALUES (1, 'Empresa Padrão', '00.000.000/0001-00', NOW())
+        VALUES (1, 'Empresa Padrão', '00.000.000/0001-00', NOW()::text)
         ON CONFLICT (id) DO NOTHING
     """)
 
@@ -291,5 +493,21 @@ def _criar_banco_postgres(cursor):
         SELECT 1, '(11) 99999-9999', 'Por favor, entre em contato com nossa equipe de atendimento.'
         WHERE NOT EXISTS (
             SELECT 1 FROM configuracoes_empresa WHERE empresa_id = 1
+        )
+    """)
+
+    cursor.execute("""
+        INSERT INTO produtos (empresa_id, nome, descricao, ativo)
+        SELECT 1, 'Plano Pro FluxIA', 'Licença mensal da plataforma CRM com agentes inteligentes e RAG corporativo', TRUE
+        WHERE NOT EXISTS (
+            SELECT 1 FROM produtos WHERE empresa_id = 1
+        )
+    """)
+
+    cursor.execute("""
+        INSERT INTO produtos (empresa_id, nome, descricao, ativo)
+        SELECT 1, 'Consultoria em IA', 'Implantação especializada e treinamento da equipe para automação de vendas', TRUE
+        WHERE NOT EXISTS (
+            SELECT 1 FROM produtos WHERE empresa_id = 1 AND nome = 'Consultoria em IA'
         )
     """)

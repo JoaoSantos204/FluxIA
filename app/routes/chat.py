@@ -1,109 +1,84 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from typing import Optional, List
 
 from app.services.semantic_search_service import buscar_chunks_semanticamente
 from app.services.ai_service import AIService
-from app.database.database import conectar, _cursor, _placeholder
-from app.services.context_service import verificar_contexto
+from app.routes.analytics import registrar_pergunta_historico
 
 router = APIRouter(
     prefix="/chat",
     tags=["Chat"]
 )
 
-# Instância única do serviço de IA
+# Instância do serviço de IA
 ai_service = AIService()
 
-# Define o formato esperado pelo chatbot.
+
 class Pergunta(BaseModel):
     mensagem: str
-    empresa_id: int | None = None
+    empresa_id: Optional[int] = 1
+    usuario_id: Optional[int] = None
 
-def existe_base_de_conhecimento(empresa_id: int | None = None):
-
-    conexao = conectar()
-    cursor = _cursor(conexao)
-    ph = _placeholder()
-
-    if empresa_id:
-        cursor.execute(
-            f"SELECT COUNT(*) AS total FROM documentos WHERE empresa_id = {ph}",
-            (empresa_id,)
-        )
-    else:
-        cursor.execute(
-            "SELECT COUNT(*) AS total FROM documentos"
-        )
-
-    total_documentos = cursor.fetchone()["total"]
-
-    cursor.execute(
-        "SELECT COUNT(*) AS total FROM instrucoes"
-    )
-
-    total_instrucoes = cursor.fetchone()["total"]
-
-    conexao.close()
-
-    return total_documentos > 0 or total_instrucoes > 0
 
 @router.post("/")
-
 def conversar(pergunta: Pergunta):
+    """
+    Chat Interno do Portal (Assistente Híbrido Corporativo):
+    - Busca chunks semanticamente nos documentos da empresa (públicos e internos).
+    - Se encontrar contexto relevante, responde com base nos documentos corporativos.
+    - Se NÃO encontrar contexto, NÃO RECUSA: responde utilizando conhecimento geral corporativo,
+      esclarecendo que a resposta não provém dos documentos internos.
+    - Persiste a interação em perguntas_historico com canal='portal'.
+    """
+    texto_pergunta = pergunta.mensagem.strip()
+    empresa_id = pergunta.empresa_id or 1
 
-    if not existe_base_de_conhecimento(empresa_id=pergunta.empresa_id):
-        return {
-            "resposta": (
-                "Ainda não existe uma base de conhecimento cadastrada "
-                "para que eu possa responder às suas perguntas. "
-                "Envie um documento ou adicione instruções para criar "
-                "uma base de conhecimento."
-            )
-        }
-
-    # Busca os chunks semanticamente mais relevantes filtrados pelo tenant
-    contexto = buscar_chunks_semanticamente(pergunta.mensagem, empresa_id=pergunta.empresa_id)
-
-    if not contexto:
-        return {
-            "resposta": (
-                "Não encontrei informações relacionadas à sua pergunta "
-                "na base de conhecimento."
-            )
-        }
+    # 1. Busca semântica nos documentos da empresa (busca todos: públicos e internos)
+    chunks = buscar_chunks_semanticamente(texto_pergunta, limite=3, empresa_id=empresa_id)
 
     contexto_texto = ""
+    documentos_usados = []
 
-    for chunk in contexto:
+    if chunks:
+        for chunk in chunks:
+            nome_arq = chunk.get("nome_arquivo", "documento")
+            sim = round(float(chunk.get("similaridade", 0.0)), 3)
+            documentos_usados.append({
+                "nome_arquivo": nome_arq,
+                "similaridade": sim
+            })
+            contexto_texto += (
+                f"\n\nDOCUMENTO: {nome_arq}\n"
+                f"{chunk.get('conteudo', '')}"
+            )
 
-        contexto_texto += (
-            f"\n\nDOCUMENTO: {chunk['nome_arquivo']}\n"
-            f"{chunk['conteudo']}"
-        )
-
-    # Extrai apenas os nomes ÚNICOS dos arquivos mantendo a ordem
-    documentos_unicos = list(dict.fromkeys(chunk["nome_arquivo"] for chunk in contexto))
-
-    possui_contexto = verificar_contexto(
-        pergunta.mensagem,
-        contexto_texto
-    )
-
-    if not possui_contexto:
-        return {
-            "resposta": (
-                "Não há informações suficientes na base de conhecimento "
-                "para responder a essa pergunta."
-            ),
-            "documentos_consultados": documentos_unicos
-        }
-
-    resposta = ai_service.gerar_resposta(
-        pergunta=pergunta.mensagem,
+    # 2. Gera a resposta com o modelo de IA interno híbrido
+    resposta_texto, fonte = ai_service.gerar_resposta_interna(
+        pergunta=texto_pergunta,
         contexto=contexto_texto
     )
 
+    teve_contexto = (fonte == "base_conhecimento")
+
+    # 3. Loga no histórico e analytics
+    documentos_unicos = list(dict.fromkeys(d["nome_arquivo"] for d in documentos_usados))
+
+    registrar_pergunta_historico(
+        canal="portal",
+        empresa_id=empresa_id,
+        pergunta=texto_pergunta,
+        resposta=resposta_texto,
+        usuario_id=pergunta.usuario_id,
+        telegram_chat_id=None,
+        documentos_utilizados=documentos_usados if teve_contexto else [],
+        teve_contexto=teve_contexto,
+        fonte_resposta=fonte
+    )
+
     return {
-        "resposta": resposta,
-        "documentos_consultados": documentos_unicos
+        "resposta": resposta_texto,
+        "fonte": fonte,
+        "teve_contexto": teve_contexto,
+        "documentos_consultados": documentos_unicos if teve_contexto else []
     }

@@ -40,3 +40,6 @@ typing_extensions==4.16.0
 urllib3==2.7.0
 uvicorn==0.52.4
 websockets==16.1.1
+python-pptx==1.0.2
+apscheduler==3.11.3
+Pillow>=3.3.2
