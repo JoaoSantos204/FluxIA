@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
 import requests
 import os
 import logging
@@ -272,3 +273,160 @@ async def telegram_webhook(request: Request):
     )
 
     return {"status": "ok"}
+
+
+# ===== ENDPOINTS DE CRM & CONVERSAS REAIS DO TELEGRAM =====
+
+class EnviarMensagemOperadorRequest(BaseModel):
+    texto: str
+
+
+@router.get("/conversas")
+def listar_conversas_telegram(empresa_id: int | None = None):
+    """
+    Lista todos os contatos e conversas do Telegram agrupadas por chat_id,
+    vinculando ao usuário e empresa correspondente.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        # Busca todas as interações distintas agrupadas por telegram_chat_id
+        # Junta com usuarios para obter o nome, e-mail e empresa_id quando vinculado
+        query = f"""
+            SELECT 
+                h.telegram_chat_id,
+                MAX(h.id) AS ultimo_id,
+                MAX(h.data_interacao) AS data_ultima_mensagem,
+                COUNT(h.id) AS total_interacoes,
+                u.id AS usuario_id,
+                u.nome AS usuario_nome,
+                u.email AS usuario_email,
+                u.perfil AS usuario_perfil,
+                COALESCE(u.empresa_id, 1) AS empresa_id
+            FROM historico_conversas h
+            LEFT JOIN usuarios u ON u.telegram_chat_id = h.telegram_chat_id
+            GROUP BY h.telegram_chat_id, u.id, u.nome, u.email, u.perfil, u.empresa_id
+            ORDER BY data_ultima_mensagem DESC
+        """
+        cursor.execute(query)
+        linhas = cursor.fetchall()
+
+        conversas = []
+        for l in linhas:
+            chat_id = l["telegram_chat_id"]
+            emp_id = l["empresa_id"] or 1
+
+            # Se empresa_id foi passado como filtro, ignora conversas de outras empresas
+            if empresa_id and emp_id != empresa_id:
+                continue
+
+            # Busca o texto da última mensagem
+            cursor.execute(f"""
+                SELECT mensagem_usuario, resposta_ia, data_interacao
+                FROM historico_conversas
+                WHERE id = {ph}
+            """, (l["ultimo_id"],))
+            ultima_row = cursor.fetchone()
+            ultima_msg = ""
+            if ultima_row:
+                ultima_msg = ultima_row["mensagem_usuario"] or ultima_row["resposta_ia"] or ""
+
+            nome_exibicao = l["usuario_nome"] if l["usuario_nome"] else f"Lead Telegram #{chat_id}"
+
+            conversas.append({
+                "chat_id": chat_id,
+                "nome": nome_exibicao,
+                "email": l["usuario_email"] or "Pendente de vínculo",
+                "perfil": l["usuario_perfil"] or "lead",
+                "empresa_id": emp_id,
+                "total_mensagens": l["total_interacoes"],
+                "ultima_mensagem": ultima_msg,
+                "data_ultima_mensagem": str(l["data_ultima_mensagem"])
+            })
+
+        return {
+            "total": len(conversas),
+            "conversas": conversas
+        }
+    except Exception as e:
+        logger.error(f"[Telegram] Erro ao listar conversas: {e}")
+        return {"total": 0, "conversas": []}
+    finally:
+        conexao.close()
+
+
+@router.get("/conversas/{chat_id}/mensagens")
+def obter_mensagens_conversa(chat_id: str):
+    """
+    Retorna todo o histórico cronológico de mensagens trocadas com o chat_id no Telegram.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            SELECT id, mensagem_usuario, resposta_ia, data_interacao
+            FROM historico_conversas
+            WHERE telegram_chat_id = {ph}
+            ORDER BY id ASC
+        """, (str(chat_id),))
+        linhas = cursor.fetchall()
+
+        mensagens = []
+        for row in linhas:
+            data_str = str(row["data_interacao"] or "")
+            hora_formatada = data_str[11:16] if len(data_str) >= 16 else ""
+
+            if row["mensagem_usuario"]:
+                mensagens.append({
+                    "id": f"{row['id']}_user",
+                    "remetente": "usuario",
+                    "texto": row["mensagem_usuario"],
+                    "hora": hora_formatada
+                })
+            if row["resposta_ia"]:
+                mensagens.append({
+                    "id": f"{row['id']}_bot",
+                    "remetente": "bot",
+                    "texto": row["resposta_ia"],
+                    "hora": hora_formatada
+                })
+
+        return {
+            "chat_id": chat_id,
+            "total": len(mensagens),
+            "mensagens": mensagens
+        }
+    except Exception as e:
+        logger.error(f"[Telegram] Erro ao obter mensagens: {e}")
+        return {"chat_id": chat_id, "total": 0, "mensagens": []}
+    finally:
+        conexao.close()
+
+
+@router.post("/conversas/{chat_id}/enviar")
+def enviar_resposta_operador(chat_id: str, dados: EnviarMensagemOperadorRequest):
+    """
+    Envia uma mensagem digitada pelo operador no CRM diretamente para o Telegram do cliente.
+    """
+    texto = dados.texto.strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="O texto da mensagem não pode estar vazio.")
+
+    # 1. Envia via Telegram API oficial
+    enviar_mensagem_telegram(chat_id, texto)
+
+    # 2. Grava no histórico como mensagem do operador
+    salvar_interacao(
+        telegram_chat_id=chat_id,
+        mensagem_usuario="",
+        resposta_ia=f"[Operador]: {texto}"
+    )
+
+    return {
+        "sucesso": True,
+        "mensagem": "Mensagem enviada com sucesso ao Telegram do cliente!"
+    }

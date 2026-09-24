@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Gestão de Ambientes & Usuários</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <script>
+    // Bloqueio imediato no head para proteger o portal admin
+    (function() {
+      try {
+        var userJson = localStorage.getItem('fluxia_user');
+        if (!userJson || userJson === 'null' || userJson === 'undefined') {
+          window.location.replace('/login?redirect=/admin');
+        } else {
+          var u = JSON.parse(userJson);
+          if (!u || !u.id) {
+            localStorage.removeItem('fluxia_user');
+            window.location.replace('/login?redirect=/admin');
+          }
+        }
+      } catch (e) {
+        localStorage.removeItem('fluxia_user');
+        window.location.replace('/login?redirect=/admin');
+      }
+    })();
+  </script>
   <style>
     .admin-container {
       display: flex;

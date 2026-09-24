@@ -3,8 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FluxIA - WhatsApp CRM & Portal Operacional</title>
+  <title>FluxIA - Telegram CRM & Portal Operacional</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <script>
+    // Bloqueio imediato no head antes da renderização do HTML
+    (function() {
+      try {
+        var userJson = localStorage.getItem('fluxia_user');
+        if (!userJson || userJson === 'null' || userJson === 'undefined') {
+          window.location.replace('/login');
+        } else {
+          var u = JSON.parse(userJson);
+          if (!u || !u.id) {
+            localStorage.removeItem('fluxia_user');
+            window.location.replace('/login');
+          }
+        }
+      } catch (e) {
+        localStorage.removeItem('fluxia_user');
+        window.location.replace('/login');
+      }
+    })();
+  </script>
 </head>
 <body>
 <div class="app">
@@ -12,12 +32,12 @@
   <div class="sidebar">
     <div class="sidebar-logo">
       <div class="logo-mark">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.133.558 4.133 1.532 5.868L0 24l6.267-1.508A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.854 0-3.585-.494-5.08-1.356L3.5 21.5l.882-3.343A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        <div class="logo-icon" style="background:#229ED9; box-shadow:0 4px 14px rgba(34,158,217,0.35);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </div>
         <div>
           <div class="logo-text">FluxIA</div>
-          <div class="logo-sub">WhatsApp CRM & IA</div>
+          <div class="logo-sub">Telegram CRM & IA</div>
         </div>
       </div>
     </div>
@@ -32,8 +52,8 @@
         </div>
         <div class="nav-item" onclick="switchTab('chat', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Conversas
-          <span class="nav-badge">8</span>
+          Conversas Telegram
+          <span class="nav-badge" id="badge-total-conversas">0</span>
         </div>
         <div class="nav-item" onclick="switchTab('resumos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -91,7 +111,7 @@
     <div class="sidebar-footer">
       <div class="user-card" style="display:flex; align-items:center; justify-content:space-between;">
         <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-          <div class="user-avatar" id="current-user-avatar">JC</div>
+          <div class="user-avatar" id="current-user-avatar">--</div>
           <div class="user-info">
             <div class="user-name" id="current-user-name">Usuário</div>
             <div class="user-role" id="current-user-role">Acesso</div>
@@ -138,20 +158,20 @@
 
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-icon mi-green">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div class="metric-icon mi-blue" style="background:rgba(34,158,217,0.15); color:#229ED9;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </div>
-          <div class="metric-label">Total de Leads</div>
-          <div class="metric-value">284</div>
-          <div class="metric-change up">↑ +23 este mês</div>
+          <div class="metric-label">Total de Leads Telegram</div>
+          <div class="metric-value" id="card-total-leads">0</div>
+          <div class="metric-change up">Sincronizado via Webhook</div>
         </div>
         <div class="metric-card">
-          <div class="metric-icon mi-blue">
+          <div class="metric-icon mi-green">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
           <div class="metric-label">Conversas Ativas</div>
-          <div class="metric-value">47</div>
-          <div class="metric-change up">↑ 8 aguardando</div>
+          <div class="metric-value" id="card-conversas-ativas">0</div>
+          <div class="metric-change up">Tempo Real</div>
         </div>
         <div class="metric-card">
           <div class="metric-icon mi-amber">
@@ -232,48 +252,9 @@
 
         <div>
           <div class="chat-list">
-            <div class="section-title">Conversas Recentes</div>
-            <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1])">
-              <div class="chat-avatar ca-1">MR</div>
-              <div class="chat-info">
-                <div class="chat-name">Marcos Ribeiro</div>
-                <div class="chat-preview">Quando vocês podem fazer a demo?</div>
-              </div>
-              <div class="chat-meta">
-                <div class="chat-time">14:32</div>
-                <div class="chat-unread">3</div>
-              </div>
-            </div>
-            <div class="chat-item">
-              <div class="chat-avatar ca-2">TC</div>
-              <div class="chat-info">
-                <div class="chat-name">Tech Corp</div>
-                <div class="chat-preview">IA: Proposta enviada por email ✓</div>
-              </div>
-              <div class="chat-meta">
-                <div class="chat-time">13:15</div>
-              </div>
-            </div>
-            <div class="chat-item">
-              <div class="chat-avatar ca-3">AF</div>
-              <div class="chat-info">
-                <div class="chat-name">Ana Ferreira</div>
-                <div class="chat-preview">Preciso do contrato hoje</div>
-              </div>
-              <div class="chat-meta">
-                <div class="chat-time">11:50</div>
-                <div class="chat-unread">1</div>
-              </div>
-            </div>
-            <div class="chat-item">
-              <div class="chat-avatar ca-4">GD</div>
-              <div class="chat-info">
-                <div class="chat-name">Grupo Delta</div>
-                <div class="chat-preview">IA: Negociação em andamento</div>
-              </div>
-              <div class="chat-meta">
-                <div class="chat-time">10:22</div>
-              </div>
+            <div class="section-title">Conversas Recentes no Telegram</div>
+            <div id="dashboard-recent-chats">
+              <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Carregando conversas do Telegram...</div>
             </div>
           </div>
         </div>
@@ -283,151 +264,69 @@
     <!-- CHAT SCREEN -->
     <div class="screen" id="screen-chat" style="flex-direction:row; padding:0;">
       <div class="chat-sidebar">
-        <div class="chat-search">
-          <input class="search-input" placeholder="Buscar conversa..." />
+        <div class="chat-search" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <input class="search-input" placeholder="Buscar no Telegram..." oninput="filtrarConversasTelegram(this.value)" />
+          <button class="btn-icon" style="background:rgba(255,255,255,0.05); color:white;" onclick="recarregarConversasTelegram()" title="Atualizar conversas">🔄</button>
         </div>
-        <div class="chat-list-sidebar">
-          <div class="chat-row active">
-            <div class="cr-avatar ca-1">MR</div>
-            <div class="cr-info">
-              <div class="cr-name">Marcos Ribeiro</div>
-              <div class="cr-msg">Quando podem fazer a demo?</div>
-              <span class="cr-stage stage-qual">Qualificado</span>
-            </div>
-            <div class="cr-meta">
-              <div class="cr-time">14:32</div>
-              <div class="cr-badge">3</div>
-            </div>
-          </div>
-          <div class="chat-row">
-            <div class="cr-avatar ca-2">TC</div>
-            <div class="cr-info">
-              <div class="cr-name">Tech Corp</div>
-              <div class="cr-msg">Proposta enviada</div>
-              <span class="cr-stage stage-prop">Proposta</span>
-            </div>
-            <div class="cr-meta">
-              <div class="cr-time">13:15</div>
-            </div>
-          </div>
-          <div class="chat-row">
-            <div class="cr-avatar ca-3">AF</div>
-            <div class="cr-info">
-              <div class="cr-name">Ana Ferreira</div>
-              <div class="cr-msg">Preciso do contrato hoje</div>
-              <span class="cr-stage stage-new">Novo</span>
-            </div>
-            <div class="cr-meta">
-              <div class="cr-time">11:50</div>
-              <div class="cr-badge">1</div>
-            </div>
-          </div>
-          <div class="chat-row">
-            <div class="cr-avatar ca-4">GD</div>
-            <div class="cr-info">
-              <div class="cr-name">Grupo Delta</div>
-              <div class="cr-msg">Negociação em andamento</div>
-              <span class="cr-stage stage-prop">Negociação</span>
-            </div>
-            <div class="cr-meta">
-              <div class="cr-time">10:22</div>
-            </div>
+        <div class="chat-list-sidebar" id="lista-conversas-telegram">
+          <div style="padding:24px; text-align:center; color:var(--text-muted); font-size:12px;">
+            Carregando conversas do Telegram...
           </div>
         </div>
       </div>
 
       <div class="chat-window">
         <div class="chat-header">
-          <div class="ch-avatar">MR</div>
+          <div class="ch-avatar" id="chat-header-avatar" style="background:#229ED9; color:white;">✈️</div>
           <div class="ch-info">
-            <div class="ch-name">Marcos Ribeiro</div>
-            <div class="ch-status">Online agora · WhatsApp</div>
+            <div class="ch-name" id="chat-header-name">Selecione uma conversa</div>
+            <div class="ch-status" id="chat-header-status">Canal: Telegram Bot</div>
           </div>
           <div class="chat-actions">
-            <div class="btn-icon" title="Buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-            <div class="btn-icon" title="Detalhes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+            <button class="btn-secondary" style="padding:5px 12px; font-size:11px;" onclick="recarregarConversasTelegram()">
+              🔄 Atualizar
+            </button>
           </div>
         </div>
 
         <div class="chat-messages" id="lead-chat-messages">
-          <div class="msg in">
-            <div class="msg-bubble">Olá! Vi no site de vocês sobre o sistema de CRM para WhatsApp. Tenho interesse, pode me passar mais detalhes?</div>
-            <div class="msg-time">10:14</div>
+          <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; line-height:1.6;">
+            <div style="font-size:36px; margin-bottom:12px;">✈️</div>
+            <strong>Histórico de Conversas do Telegram</strong><br>
+            Selecione um contato à esquerda para carregar as mensagens trocadas com o bot em tempo real.
           </div>
-          <div class="msg out">
-            <div class="msg-bubble">Olá Marcos! Boa tarde! Sim, claro! O FluxIA ajuda empresas a gerenciar todos os contatos e fluxos comerciais direto pelo WhatsApp. Qual o tamanho do time de vendas de vocês?</div>
-            <div class="msg-time">10:17 ✓✓</div>
-          </div>
-          <div class="msg in">
-            <div class="msg-bubble">Somos 8 pessoas no time comercial. Hoje usamos planilha e é um caos. Quanto custa o sistema?</div>
-            <div class="msg-time">10:22</div>
-            <div class="msg-tags">
-              <span class="msg-tag tag-interesse">Alta intenção</span>
-              <span class="msg-tag tag-budget">Budget mencionado</span>
-            </div>
-          </div>
-          <div class="msg ai-msg">
-            <div class="ai-label"><div class="ai-label-dot"></div> Assistente IA</div>
-            <div class="msg-bubble">Para um time de 8 pessoas, a melhor opção seria o plano Business (R$497/mês). Inclui até 10 usuários, automações ilimitadas e integração com seu CRM atual. Quer que eu agende uma demonstração para esta semana?</div>
-            <div class="msg-time">10:22 (sugestão automática)</div>
-          </div>
-          <div class="msg in">
-            <div class="msg-bubble">Quando vocês podem fazer a demo? Prefiro esta semana se possível</div>
-            <div class="msg-time">14:32</div>
-          </div>
-        </div>
-
-        <div class="ai-suggestion">
-          <span class="ai-sug-icon">✦</span>
-          <span><strong>IA sugere:</strong> Marcos demonstrou interesse claro e urgência. Ofereça uma demonstração amanhã às 10h ou 15h. Menção de planilha indica dor real — destaque automações.</span>
         </div>
 
         <div class="chat-input-area">
-          <textarea class="input-box" id="lead-input-text" placeholder="Digite uma resposta para o lead..." rows="1">Perfeito, Marcos! Tenho disponibilidade amanhã às 10h ou 15h. Qual prefere?</textarea>
-          <button class="send-btn" onclick="enviarMensagemLead()">
+          <textarea class="input-box" id="lead-input-text" placeholder="Digite uma resposta para enviar diretamente ao Telegram do cliente..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensagemOperadorTelegram();}"></textarea>
+          <button class="send-btn" style="background:#229ED9;" onclick="enviarMensagemOperadorTelegram()" title="Enviar para o Telegram">
             <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </button>
         </div>
       </div>
 
-      <div class="lead-panel">
+      <div class="lead-panel" id="lead-panel-details">
         <div class="lp-section">
           <div style="text-align:center;margin-bottom:8px;">
-            <div class="lp-avatar">MR</div>
-            <div class="lp-name">Marcos Ribeiro</div>
-            <div class="lp-phone">+55 21 99999-1234</div>
+            <div class="lp-avatar" id="lp-avatar" style="background:#229ED9; color:white;">--</div>
+            <div class="lp-name" id="lp-name">Nenhum Contato Selecionado</div>
+            <div class="lp-phone" id="lp-chat-id">Chat ID: -</div>
           </div>
-          <div class="lp-stage-badge"><span class="stage-pill">Qualificado</span></div>
+          <div class="lp-stage-badge"><span class="stage-pill" id="lp-badge" style="background:rgba(34,158,217,0.15); color:#229ED9; border:1px solid rgba(34,158,217,0.3);">Telegram Bot</span></div>
         </div>
 
         <div class="lp-section">
-          <div class="lp-title">Dados do Lead</div>
-          <div class="lp-field"><span class="lp-field-key">Empresa</span><span class="lp-field-val">Tech Corp</span></div>
-          <div class="lp-field"><span class="lp-field-key">Cargo</span><span class="lp-field-val">Diretor</span></div>
-          <div class="lp-field"><span class="lp-field-key">Valor est.</span><span class="lp-field-val" style="color:#0F6E56">R$ 45.000</span></div>
-          <div class="lp-field"><span class="lp-field-key">Origem</span><span class="lp-field-val">WhatsApp</span></div>
+          <div class="lp-title">Dados do Contato</div>
+          <div class="lp-field"><span class="lp-field-key">E-mail</span><span class="lp-field-val" id="lp-email">-</span></div>
+          <div class="lp-field"><span class="lp-field-key">Perfil</span><span class="lp-field-val" id="lp-perfil">-</span></div>
+          <div class="lp-field"><span class="lp-field-key">Ambiente</span><span class="lp-field-val" id="lp-empresa">-</span></div>
+          <div class="lp-field"><span class="lp-field-key">Canal</span><span class="lp-field-val" style="color:#229ED9; font-weight:600;">Telegram Oficial</span></div>
         </div>
 
         <div class="lp-section">
-          <div class="lp-title">Score IA</div>
-          <div class="lp-field"><span class="lp-field-key">Probabilidade</span><span class="lp-field-val" style="color:#0F6E56">78%</span></div>
-          <div class="lp-score">
-            <div class="lp-score-bar"><div class="lp-score-fill" style="width:78%"></div></div>
-          </div>
-        </div>
-
-        <div class="lp-section">
-          <div class="lp-title">Tags</div>
-          <span class="lp-tag">Alta Prioridade</span>
-          <span class="lp-tag">Demo Pendente</span>
-          <span class="lp-tag">Decision Maker</span>
-        </div>
-
-        <div class="lp-section">
-          <div class="lp-title">Ações</div>
-          <button class="lp-action-btn lpa-green">Agendar Demo</button>
-          <button class="lp-action-btn">Enviar Proposta</button>
-          <button class="lp-action-btn">Gerar Contrato</button>
+          <div class="lp-title">Status da Conexão</div>
+          <div class="lp-field"><span class="lp-field-key">Webhook</span><span class="lp-field-val" style="color:#25D366;">● Conectado</span></div>
+          <div class="lp-field"><span class="lp-field-key">Total Mensagens</span><span class="lp-field-val" id="lp-total-msgs">0</span></div>
         </div>
       </div>
     </div>
@@ -815,13 +714,197 @@ function switchTab(tabId, navEl) {
 
   if (tabId === 'documentos') carregarDocumentos();
   if (tabId === 'equipe') carregarEquipe();
+  if (tabId === 'chat' || tabId === 'dashboard') carregarConversasTelegram();
 }
 
-// ===== CHAT DO LEAD =====
-function enviarMensagemLead() {
+// ===== CONVERSAS DINÂMICAS DO TELEGRAM =====
+let listaConversasTelegram = [];
+let conversaAtivaChatId = null;
+
+async function carregarConversasTelegram() {
+  const containerList = document.getElementById('lista-conversas-telegram');
+  const dashList = document.getElementById('dashboard-recent-chats');
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await fetch(`/telegram/conversas?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar conversas');
+    const data = await res.json();
+    listaConversasTelegram = data.conversas || [];
+
+    const badgeChats = document.getElementById('badge-total-conversas');
+    if (badgeChats) badgeChats.textContent = listaConversasTelegram.length;
+    const cardLeads = document.getElementById('card-total-leads');
+    if (cardLeads) cardLeads.textContent = listaConversasTelegram.length;
+    const cardAtivas = document.getElementById('card-conversas-ativas');
+    if (cardAtivas) cardAtivas.textContent = listaConversasTelegram.length;
+
+    renderizarListaConversasTelegram();
+    renderizarDashboardConversasTelegram();
+  } catch (e) {
+    console.error('Erro ao carregar conversas do Telegram:', e);
+    if (containerList) containerList.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px;">Erro ao carregar: ${e.message}</div>`;
+  }
+}
+
+function renderizarListaConversasTelegram(filtradas = null) {
+  const container = document.getElementById('lista-conversas-telegram');
+  if (!container) return;
+
+  const lista = filtradas || listaConversasTelegram;
+
+  if (lista.length === 0) {
+    container.innerHTML = `
+      <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
+        <div style="font-size:28px; margin-bottom:8px;">✈️</div>
+        <strong>Nenhum lead no Telegram</strong><br>
+        Quando clientes interagirem com seu Bot no Telegram, as conversas aparecerão aqui em tempo real.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = lista.map(c => {
+    const initials = (c.nome || 'TG').substring(0, 2).toUpperCase();
+    const isActive = c.chat_id === conversaAtivaChatId;
+    const hora = (c.data_ultima_mensagem || '').substring(11, 16);
+
+    return `
+      <div class="chat-row ${isActive ? 'active' : ''}" onclick="selecionarConversaTelegram('${c.chat_id}')">
+        <div class="cr-avatar ca-1" style="background:#229ED9; color:white;">${initials}</div>
+        <div class="cr-info">
+          <div class="cr-name">${c.nome}</div>
+          <div class="cr-msg">${c.ultima_mensagem || 'Iniciou conversa no Telegram'}</div>
+          <span class="cr-stage stage-qual" style="background:rgba(34,158,217,0.15); color:#229ED9; border:1px solid rgba(34,158,217,0.3);">
+            Telegram · ${c.perfil.toUpperCase()}
+          </span>
+        </div>
+        <div class="cr-meta">
+          <div class="cr-time">${hora}</div>
+          <div class="cr-badge" style="background:#229ED9;">${c.total_mensagens}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderizarDashboardConversasTelegram() {
+  const container = document.getElementById('dashboard-recent-chats');
+  if (!container) return;
+
+  if (listaConversasTelegram.length === 0) {
+    container.innerHTML = `
+      <div style="padding:24px; text-align:center; color:var(--text-muted); font-size:12px;">
+        Nenhuma conversa registrada no Telegram ainda.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = listaConversasTelegram.slice(0, 5).map(c => {
+    const initials = (c.nome || 'TG').substring(0, 2).toUpperCase();
+    const hora = (c.data_ultima_mensagem || '').substring(11, 16);
+
+    return `
+      <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')">
+        <div class="chat-avatar ca-1" style="background:#229ED9; color:white;">${initials}</div>
+        <div class="chat-info">
+          <div class="chat-name">${c.nome}</div>
+          <div class="chat-preview">${c.ultima_mensagem || 'Interação no Telegram'}</div>
+        </div>
+        <div class="chat-meta">
+          <div class="chat-time">${hora}</div>
+          <div class="chat-unread" style="background:#229ED9;">${c.total_mensagens}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filtrarConversasTelegram(termo) {
+  const t = termo.toLowerCase().trim();
+  if (!t) {
+    renderizarListaConversasTelegram();
+    return;
+  }
+  const filtradas = listaConversasTelegram.filter(c => 
+    c.nome.toLowerCase().includes(t) ||
+    c.chat_id.includes(t) ||
+    (c.email && c.email.toLowerCase().includes(t)) ||
+    (c.ultima_mensagem && c.ultima_mensagem.toLowerCase().includes(t))
+  );
+  renderizarListaConversasTelegram(filtradas);
+}
+
+async function selecionarConversaTelegram(chatId) {
+  conversaAtivaChatId = chatId;
+  renderizarListaConversasTelegram();
+
+  const c = listaConversasTelegram.find(item => item.chat_id === chatId);
+  if (c) {
+    document.getElementById('chat-header-name').textContent = c.nome;
+    document.getElementById('chat-header-status').textContent = `Chat ID: ${c.chat_id} · Telegram`;
+    document.getElementById('chat-header-avatar').textContent = (c.nome || 'TG').substring(0, 2).toUpperCase();
+
+    // Atualiza detalhes do lead à direita
+    const elAvatar = document.getElementById('lp-avatar');
+    const elName = document.getElementById('lp-name');
+    const elChatId = document.getElementById('lp-chat-id');
+    const elEmail = document.getElementById('lp-email');
+    const elPerfil = document.getElementById('lp-perfil');
+    const elEmpresa = document.getElementById('lp-empresa');
+    const elTotal = document.getElementById('lp-total-msgs');
+
+    if (elAvatar) elAvatar.textContent = (c.nome || 'TG').substring(0, 2).toUpperCase();
+    if (elName) elName.textContent = c.nome;
+    if (elChatId) elChatId.textContent = `Chat ID: ${c.chat_id}`;
+    if (elEmail) elEmail.textContent = c.email;
+    if (elPerfil) elPerfil.textContent = c.perfil.toUpperCase();
+    if (elEmpresa) elEmpresa.textContent = `Empresa #${c.empresa_id}`;
+    if (elTotal) elTotal.textContent = c.total_mensagens;
+  }
+
+  const box = document.getElementById('lead-chat-messages');
+  box.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">Carregando histórico do Telegram...</div>`;
+
+  try {
+    const res = await fetch(`/telegram/conversas/${chatId}/mensagens`);
+    if (!res.ok) throw new Error('Erro ao carregar mensagens.');
+    const data = await res.json();
+    const mensagens = data.mensagens || [];
+
+    if (mensagens.length === 0) {
+      box.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted);">Nenhuma mensagem registrada nesta conversa.</div>`;
+      return;
+    }
+
+    box.innerHTML = mensagens.map(m => {
+      const isUser = m.remetente === 'usuario';
+      return `
+        <div class="msg ${isUser ? 'in' : 'out'}">
+          <div class="msg-bubble" style="${!isUser ? 'background:#185FA5; color:white;' : ''}">
+            ${m.texto}
+          </div>
+          <div class="msg-time">${m.hora} ${!isUser ? '✓✓' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    box.scrollTop = box.scrollHeight;
+  } catch (err) {
+    box.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Erro ao carregar histórico: ${err.message}</div>`;
+  }
+}
+
+async function enviarMensagemOperadorTelegram() {
   const input = document.getElementById('lead-input-text');
   const texto = input.value.trim();
   if (!texto) return;
+
+  if (!conversaAtivaChatId) {
+    alert('Selecione uma conversa do Telegram à esquerda antes de responder.');
+    return;
+  }
 
   const box = document.getElementById('lead-chat-messages');
   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -829,12 +912,32 @@ function enviarMensagemLead() {
   const msgDiv = document.createElement('div');
   msgDiv.className = 'msg out';
   msgDiv.innerHTML = `
-    <div class="msg-bubble">${texto}</div>
-    <div class="msg-time">${now} ✓✓</div>
+    <div class="msg-bubble" style="background:#185FA5; color:white;">${texto}</div>
+    <div class="msg-time">${now} ✓</div>
   `;
   box.appendChild(msgDiv);
   input.value = '';
   box.scrollTop = box.scrollHeight;
+
+  try {
+    const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/enviar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: texto })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao enviar mensagem');
+
+    setTimeout(() => {
+      selecionarConversaTelegram(conversaAtivaChatId);
+    }, 600);
+  } catch (e) {
+    alert('Erro ao enviar mensagem pelo Telegram: ' + e.message);
+  }
+}
+
+function recarregarConversasTelegram() {
+  carregarConversasTelegram();
 }
 
 // ===== CHAT IA RAG INTEGRADO =====
@@ -1311,6 +1414,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const labelData = document.getElementById('data-atual-label');
   if (labelData) labelData.textContent = hoje.charAt(0).toUpperCase() + hoje.slice(1);
   carregarDocumentos();
+  carregarConversasTelegram();
+  // Atualiza as conversas do Telegram periodicamente
+  setInterval(carregarConversasTelegram, 15000);
 });
 </script>
 
