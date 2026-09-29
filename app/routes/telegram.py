@@ -136,6 +136,29 @@ def enviar_mensagem_telegram(chat_id: str, texto: str):
         logger.error(f"[Telegram] Erro ao enviar mensagem para chat {chat_id}: {e}")
 
 
+def buscar_nome_telegram_api(chat_id: str) -> str | None:
+    """Consulta os dados do chat na API do Telegram para obter o nome real do usuário."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token or not chat_id:
+        return None
+    try:
+        url = f"https://api.telegram.org/bot{token}/getChat"
+        resp = requests.get(url, params={"chat_id": chat_id}, timeout=4)
+        if resp.status_code == 200:
+            res = resp.json().get("result", {})
+            first = str(res.get("first_name") or "").strip()
+            last = str(res.get("last_name") or "").strip()
+            username = str(res.get("username") or "").strip()
+            full = " ".join([p for p in [first, last] if p])
+            if full:
+                return full
+            if username:
+                return f"@{username}"
+    except Exception as e:
+        logger.debug(f"[Telegram] Falha ao consultar getChat({chat_id}): {e}")
+    return None
+
+
 def classificar_estagio_e_produto(pergunta: str, resposta: str, produtos: list[dict], estagio_atual: str) -> dict:
     """
     Chamada adicional e leve ao Gemini para qualificação do lead no CRM.
@@ -208,24 +231,39 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     except Exception:
         return {"status": "error", "message": "JSON inválido"}
 
-    if "message" not in dados or "text" not in dados["message"]:
+    mensagem = dados.get("message") or dados.get("edited_message")
+    if not mensagem or "text" not in mensagem:
         return {"status": "ok"}
 
-    mensagem = dados["message"]
     chat_id = str(mensagem["chat"]["id"])
     texto_recebido = str(mensagem.get("text", "")).strip()
     empresa_id = 1
+
+    # Extração de nome real do usuário do Telegram (from ou chat)
+    remetente = mensagem.get("from") or {}
+    chat_info = mensagem.get("chat") or {}
+    first_name = str(remetente.get("first_name") or chat_info.get("first_name") or "").strip()
+    last_name = str(remetente.get("last_name") or chat_info.get("last_name") or "").strip()
+    username = str(remetente.get("username") or chat_info.get("username") or "").strip()
+
+    partes_nome = [p for p in [first_name, last_name] if p]
+    if partes_nome:
+        nome_lead = " ".join(partes_nome)
+    elif username:
+        nome_lead = f"@{username}"
+    else:
+        nome_api = buscar_nome_telegram_api(chat_id)
+        nome_lead = nome_api if nome_api else f"Usuário #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
-        # 0. Garante que o registro do cliente exista no CRM
+        # 0. Garante que o registro do cliente exista no CRM com o nome real
         cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
         cliente = cursor.fetchone()
         if not cliente:
-            nome_lead = f"Lead Telegram #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
             cursor.execute(f"""
                 INSERT INTO clientes (empresa_id, nome, telegram_chat_id, origem, aguardando_contato)
                 VALUES ({ph}, {ph}, {ph}, 'telegram', {ph})
@@ -233,6 +271,20 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             conexao.commit()
             cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
             cliente = cursor.fetchone()
+        else:
+            nome_atual = (cliente.get("nome") or "").strip()
+            eh_generico = (
+                not nome_atual or
+                nome_atual.startswith("Lead ") or
+                nome_atual.startswith("Usuário ") or
+                nome_atual.startswith("Lead Telegram") or
+                chat_id in nome_atual
+            )
+            # Atualiza no banco se o nome atual for genérico e tivermos um nome real capturado
+            if eh_generico and not nome_lead.startswith("Usuário #") and not nome_lead.startswith("Lead Telegram"):
+                cursor.execute(f"UPDATE clientes SET nome = {ph} WHERE id = {ph}", (nome_lead, cliente["id"]))
+                conexao.commit()
+                cliente["nome"] = nome_lead
 
         cliente_id = cliente["id"]
 
@@ -251,8 +303,10 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         # 2. Tratamento de Comandos Básicos
         comando = texto_recebido.strip().lower()
         if comando in ["/start", "start"]:
+            primeiro_nome = first_name or (cliente.get("nome") if cliente and not str(cliente.get("nome")).startswith("Usuário #") else "")
+            saudacao = f", {primeiro_nome}" if primeiro_nome and not primeiro_nome.startswith("@") else ""
             msg_start = (
-                "👋 Olá! Seja bem-vindo ao atendimento inteligente da **FluxIA**.\n\n"
+                f"👋 Olá{saudacao}! Seja bem-vindo ao atendimento inteligente da **FluxIA**.\n\n"
                 "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos e serviços!\n\n"
                 "📌 **Comandos úteis:**\n"
                 "• `/ajuda` - Como usar o assistente\n"
@@ -299,7 +353,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
             texto_nome = re.sub(r'(?i)(meu nome [eé]|sou o|sou a|me chamo|nome:?|e-mail:?|email:?|telefone:?|tel:?|cel:?|whatsapp:?)', '', texto_sem_contatos)
             texto_nome = re.sub(r'[,;\n\r\t]+', ' ', texto_nome).strip()
-            nome_final = texto_nome if len(texto_nome) >= 2 else (cliente.get("nome") or f"Lead #{chat_id}")
+            nome_final = texto_nome if len(texto_nome) >= 2 else (cliente.get("nome") or nome_lead or f"Usuário #{chat_id[-4:]}")
 
             cursor.execute(f"""
                 UPDATE clientes
@@ -712,8 +766,28 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             if ultima_row:
                 ultima_msg = ultima_row["mensagem_usuario"] or ultima_row["resposta_ia"] or ""
 
-            # PARTE 19: Retornar nome do cliente cadastrado ou 'Lead #<chat_id>'
-            nome_exibicao = l["cliente_nome"] if l["cliente_nome"] else f"Lead #{chat_id}"
+            # PARTE 19: Retornar nome do cliente cadastrado ou resolver via Telegram API se genérico
+            nome_cliente = l["cliente_nome"]
+            eh_generico = (
+                not nome_cliente or 
+                str(nome_cliente).startswith("Lead ") or 
+                str(nome_cliente).startswith("Usuário ") or
+                str(nome_cliente).startswith("Lead Telegram") or
+                chat_id in str(nome_cliente)
+            )
+            if eh_generico:
+                nome_api = buscar_nome_telegram_api(chat_id)
+                if nome_api:
+                    nome_cliente = nome_api
+                    try:
+                        cursor.execute(f"UPDATE clientes SET nome = {ph} WHERE telegram_chat_id = {ph}", (nome_api, chat_id))
+                        conexao.commit()
+                    except Exception:
+                        pass
+                else:
+                    nome_cliente = f"Usuário #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
+
+            nome_exibicao = nome_cliente
             qtd_nao_lidas = nao_lidas_map.get(chat_id, 0)
 
             conversas.append({

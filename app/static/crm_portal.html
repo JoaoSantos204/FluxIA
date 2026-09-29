@@ -94,6 +94,10 @@
       outline: none;
       cursor: pointer;
     }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -845,7 +849,12 @@ function switchTab(tabId, navEl) {
 
   if (tabId === 'documentos') carregarDocumentos();
   if (tabId === 'equipe') carregarEquipe();
-  if (tabId === 'chat') carregarConversasTelegram();
+  if (tabId === 'chat') {
+    carregarConversasTelegram();
+    iniciarPollingConversaAtiva();
+  } else {
+    pararPollingConversaAtiva();
+  }
   if (tabId === 'chatrag') carregarHistoricoRecenteChatRAG();
   if (tabId === 'dashboard') {
     carregarConversasTelegram();
@@ -870,6 +879,26 @@ function obterEmpresaAtivaId() {
 }
 
 // ===== CONVERSAS DO TELEGRAM & ATENDENTE HUMANO =====
+let intervalPollingConversaAtiva = null;
+let ultimaQtdMensagens = -1;
+
+function pararPollingConversaAtiva() {
+  if (intervalPollingConversaAtiva) {
+    clearInterval(intervalPollingConversaAtiva);
+    intervalPollingConversaAtiva = null;
+  }
+}
+
+function iniciarPollingConversaAtiva() {
+  pararPollingConversaAtiva();
+  intervalPollingConversaAtiva = setInterval(async () => {
+    const screenChat = document.getElementById('screen-chat');
+    if (!screenChat || !screenChat.classList.contains('active')) return;
+    if (!conversaAtivaChatId) return;
+    await carregarMensagensTelegram(conversaAtivaChatId, true);
+  }, 3500);
+}
+
 async function carregarConversasTelegram() {
   const containerList = document.getElementById('lista-conversas-telegram');
   const empresaId = obterEmpresaAtivaId();
@@ -890,9 +919,30 @@ async function carregarConversasTelegram() {
 
     renderizarListaConversasTelegram();
     renderizarDashboardConversasTelegram();
+
+    // Se estiver na tela de chat:
+    const screenChat = document.getElementById('screen-chat');
+    if (screenChat && screenChat.classList.contains('active')) {
+      if (!conversaAtivaChatId && listaConversasTelegram.length > 0) {
+        // Auto-seleciona a primeira conversa se nenhuma estiver ativa
+        selecionarConversaTelegram(listaConversasTelegram[0].chat_id);
+      } else if (conversaAtivaChatId) {
+        // Atualiza cabeçalho e painel caso os dados do contato tenham sido enriquecidos
+        const convAtual = listaConversasTelegram.find(c => String(c.chat_id) === String(conversaAtivaChatId));
+        if (convAtual) {
+          const nomeExibicao = convAtual.nome || ('Usuário #' + (convAtual.chat_id ? String(convAtual.chat_id).slice(-4) : ''));
+          const headerName = document.getElementById('chat-header-name');
+          if (headerName && headerName.textContent !== nomeExibicao) headerName.textContent = nomeExibicao;
+          const lpName = document.getElementById('lp-name');
+          if (lpName && lpName.textContent !== nomeExibicao) lpName.textContent = nomeExibicao;
+        }
+      }
+    }
   } catch (e) {
     console.error('Erro ao carregar conversas do Telegram:', e);
-    if (containerList) containerList.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px;">Erro ao carregar: ${e.message}</div>`;
+    if (containerList && (!listaConversasTelegram || listaConversasTelegram.length === 0)) {
+      containerList.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px;">Erro ao carregar: ${e.message}</div>`;
+    }
   }
 }
 
@@ -914,8 +964,9 @@ function renderizarListaConversasTelegram(filtradas = null) {
   }
 
   container.innerHTML = lista.map(c => {
-    const initials = (c.nome || 'TG').substring(0, 2).toUpperCase();
-    const isActive = c.chat_id === conversaAtivaChatId;
+    const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
+    const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
+    const isActive = conversaAtivaChatId && String(c.chat_id) === String(conversaAtivaChatId);
     const hora = (c.data_ultima_mensagem || '').substring(11, 16);
     const isHuman = c.status_atendimento === 'humano';
 
@@ -924,7 +975,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
         <div class="ci-avatar" style="background:#229ED9; color:white;">${initials}</div>
         <div class="ci-info">
           <div class="ci-name" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${c.nome}</span>
+            <span>${nomeExibicao}</span>
             <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
           </div>
           <div class="ci-msg" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px;">
@@ -951,14 +1002,16 @@ function renderizarDashboardConversasTelegram() {
   }
 
   container.innerHTML = listaConversasTelegram.slice(0, 5).map(c => {
+    const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
     const hora = (c.data_ultima_mensagem || '').substring(11, 16);
     const isHuman = c.status_atendimento === 'humano';
+    const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
     return `
       <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer;">
-        <div class="ci-avatar" style="background:#229ED9; color:white;">${(c.nome || 'TG').substring(0,2).toUpperCase()}</div>
+        <div class="ci-avatar" style="background:#229ED9; color:white;">${initials}</div>
         <div class="ci-info">
           <div class="ci-name" style="display:flex; justify-content:space-between;">
-            <span>${c.nome}</span>
+            <span>${nomeExibicao}</span>
             <span style="font-size:10px; color:var(--text-muted);">${hora}</span>
           </div>
           <div class="ci-msg">${c.ultima_mensagem || 'Sem mensagens'}</div>
@@ -981,7 +1034,7 @@ function filtrarConversasTelegram(termo) {
   const t = termo.toLowerCase();
   const filtradas = listaConversasTelegram.filter(c => 
     (c.nome && c.nome.toLowerCase().includes(t)) ||
-    (c.chat_id && c.chat_id.includes(t)) ||
+    (c.chat_id && String(c.chat_id).includes(t)) ||
     (c.ultima_mensagem && c.ultima_mensagem.toLowerCase().includes(t))
   );
   renderizarListaConversasTelegram(filtradas);
@@ -989,16 +1042,59 @@ function filtrarConversasTelegram(termo) {
 
 function recarregarConversasTelegram() {
   carregarConversasTelegram();
-  if (conversaAtivaChatId) carregarMensagensTelegram(conversaAtivaChatId);
+  if (conversaAtivaChatId) carregarMensagensTelegram(conversaAtivaChatId, false);
 }
 
 async function selecionarConversaTelegram(chatId) {
+  if (!chatId) return;
+  chatId = String(chatId);
+
+  const trocouConversa = String(conversaAtivaChatId) !== String(chatId);
   conversaAtivaChatId = chatId;
 
-  // PARTE 20: Marcar mensagens desta conversa como lidas e atualizar contador de não lidas
+  // Atualização visual imediata da seleção na barra lateral
+  renderizarListaConversasTelegram();
+
+  // Localiza dados do lead para atualizar o cabeçalho e painel instantaneamente
+  const conv = listaConversasTelegram.find(c => String(c.chat_id) === String(chatId));
+  const nomeExibicao = conv ? (conv.nome || ('Usuário #' + (conv.chat_id ? String(conv.chat_id).slice(-4) : ''))) : `Usuário #${chatId.slice(-4)}`;
+  const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
+
+  const headerName = document.getElementById('chat-header-name');
+  if (headerName) headerName.textContent = nomeExibicao;
+  const headerAvatar = document.getElementById('chat-header-avatar');
+  if (headerAvatar) headerAvatar.textContent = initials;
+
+  const lpName = document.getElementById('lp-name');
+  if (lpName) lpName.textContent = nomeExibicao;
+  const lpChatId = document.getElementById('lp-chat-id');
+  if (lpChatId) lpChatId.textContent = `Chat ID: ${chatId}`;
+  const lpAvatar = document.getElementById('lp-avatar');
+  if (lpAvatar) lpAvatar.textContent = initials;
+  const lpTelefone = document.getElementById('lp-telefone');
+  if (lpTelefone) lpTelefone.textContent = (conv && conv.telefone) ? conv.telefone : '-';
+  const lpEmpresa = document.getElementById('lp-empresa');
+  const labelEmpresa = document.getElementById('label-empresa-atual');
+  if (lpEmpresa) lpEmpresa.textContent = labelEmpresa ? labelEmpresa.textContent : '-';
+  const lpTotalMsgs = document.getElementById('lp-total-msgs');
+  if (lpTotalMsgs) lpTotalMsgs.textContent = (conv && conv.total_mensagens) ? conv.total_mensagens : 0;
+
+  // Feedback visual imediato ao transicionar: exibe carregador na área de mensagens
+  const container = document.getElementById('lead-chat-messages');
+  if (container && trocouConversa) {
+    ultimaQtdMensagens = -1;
+    container.innerHTML = `
+      <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px;">
+        <div style="width:32px; height:32px; border:3px solid rgba(34,158,217,0.2); border-top-color:#229ED9; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px;"></div>
+        <div>Carregando histórico com <strong>${nomeExibicao}</strong>...</div>
+      </div>
+    `;
+  }
+
+  // Marcar como lida e atualizar contadores
   try {
     fetch(`/telegram/conversas/${chatId}/marcar-lida`, { method: 'PATCH' }).catch(e => console.error('Erro ao marcar lida:', e));
-    const convIdx = listaConversasTelegram.findIndex(c => c.chat_id === chatId);
+    const convIdx = listaConversasTelegram.findIndex(c => String(c.chat_id) === String(chatId));
     if (convIdx !== -1) {
       listaConversasTelegram[convIdx].nao_lidas = 0;
     }
@@ -1012,30 +1108,24 @@ async function selecionarConversaTelegram(chatId) {
     console.error('Erro ao atualizar status de lida:', e);
   }
 
-  renderizarListaConversasTelegram();
+  // Carrega mensagens da conversa de forma assíncrona
+  await carregarMensagensTelegram(chatId, false);
 
-  const conv = listaConversasTelegram.find(c => c.chat_id === chatId);
-  if (conv) {
-    document.getElementById('chat-header-name').textContent = conv.nome;
-    document.getElementById('chat-header-avatar').textContent = (conv.nome || 'TG').substring(0, 2).toUpperCase();
-    document.getElementById('lp-name').textContent = conv.nome;
-    document.getElementById('lp-chat-id').textContent = `Chat ID: ${conv.chat_id}`;
-    document.getElementById('lp-avatar').textContent = (conv.nome || 'TG').substring(0, 2).toUpperCase();
-    document.getElementById('lp-telefone').textContent = conv.telefone || '-';
-    document.getElementById('lp-empresa').textContent = document.getElementById('label-empresa-atual').textContent;
-    document.getElementById('lp-total-msgs').textContent = conv.total_mensagens || 0;
-  }
-
-  await carregarMensagensTelegram(chatId);
+  // Inicia/reinicia polling em tempo real para a conversa ativa
+  iniciarPollingConversaAtiva();
 }
 
-async function carregarMensagensTelegram(chatId) {
+async function carregarMensagensTelegram(chatId, silencioso = false) {
   const container = document.getElementById('lead-chat-messages');
-  if (!container) return;
+  if (!container || !chatId) return;
 
   try {
     const res = await fetch(`/telegram/conversas/${chatId}/mensagens`);
     if (!res.ok) throw new Error('Falha ao obter mensagens');
+
+    // Previne condição de corrida se o usuário trocou de conversa antes da resposta chegar
+    if (String(conversaAtivaChatId) !== String(chatId)) return;
+
     const data = await res.json();
     const msgs = data.mensagens || [];
 
@@ -1044,29 +1134,57 @@ async function carregarMensagensTelegram(chatId) {
     atualizarUIAssumirDevolver(data.nome_atendente);
 
     if (msgs.length === 0) {
-      container.innerHTML = `
-        <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">
-          Nenhuma mensagem registrada com este lead ainda.
-        </div>
-      `;
+      if (!silencioso || container.innerHTML.includes('Carregando')) {
+        container.innerHTML = `
+          <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">
+            Nenhuma mensagem registrada com este lead ainda.
+          </div>
+        `;
+      }
+      ultimaQtdMensagens = 0;
       return;
     }
 
+    // Se é polling em background e o total de mensagens não mudou, não reconstrói o DOM (evita flicker)
+    if (silencioso && msgs.length === ultimaQtdMensagens) {
+      return;
+    }
+    ultimaQtdMensagens = msgs.length;
+
+    const estavaNoFinal = (container.scrollHeight - container.clientHeight <= container.scrollTop + 80);
+
     container.innerHTML = msgs.map(m => {
       const isUser = m.remetente === 'usuario';
+      const textoSeguro = (m.texto || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
       return `
         <div class="msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}" style="${!isUser ? 'border-left: 3px solid #229ED9;' : ''}">
-          <div class="msg-text">${m.texto.replace(/\n/g, '<br>')}</div>
-          <div class="msg-time">${m.hora}</div>
+          <div class="msg-text">${textoSeguro}</div>
+          <div class="msg-time">${m.hora || ''}</div>
         </div>
       `;
     }).join('');
 
-    container.scrollTop = container.scrollHeight;
+    // Rola para a mensagem mais recente
+    if (!silencioso || estavaNoFinal) {
+      container.scrollTop = container.scrollHeight;
+    }
   } catch (e) {
     console.error('Erro ao buscar mensagens:', e);
+    if (!silencioso && String(conversaAtivaChatId) === String(chatId)) {
+      container.innerHTML = `
+        <div style="padding:40px; text-align:center; color:#ef4444; font-size:12px;">
+          Falha ao carregar mensagens: ${e.message}
+        </div>
+      `;
+    }
   }
 }
+
 
 function atualizarUIAssumirDevolver(nomeAtendente) {
   const btn = document.getElementById('btn-toggle-atendimento');
