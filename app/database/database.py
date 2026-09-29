@@ -143,6 +143,9 @@ def _criar_banco_sqlite(cursor):
             numero_suporte_humano TEXT DEFAULT '(11) 99999-9999',
             mensagem_suporte TEXT DEFAULT 'Por favor, entre em contato com nossa equipe de atendimento.',
             gemini_api_key TEXT,
+            openai_api_key TEXT,
+            provedor_ia_padrao TEXT DEFAULT 'google',
+            fuso_horario TEXT DEFAULT 'America/Sao_Paulo',
             FOREIGN KEY (empresa_id) REFERENCES empresas(id)
         )
     """)
@@ -325,6 +328,8 @@ def _criar_banco_sqlite(cursor):
         cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN openai_api_key TEXT")
     if "provedor_ia_padrao" not in colunas_cfg:
         cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN provedor_ia_padrao TEXT DEFAULT 'google'")
+    if "fuso_horario" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN fuso_horario TEXT DEFAULT 'America/Sao_Paulo'")
 
     # Dados iniciais
     cursor.execute("SELECT COUNT(*) AS total FROM empresas")
@@ -439,6 +444,9 @@ def _criar_banco_postgres(cursor):
             numero_suporte_humano TEXT DEFAULT '(11) 99999-9999',
             mensagem_suporte TEXT DEFAULT 'Por favor, entre em contato com nossa equipe de atendimento.',
             gemini_api_key TEXT,
+            openai_api_key TEXT,
+            provedor_ia_padrao TEXT DEFAULT 'google',
+            fuso_horario TEXT DEFAULT 'America/Sao_Paulo',
             FOREIGN KEY (empresa_id) REFERENCES empresas(id)
         )
     """)
@@ -603,6 +611,9 @@ def _criar_banco_postgres(cursor):
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='provedor_ia_padrao') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN provedor_ia_padrao TEXT DEFAULT 'google';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='fuso_horario') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN fuso_horario TEXT DEFAULT 'America/Sao_Paulo';
             END IF;
         END $$;
     """)

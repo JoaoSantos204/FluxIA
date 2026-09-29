@@ -9,7 +9,8 @@ CONFIGURACAO_PADRAO = {
     "mensagem_suporte": "Por favor, entre em contato com nossa equipe de atendimento.",
     "gemini_api_key": None,
     "openai_api_key": None,
-    "provedor_ia_padrao": "google"
+    "provedor_ia_padrao": "google",
+    "fuso_horario": "America/Sao_Paulo"
 }
 
 
@@ -25,7 +26,7 @@ def mascarar_api_key(chave: str | None) -> str:
 
 def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     """
-    Busca as configurações da empresa (como telefone, mensagem de suporte e chaves BYOK Google e OpenAI).
+    Busca as configurações da empresa (como telefone, mensagem de suporte, fuso horário e chaves BYOK Google e OpenAI).
     Caso não exista configuração cadastrada, retorna os valores padrão do sistema.
     """
     conexao = conectar()
@@ -34,7 +35,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
     try:
         cursor.execute(f"""
-            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao
+            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -46,6 +47,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             chave_gemini = linha.get("gemini_api_key") if isinstance(linha, dict) else linha["gemini_api_key"]
             chave_openai = linha.get("openai_api_key") if isinstance(linha, dict) else linha["openai_api_key"]
             provedor = linha.get("provedor_ia_padrao") if isinstance(linha, dict) else linha["provedor_ia_padrao"]
+            fuso = linha.get("fuso_horario") if isinstance(linha, dict) else linha["fuso_horario"]
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
@@ -55,6 +57,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
                 "openai_api_key": chave_openai,
                 "openai_api_key_mascarada": mascarar_api_key(chave_openai),
                 "provedor_ia_padrao": provedor or "google",
+                "fuso_horario": fuso or "America/Sao_Paulo",
                 "possui_chave_propria": bool((chave_gemini and chave_gemini.strip()) or (chave_openai and chave_openai.strip()))
             }
 
@@ -195,6 +198,38 @@ def atualizar_configuracao_ia(
     except Exception as e:
         conexao.rollback()
         logger.error(f"[CompanyService] Erro ao atualizar configurações de IA da empresa {empresa_id}: {e}")
+        raise e
+
+def atualizar_fuso_horario(empresa_id: int, fuso_horario: str) -> dict:
+    """
+    Atualiza o fuso horário global da empresa (ex: 'America/Sao_Paulo', 'America/Manaus', 'auto').
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    fuso = (fuso_horario or "America/Sao_Paulo").strip()
+    try:
+        cursor.execute(f"SELECT id FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET fuso_horario = {ph}
+                WHERE empresa_id = {ph}
+            """, (fuso, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (empresa_id, fuso_horario)
+                VALUES ({ph}, {ph})
+            """, (empresa_id, fuso))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao atualizar fuso horário da empresa {empresa_id}: {e}")
         raise e
     finally:
         conexao.close()

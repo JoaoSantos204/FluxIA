@@ -790,6 +790,15 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             nome_exibicao = nome_cliente
             qtd_nao_lidas = nao_lidas_map.get(chat_id, 0)
 
+            # Formata timestamp como UTC ISO explícito
+            dt_raw = str(l["data_ultima_mensagem"] or "")
+            if dt_raw and "T" not in dt_raw:
+                dt_iso = dt_raw.replace(" ", "T") + "Z"
+            elif dt_raw and not dt_raw.endswith("Z") and "+" not in dt_raw:
+                dt_iso = dt_raw + "Z"
+            else:
+                dt_iso = dt_raw
+
             conversas.append({
                 "chat_id": chat_id,
                 "nome": nome_exibicao,
@@ -800,7 +809,7 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 "total_mensagens": l["total_interacoes"],
                 "nao_lidas": qtd_nao_lidas,
                 "ultima_mensagem": ultima_msg,
-                "data_ultima_mensagem": str(l["data_ultima_mensagem"])
+                "data_ultima_mensagem": dt_iso
             })
 
         total_nao_lidas = sum(c["nao_lidas"] for c in conversas)
@@ -847,6 +856,13 @@ def obter_mensagens_conversa(chat_id: str):
         mensagens = []
         for row in linhas:
             data_str = str(row["data_interacao"] or "")
+            if data_str and "T" not in data_str:
+                data_iso = data_str.replace(" ", "T") + "Z"
+            elif data_str and not data_str.endswith("Z") and "+" not in data_str:
+                data_iso = data_str + "Z"
+            else:
+                data_iso = data_str
+
             hora_formatada = data_str[11:16] if len(data_str) >= 16 else ""
 
             if row["mensagem_usuario"]:
@@ -854,14 +870,16 @@ def obter_mensagens_conversa(chat_id: str):
                     "id": f"{row['id']}_user",
                     "remetente": "usuario",
                     "texto": row["mensagem_usuario"],
-                    "hora": hora_formatada
+                    "hora": hora_formatada,
+                    "data_hora": data_iso
                 })
             if row["resposta_ia"]:
                 mensagens.append({
                     "id": f"{row['id']}_bot",
                     "remetente": "bot",
                     "texto": row["resposta_ia"],
-                    "hora": hora_formatada
+                    "hora": hora_formatada,
+                    "data_hora": data_iso
                 })
 
         # Consulta também o status atual desta conversa

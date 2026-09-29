@@ -737,6 +737,42 @@
             </button>
           </div>
 
+          <!-- FUSO HORÁRIO GLOBAL DA EMPRESA -->
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon" style="background:#0284c7; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              Fuso Horário Global da Empresa
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              Define o fuso horário oficial para registro e exibição das mensagens no Telegram, CRM e relatórios de todos os operadores.
+            </div>
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label">Fuso Horário Padrão</div>
+              <select class="login-input" id="config-fuso-horario" style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:8px 12px; width:100%;">
+                <option value="America/Sao_Paulo">🇧🇷 Horário de Brasília (UTC-03:00 - Padrão Nacional)</option>
+                <option value="America/Manaus">🇧🇷 Horário de Manaus / AM (UTC-04:00)</option>
+                <option value="America/Cuiaba">🇧🇷 Horário de Cuiabá / MT / MS (UTC-04:00)</option>
+                <option value="America/Rio_Branco">🇧🇷 Horário do Acre (UTC-05:00)</option>
+                <option value="America/Noronha">🇧🇷 Fernando de Noronha (UTC-02:00)</option>
+                <option value="America/Fortaleza">🇧🇷 Nordeste / Fortaleza (UTC-03:00)</option>
+                <option value="America/Belem">🇧🇷 Norte / Belém (UTC-03:00)</option>
+                <option value="UTC">🌐 Tempo Universal Coordenado (UTC+00:00)</option>
+                <option value="America/New_York">🇺🇸 Nova York / Leste EUA (UTC-05:00)</option>
+                <option value="Europe/Lisbon">🇵🇹 Lisboa / Portugal (UTC+00:00)</option>
+                <option value="Europe/London">🇬🇧 Londres / Reino Unido (UTC+00:00)</option>
+                <option value="auto">💻 Automático (Detectar fuso local do navegador)</option>
+              </select>
+            </div>
+            <div id="fuso-horario-status" style="font-size:11px; margin-top:4px; margin-bottom:12px; color:var(--text-muted);">
+              Detectando fuso do navegador...
+            </div>
+            <button class="btn-green" style="width:100%; justify-content:center; padding:10px;" onclick="salvarConfiguracaoFusoHorario()">
+              Salvar Fuso Horário Global
+            </button>
+          </div>
+
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon" style="background:#229ED9; color:white;">
@@ -832,6 +868,68 @@ let modoAtendimentoAtual = 'bot';
 let usuarioAtual = null;
 let listaEmpresasCadastradas = [];
 let equipeCarregada = [];
+let fusoHorarioEmpresa = 'America/Sao_Paulo';
+
+function obterFusoAtivo() {
+  if (fusoHorarioEmpresa && fusoHorarioEmpresa !== 'auto') {
+    return fusoHorarioEmpresa;
+  }
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+  } catch (e) {
+    return 'America/Sao_Paulo';
+  }
+}
+
+function formatarHoraConversa(dataStr) {
+  if (!dataStr) return '';
+  try {
+    let str = String(dataStr).trim();
+    if (!str.includes('T') && str.includes(' ')) {
+      str = str.replace(' ', 'T') + 'Z';
+    } else if (str.includes('T') && !str.endsWith('Z') && !str.includes('+') && !str.includes('-')) {
+      str = str + 'Z';
+    }
+    const d = new Date(str);
+    if (isNaN(d.getTime())) {
+      if (str.length === 5 && str.includes(':')) return str;
+      return str.substring(11, 16) || str;
+    }
+    const tz = obterFusoAtivo();
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(d);
+  } catch (e) {
+    return String(dataStr).substring(11, 16);
+  }
+}
+
+function formatarDataHoraCompleta(dataStr) {
+  if (!dataStr) return '';
+  try {
+    let str = String(dataStr).trim();
+    if (!str.includes('T') && str.includes(' ')) str = str.replace(' ', 'T') + 'Z';
+    else if (str.includes('T') && !str.endsWith('Z') && !str.includes('+') && !str.includes('-')) str = str + 'Z';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    const tz = obterFusoAtivo();
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: tz,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(d);
+  } catch (e) {
+    return String(dataStr);
+  }
+}
 
 function switchTab(tabId, navEl) {
   // PARTE 15: Restrição de acesso para funcionários (Analytics e Configurações)
@@ -967,7 +1065,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
     const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
     const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
     const isActive = conversaAtivaChatId && String(c.chat_id) === String(conversaAtivaChatId);
-    const hora = (c.data_ultima_mensagem || '').substring(11, 16);
+    const hora = formatarHoraConversa(c.data_ultima_mensagem);
     const isHuman = c.status_atendimento === 'humano';
 
     return `
@@ -1003,7 +1101,7 @@ function renderizarDashboardConversasTelegram() {
 
   container.innerHTML = listaConversasTelegram.slice(0, 5).map(c => {
     const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
-    const hora = (c.data_ultima_mensagem || '').substring(11, 16);
+    const hora = formatarHoraConversa(c.data_ultima_mensagem);
     const isHuman = c.status_atendimento === 'humano';
     const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
     return `
@@ -1164,7 +1262,7 @@ async function carregarMensagensTelegram(chatId, silencioso = false) {
       return `
         <div class="msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}" style="${!isUser ? 'border-left: 3px solid #229ED9;' : ''}">
           <div class="msg-text">${textoSeguro}</div>
-          <div class="msg-time">${m.hora || ''}</div>
+          <div class="msg-time" title="${m.data_hora || ''}">${formatarHoraConversa(m.data_hora || m.hora)}</div>
         </div>
       `;
     }).join('');
@@ -1637,8 +1735,64 @@ async function carregarConfiguracoesEmpresa() {
         openaiStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão / fallback</span>`;
       }
     }
+
+    if (data.fuso_horario) {
+      fusoHorarioEmpresa = data.fuso_horario;
+    }
+    const fusoSelect = document.getElementById('config-fuso-horario');
+    const fusoStatus = document.getElementById('fuso-horario-status');
+    if (fusoSelect) {
+      fusoSelect.value = fusoHorarioEmpresa || 'America/Sao_Paulo';
+    }
+    if (fusoStatus) {
+      let fusoNavegador = 'America/Sao_Paulo';
+      try {
+        fusoNavegador = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+      } catch (e) {}
+      fusoStatus.innerHTML = `<span style="color:var(--text-muted);">💻 Fuso local detectado neste dispositivo: <strong style="color:var(--text);">${fusoNavegador}</strong></span>`;
+    }
   } catch (err) {
     if (geminiStatus) geminiStatus.innerHTML = `<span style="color:#ef4444;">Erro: ${err.message}</span>`;
+  }
+}
+
+async function salvarConfiguracaoFusoHorario() {
+  const fusoSelect = document.getElementById('config-fuso-horario');
+  if (!fusoSelect) return;
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+  const novoFuso = fusoSelect.value;
+
+  try {
+    const res = await fetch('/empresa/fuso-horario', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        fuso_horario: novoFuso,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar fuso horário');
+
+    fusoHorarioEmpresa = novoFuso;
+    alert(data.mensagem || 'Fuso horário global atualizado com sucesso!');
+
+    // Re-renderiza imediatamente todas as conversas e a conversa ativa com o novo fuso
+    renderizarListaConversasTelegram();
+    renderizarDashboardConversasTelegram();
+    if (conversaAtivaChatId) {
+      carregarMensagensTelegram(conversaAtivaChatId, false);
+    }
+  } catch (err) {
+    alert('Erro ao atualizar fuso horário: ' + err.message);
   }
 }
 
@@ -2382,6 +2536,7 @@ async function atualizarInterfaceTenant() {
 function trocarEmpresaAtiva(novaEmpresaId) {
   localStorage.setItem('fluxia_active_empresa_id', novaEmpresaId);
   carregarDocumentos();
+  carregarConfiguracoesEmpresa();
   carregarConversasTelegram();
   carregarDashboardMetricas();
   carregarKanbanNegocios();
@@ -2398,6 +2553,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (labelData) labelData.textContent = hoje.charAt(0).toUpperCase() + hoje.slice(1);
 
   carregarDocumentos();
+  carregarConfiguracoesEmpresa();
   carregarConversasTelegram();
   carregarDashboardMetricas();
 

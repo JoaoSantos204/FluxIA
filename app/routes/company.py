@@ -7,6 +7,7 @@ from app.services.company_service import (
     atualizar_configuracao_empresa,
     atualizar_gemini_api_key,
     atualizar_configuracao_ia,
+    atualizar_fuso_horario,
     listar_empresas,
     cadastrar_empresa,
     deletar_empresa
@@ -42,6 +43,13 @@ class MultiVendorIARequest(BaseModel):
     provedor_ia_padrao: str = Field(default="google", description="Provedor padrão: 'google' ou 'openai'")
     gemini_api_key: Optional[str] = Field(default=None, description="Chave de API do Google Gemini (BYOK)")
     openai_api_key: Optional[str] = Field(default=None, description="Chave de API da OpenAI (BYOK)")
+    usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
+    usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
+
+
+class FusoHorarioRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    fuso_horario: str = Field(default="America/Sao_Paulo", description="Identificador IANA do fuso horário (ex: 'America/Sao_Paulo', 'auto')")
     usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
     usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
 
@@ -145,6 +153,41 @@ def salvar_provedor_ia_empresa(
 
     return {
         "mensagem": "Configurações de IA Multi-Vendor atualizadas com sucesso!",
+        "configuracao": resultado
+    }
+
+
+@router.post("/fuso-horario")
+def salvar_fuso_horario_empresa(
+    dados: FusoHorarioRequest,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Configura o fuso horário global da empresa (ex: 'America/Sao_Paulo', 'America/Manaus', 'auto').
+    Exige perfil admin ou master.
+    """
+    if dados.usuario_perfil:
+        if dados.usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem alterar o fuso horário global da empresa."
+            )
+    else:
+        uid = dados.usuario_id or x_user_id
+        if not uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identificação do usuário é obrigatória para alterar o fuso horário."
+            )
+        validar_perfil_admin_ou_master(uid)
+
+    resultado = atualizar_fuso_horario(
+        empresa_id=dados.empresa_id,
+        fuso_horario=dados.fuso_horario
+    )
+
+    return {
+        "mensagem": f"Fuso horário global atualizado para {dados.fuso_horario} com sucesso!",
         "configuracao": resultado
     }
 
