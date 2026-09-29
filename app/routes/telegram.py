@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException, Query, Body, Header
+from fastapi import APIRouter, Request, HTTPException, Query, Body, Header, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List
 import requests
@@ -195,7 +195,7 @@ def classificar_estagio_e_produto(pergunta: str, resposta: str, produtos: list[d
 # ============================================================================
 
 @router.post("/webhook")
-async def telegram_webhook(request: Request):
+async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Webhook público do Telegram:
     - Sem exigência de e-mail (atendimento aberto e autônomo).
@@ -356,14 +356,40 @@ async def telegram_webhook(request: Request):
             )
             return {"status": "ok", "acao": "solicitado_dados_contato"}
 
-        # 5. Geração de resposta com Gemini (utilizando empresa_id para BYOK)
-        resposta_ia = ai_service.gerar_resposta(
-            pergunta=texto_recebido,
-            contexto=contexto_publico,
-            historico=historico_recente,
-            config_suporte=config_suporte,
-            empresa_id=empresa_id
-        )
+        # 5. Geração de resposta com LangChain Multi-Vendor + Observabilidade
+        telemetria_id = 0
+        try:
+            from app.services.ai_engine_service import ai_engine
+            resposta_ia, telemetria_id = ai_engine.gerar_resposta_orquestrada(
+                pergunta=texto_recebido,
+                contexto=contexto_publico,
+                historico=historico_recente,
+                config_suporte=config_suporte,
+                empresa_id=empresa_id,
+                canal="telegram",
+                session_id=chat_id
+            )
+        except Exception as e:
+            logger.warning(f"[Telegram] Falha no ai_engine, usando fallback direto: {e}")
+            resposta_ia = ai_service.gerar_resposta(
+                pergunta=texto_recebido,
+                contexto=contexto_publico,
+                historico=historico_recente,
+                config_suporte=config_suporte,
+                empresa_id=empresa_id
+            )
+
+        # Dispara continuous evaluation em background (latência zero para o cliente)
+        if telemetria_id:
+            from app.services.ai_evaluation_service import avaliar_interacao_ia
+            background_tasks.add_task(
+                avaliar_interacao_ia,
+                telemetria_id=telemetria_id,
+                empresa_id=empresa_id,
+                pergunta=texto_recebido,
+                resposta=resposta_ia,
+                contexto_utilizado=contexto_publico
+            )
 
         # 6. Envia resposta ao Telegram
         enviar_mensagem_telegram(chat_id, resposta_ia)

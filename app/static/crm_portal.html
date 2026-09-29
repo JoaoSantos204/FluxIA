@@ -145,6 +145,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Analytics RAG
         </div>
+        <div class="nav-item" id="nav-item-observabilidade" onclick="switchTab('observabilidade', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Observabilidade & Evaluation
+        </div>
       </div>
 
       <div class="nav-section">
@@ -577,6 +581,115 @@
       </div>
     </div>
 
+    <!-- OBSERVABILIDADE & CONTINUOUS EVALUATION (ENGENHARIA DE IA) -->
+    <div class="screen" id="screen-observabilidade">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Observabilidade & Evaluation (Engenharia de IA)</div>
+          <div class="page-sub">Tracing de execução LangChain · Telemetria de custos e latência · RAG Triad Online Evaluation (LLM-as-a-Judge)</div>
+        </div>
+        <button class="btn-secondary" onclick="carregarObservabilidadeEEvaluation()" style="font-size:12px;">
+          🔄 Atualizar Telemetria
+        </button>
+      </div>
+
+      <!-- KPI CARDS TELEMETRIA -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-icon mi-purple">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="metric-label">Custo Total de IA (Est.)</div>
+          <div class="metric-value" id="obs-custo-total">$ 0.0000</div>
+          <div class="metric-change up" id="obs-custo-brl">R$ 0,00 BRL</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon mi-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="metric-label">Latência Média</div>
+          <div class="metric-value" id="obs-latencia-media">0 ms</div>
+          <div class="metric-change up">Tempo de resposta LLM</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon mi-amber">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <div class="metric-label">Tokens Processados</div>
+          <div class="metric-value" id="obs-total-tokens">0</div>
+          <div class="metric-change" id="obs-tokens-detalhes">Prompt: 0 | Completion: 0</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon mi-green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="metric-label">Assertividade Sem Alucinação</div>
+          <div class="metric-value" id="obs-assertividade-pct">100%</div>
+          <div class="metric-change up" id="obs-alucinacoes-cont">0 Alucinações Detectadas</div>
+        </div>
+      </div>
+
+      <!-- PAINEL RAG TRIAD & DISTRIBUIÇÃO MULTI-VENDOR -->
+      <div class="dash-body" style="grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
+        <div class="metric-card" style="padding:20px;">
+          <div class="section-title" style="margin-bottom:14px;">🎯 Continuous Evaluation — RAG Triad (LLM-as-a-Judge)</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">
+            Avaliação contínua automática em tempo real para cada interação com o cliente, garantindo integridade e conformidade sem aumentar a latência percebida:
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                <span><strong>Fidelidade / Groundedness</strong> (Anti-Alucinação):</span>
+                <strong id="eval-fidelidade-val" style="color:#10b981;">1.00 / 1.0</strong>
+              </div>
+              <div style="height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+                <div id="eval-fidelidade-bar" style="height:100%; width:100%; background:#10b981;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                <span><strong>Relevância da Resposta</strong> (Answer Relevance):</span>
+                <strong id="eval-relevancia-resp-val" style="color:#38bdf8;">1.00 / 1.0</strong>
+              </div>
+              <div style="height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+                <div id="eval-relevancia-resp-bar" style="height:100%; width:100%; background:#38bdf8;"></div>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                <span><strong>Relevância do Contexto</strong> (Context Relevance):</span>
+                <strong id="eval-relevancia-ctx-val" style="color:#818cf8;">1.00 / 1.0</strong>
+              </div>
+              <div style="height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+                <div id="eval-relevancia-ctx-bar" style="height:100%; width:100%; background:#818cf8;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card" style="padding:20px;">
+          <div class="section-title" style="margin-bottom:14px;">🌐 Distribuição Multi-Vendor & Modelos</div>
+          <div id="obs-vendors-container">
+            <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando dados dos provedores...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDITORIA DETALHADA DAS ÚLTIMAS AVALIAÇÕES -->
+      <div class="metric-card" style="padding:20px; margin-top:20px;">
+        <div class="section-title" style="margin-bottom:14px;">📋 Auditoria de Avaliações Online (Últimas Interações)</div>
+        <div id="obs-tabela-avaliacoes">
+          <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando auditoria...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- CONFIG (PARTE 2c) -->
     <div class="screen" id="screen-config">
       <div class="flow-header">
@@ -587,27 +700,37 @@
       </div>
       <div class="config-content">
         <div class="config-grid">
-          <!-- BYOK: CHAVE PRÓPRIA DE IA (PARTE 18) -->
+          <!-- MULTI-VENDOR: CHAVES & PROVEDORES (PARTE 18 EXPANDIDA) -->
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon" style="background:#534AB7; color:white;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
               </div>
-              Chave de API Própria (BYOK)
+              Orquestração Multi-Vendor & Chaves BYOK
             </div>
             <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
-              Cadastre sua chave do <strong>Google AI Studio (Gemini)</strong>. Se não configurada, o sistema utilizará automaticamente a chave padrão da plataforma.
+              Configure seu provedor padrão e chaves próprias (BYOK) para <strong>Google Gemini</strong> e <strong>OpenAI</strong> com failover automático.
             </div>
-            <div class="config-field">
-              <div class="cf-label">Chave Google Gemini API</div>
-              <div style="display:flex; gap:8px;">
-                <input type="password" class="cf-input" id="config-gemini-key" placeholder="AIzaSy... (ou deixe vazio para padrão)" />
-                <button class="btn-green" style="white-space:nowrap; padding:0 14px; font-size:12px;" onclick="salvarChaveGeminiEmpresa()">Salvar Chave</button>
-              </div>
-              <div id="gemini-key-status" style="font-size:11px; margin-top:6px; color:var(--text-muted);">
-                Consultando status da chave...
-              </div>
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label">Provedor de IA Padrão</div>
+              <select class="login-input" id="config-ia-provedor" style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:8px 12px;">
+                <option value="google">Google Gemini (Flash 2.5 / Flash Lite)</option>
+                <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+              </select>
             </div>
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label">Chave Google Gemini API (BYOK)</div>
+              <input type="password" class="cf-input" id="config-gemini-key" placeholder="AIzaSy... (ou deixe vazio para padrão)" />
+              <div id="gemini-key-status" style="font-size:11px; margin-top:4px; color:var(--text-muted);">Consultando...</div>
+            </div>
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label">Chave OpenAI API (BYOK)</div>
+              <input type="password" class="cf-input" id="config-openai-key" placeholder="sk-... (ou deixe vazio para padrão)" />
+              <div id="openai-key-status" style="font-size:11px; margin-top:4px; color:var(--text-muted);">Consultando...</div>
+            </div>
+            <button class="btn-green" style="width:100%; justify-content:center; padding:10px;" onclick="salvarConfiguracaoMultiVendor()">
+              Salvar Configurações Multi-Vendor
+            </button>
           </div>
 
           <div class="config-card">
@@ -735,6 +858,7 @@ function switchTab(tabId, navEl) {
     carregarConfiguracoesEmpresa();
   }
   if (tabId === 'analytics') carregarAnalytics();
+  if (tabId === 'observabilidade') carregarObservabilidadeEEvaluation();
 }
 
 function obterEmpresaAtivaId() {
@@ -1351,11 +1475,13 @@ async function carregarStatusWebhook() {
   }
 }
 
-// PARTE 18: BYOK (Bring Your Own Key) para Gemini API
+// PARTE 18: Multi-Vendor AI & BYOK
 async function carregarConfiguracoesEmpresa() {
-  const keyInput = document.getElementById('config-gemini-key');
-  const statusEl = document.getElementById('gemini-key-status');
-  if (!keyInput || !statusEl) return;
+  const geminiInput = document.getElementById('config-gemini-key');
+  const geminiStatus = document.getElementById('gemini-key-status');
+  const openaiInput = document.getElementById('config-openai-key');
+  const openaiStatus = document.getElementById('openai-key-status');
+  const provedorSelect = document.getElementById('config-ia-provedor');
 
   const empresaId = obterEmpresaAtivaId();
   const uid = usuarioAtual ? usuarioAtual.id : null;
@@ -1367,49 +1493,209 @@ async function carregarConfiguracoesEmpresa() {
     });
     if (!res.ok) throw new Error('Não foi possível carregar configurações');
     const data = await res.json();
-    if (data.possui_chave_propria) {
-      keyInput.placeholder = data.gemini_api_key_mascarada || '••••••••';
-      keyInput.value = '';
-      statusEl.innerHTML = `<span style="color:#34d399;">✓ Chave própria configurada (${data.gemini_api_key_mascarada})</span>`;
-    } else {
-      keyInput.placeholder = 'AIzaSy... (ou deixe vazio para padrão)';
-      keyInput.value = '';
-      statusEl.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão da plataforma (FluxIA Shared)</span>`;
+
+    if (provedorSelect) provedorSelect.value = data.provedor_ia_padrao || 'google';
+
+    if (geminiInput && geminiStatus) {
+      if (data.gemini_api_key_mascarada) {
+        geminiInput.placeholder = data.gemini_api_key_mascarada;
+        geminiInput.value = '';
+        geminiStatus.innerHTML = `<span style="color:#34d399;">✓ Chave própria Google (${data.gemini_api_key_mascarada})</span>`;
+      } else {
+        geminiInput.placeholder = 'AIzaSy... (ou deixe vazio para padrão)';
+        geminiInput.value = '';
+        geminiStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão da plataforma</span>`;
+      }
+    }
+
+    if (openaiInput && openaiStatus) {
+      if (data.openai_api_key_mascarada) {
+        openaiInput.placeholder = data.openai_api_key_mascarada;
+        openaiInput.value = '';
+        openaiStatus.innerHTML = `<span style="color:#38bdf8;">✓ Chave própria OpenAI (${data.openai_api_key_mascarada})</span>`;
+      } else {
+        openaiInput.placeholder = 'sk-... (ou deixe vazio para padrão)';
+        openaiInput.value = '';
+        openaiStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão / fallback</span>`;
+      }
     }
   } catch (err) {
-    statusEl.innerHTML = `<span style="color:#ef4444;">Erro ao verificar chave: ${err.message}</span>`;
+    if (geminiStatus) geminiStatus.innerHTML = `<span style="color:#ef4444;">Erro: ${err.message}</span>`;
   }
 }
 
-async function salvarChaveGeminiEmpresa() {
-  const keyInput = document.getElementById('config-gemini-key');
-  if (!keyInput) return;
+async function salvarConfiguracaoMultiVendor() {
+  const geminiInput = document.getElementById('config-gemini-key');
+  const openaiInput = document.getElementById('config-openai-key');
+  const provedorSelect = document.getElementById('config-ia-provedor');
 
-  const novaChave = keyInput.value.trim();
   const empresaId = obterEmpresaAtivaId();
   const uid = usuarioAtual ? usuarioAtual.id : null;
   const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
 
+  const provedor = provedorSelect ? provedorSelect.value : 'google';
+  const geminiKey = geminiInput ? geminiInput.value.trim() : null;
+  const openaiKey = openaiInput ? openaiInput.value.trim() : null;
+
   try {
-    const res = await fetch('/empresa/api-key', {
+    const res = await fetch('/empresa/provedor-ia', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'X-User-Id': String(uid || '')
       },
       body: JSON.stringify({
         empresa_id: empresaId,
-        gemini_api_key: novaChave,
+        provedor_ia_padrao: provedor,
+        gemini_api_key: geminiKey || null,
+        openai_api_key: openaiKey || null,
         usuario_id: uid,
         usuario_perfil: perfil
       })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar chave');
-    alert(data.mensagem || 'Chave atualizada com sucesso!');
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar configurações');
+    alert(data.mensagem || 'Configurações de IA atualizadas com sucesso!');
     carregarConfiguracoesEmpresa();
   } catch (err) {
-    alert('Erro ao salvar chave Gemini: ' + err.message);
+    alert('Erro: ' + err.message);
+  }
+}
+
+async function salvarChaveGeminiEmpresa() {
+  return salvarConfiguracaoMultiVendor();
+}
+
+// ===== OBSERVABILIDADE & CONTINUOUS EVALUATION (ENGENHARIA DE IA) =====
+async function carregarObservabilidadeEEvaluation() {
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  // 1. Carrega Telemetria de IA
+  try {
+    const res = await fetch(`/analytics/ia-telemetria?empresa_id=${empresaId}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const elCusto = document.getElementById('obs-custo-total');
+      const elBrl = document.getElementById('obs-custo-brl');
+      const elLat = document.getElementById('obs-latencia-media');
+      const elTok = document.getElementById('obs-total-tokens');
+      const elTokDet = document.getElementById('obs-tokens-detalhes');
+
+      if (elCusto) elCusto.textContent = `$ ${data.custo_total_usd.toFixed(4)}`;
+      if (elBrl) elBrl.textContent = `R$ ${data.custo_total_brl.toFixed(2)} BRL`;
+      if (elLat) elLat.textContent = `${Math.round(data.latencia_media_ms)} ms`;
+      if (elTok) elTok.textContent = data.total_tokens.toLocaleString('pt-BR');
+      if (elTokDet) elTokDet.textContent = `Prompt: ${data.total_tokens_prompt.toLocaleString('pt-BR')} | Comp: ${data.total_tokens_completion.toLocaleString('pt-BR')}`;
+
+      // Renderiza provedores/modelos
+      const vContainer = document.getElementById('obs-vendors-container');
+      if (vContainer) {
+        if (!data.distribuicao_vendors || data.distribuicao_vendors.length === 0) {
+          vContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma chamada registrada ainda. Interaja pelo Telegram ou Chat RAG.</div>';
+        } else {
+          vContainer.innerHTML = data.distribuicao_vendors.map(v => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
+              <div>
+                <strong style="color:var(--text); font-size:13px;">${v.vendor.toUpperCase()} · ${v.modelo}</strong>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${v.total_chamadas} chamadas · ${Math.round(v.latencia_media_ms)}ms médio</div>
+              </div>
+              <div style="text-align:right;">
+                <span class="contract-status-badge cs-signed" style="font-size:11px;">$ ${v.custo_usd.toFixed(4)}</span>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${v.tokens_total.toLocaleString('pt-BR')} tokens</div>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao carregar telemetria:', err);
+  }
+
+  // 2. Carrega Continuous Evaluation
+  try {
+    const res = await fetch(`/analytics/ia-evaluations?empresa_id=${empresaId}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const elAssert = document.getElementById('obs-assertividade-pct');
+      const elAluc = document.getElementById('obs-alucinacoes-cont');
+      if (elAssert) elAssert.textContent = `${data.taxa_assertividade_sem_alucinacao_percent}%`;
+      if (elAluc) elAluc.textContent = `${data.total_alucinacoes} Alucinações Detectadas`;
+
+      // Barras RAG Triad
+      const fid = data.media_fidelidade || 1.0;
+      const relResp = data.media_relevancia_resposta || 1.0;
+      const relCtx = data.media_relevancia_contexto || 1.0;
+
+      const elFidVal = document.getElementById('eval-fidelidade-val');
+      const elFidBar = document.getElementById('eval-fidelidade-bar');
+      const elRelRespVal = document.getElementById('eval-relevancia-resp-val');
+      const elRelRespBar = document.getElementById('eval-relevancia-resp-bar');
+      const elRelCtxVal = document.getElementById('eval-relevancia-ctx-val');
+      const elRelCtxBar = document.getElementById('eval-relevancia-ctx-bar');
+
+      if (elFidVal) elFidVal.textContent = `${fid.toFixed(2)} / 1.0`;
+      if (elFidBar) elFidBar.style.width = `${Math.min(100, fid * 100)}%`;
+
+      if (elRelRespVal) elRelRespVal.textContent = `${relResp.toFixed(2)} / 1.0`;
+      if (elRelRespBar) elRelRespBar.style.width = `${Math.min(100, relResp * 100)}%`;
+
+      if (elRelCtxVal) elRelCtxVal.textContent = `${relCtx.toFixed(2)} / 1.0`;
+      if (elRelCtxBar) elRelCtxBar.style.width = `${Math.min(100, relCtx * 100)}%`;
+
+      // Tabela de auditoria
+      const tContainer = document.getElementById('obs-tabela-avaliacoes');
+      if (tContainer) {
+        if (!data.ultimas_avaliacoes || data.ultimas_avaliacoes.length === 0) {
+          tContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma avaliação registrada ainda. As avaliações RAG Triad são executadas automaticamente via LLM-as-a-Judge em cada interação.</div>';
+        } else {
+          tContainer.innerHTML = `
+            <div style="overflow-x:auto;">
+              <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border); color:var(--text-muted);">
+                    <th style="padding:10px;">Data/Hora</th>
+                    <th style="padding:10px;">Pergunta</th>
+                    <th style="padding:10px;">Fidelidade</th>
+                    <th style="padding:10px;">Relevância</th>
+                    <th style="padding:10px;">Status Alucinação</th>
+                    <th style="padding:10px;">Justificativa (LLM Judge)</th>
+                    <th style="padding:10px;">Provedor / Latência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.ultimas_avaliacoes.map(ev => {
+                    const dataFmt = ev.criado_em ? new Date(ev.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}) : '';
+                    const badgeAluc = ev.possivel_alucinacao 
+                      ? '<span class="contract-status-badge cs-cancelled" style="font-size:10px;">⚠️ Alucinação</span>'
+                      : '<span class="contract-status-badge cs-signed" style="font-size:10px;">✓ Fiel ao Contexto</span>';
+                    return `
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:10px; white-space:nowrap; color:var(--text-muted);">${dataFmt}</td>
+                        <td style="padding:10px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${ev.pergunta}"><strong>${ev.pergunta}</strong></td>
+                        <td style="padding:10px; font-weight:600; color:#10b981;">${(ev.score_fidelidade || 1.0).toFixed(2)}</td>
+                        <td style="padding:10px; font-weight:600; color:#38bdf8;">${(ev.score_relevancia_resposta || 1.0).toFixed(2)}</td>
+                        <td style="padding:10px;">${badgeAluc}</td>
+                        <td style="padding:10px; max-width:260px; color:var(--text-muted); font-size:11px;">${ev.justificativa_avaliacao || 'Avaliação conforme'}</td>
+                        <td style="padding:10px; white-space:nowrap; font-size:11px; color:var(--text-muted);">${ev.vendor || 'google'} (${ev.latencia_ms || 0}ms)</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao carregar evaluations:', err);
   }
 }
 

@@ -247,3 +247,141 @@ def listar_historico_perguntas(
         }
     finally:
         conexao.close()
+
+
+@router.get("/ia-telemetria")
+def obter_telemetria_ia(
+    empresa_id: int = Query(1),
+    usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Retorna métricas consolidadas de Observabilidade de IA:
+    Consumo de tokens, custo acumulado em USD/BRL, latência média e distribuição por provedor/modelo.
+    """
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        # Totais gerais
+        cursor.execute(f"""
+            SELECT 
+                COUNT(*) AS total_interacoes,
+                COALESCE(SUM(tokens_prompt), 0) AS total_tokens_prompt,
+                COALESCE(SUM(tokens_completion), 0) AS total_tokens_completion,
+                COALESCE(SUM(tokens_total), 0) AS total_tokens,
+                COALESCE(SUM(custo_estimado_usd), 0.0) AS custo_total_usd,
+                COALESCE(AVG(latencia_ms), 0) AS latencia_media_ms
+            FROM ia_telemetria_execucao
+            WHERE empresa_id = {ph}
+        """, (empresa_id,))
+        totais = cursor.fetchone()
+
+        # Distribuição por Vendor/Modelo
+        cursor.execute(f"""
+            SELECT 
+                vendor,
+                modelo,
+                COUNT(*) AS total_chamadas,
+                COALESCE(SUM(tokens_total), 0) AS tokens_total,
+                COALESCE(SUM(custo_estimado_usd), 0.0) AS custo_usd,
+                COALESCE(AVG(latencia_ms), 0) AS latencia_media_ms
+            FROM ia_telemetria_execucao
+            WHERE empresa_id = {ph}
+            GROUP BY vendor, modelo
+            ORDER BY total_chamadas DESC
+        """, (empresa_id,))
+        distribuicao = [dict(r) for r in cursor.fetchall()]
+
+        # Últimas 10 execuções detalhadas
+        cursor.execute(f"""
+            SELECT 
+                id, canal, session_id, vendor, modelo,
+                tokens_prompt, tokens_completion, tokens_total,
+                custo_estimado_usd, latencia_ms, status_execucao,
+                tools_executadas, criado_em
+            FROM ia_telemetria_execucao
+            WHERE empresa_id = {ph}
+            ORDER BY id DESC
+            LIMIT 10
+        """, (empresa_id,))
+        ultimas = [dict(r) for r in cursor.fetchall()]
+
+        custo_usd = float(totais["custo_total_usd"] if totais else 0.0)
+        return {
+            "total_interacoes": int(totais["total_interacoes"] if totais else 0),
+            "total_tokens": int(totais["total_tokens"] if totais else 0),
+            "total_tokens_prompt": int(totais["total_tokens_prompt"] if totais else 0),
+            "total_tokens_completion": int(totais["total_tokens_completion"] if totais else 0),
+            "custo_total_usd": round(custo_usd, 6),
+            "custo_total_brl": round(custo_usd * 5.60, 4), # Cotação referencial
+            "latencia_media_ms": round(float(totais["latencia_media_ms"] if totais else 0), 1),
+            "distribuicao_vendors": distribuicao,
+            "ultimas_interacoes": ultimas
+        }
+    finally:
+        conexao.close()
+
+
+@router.get("/ia-evaluations")
+def obter_evaluations_ia(
+    empresa_id: int = Query(1),
+    usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Retorna métricas consolidadas de Continuous Evaluation (RAG Triad & LLM-as-a-Judge):
+    Fidelidade (Groundedness), Relevância da Resposta, Relevância do Contexto e Alucinações Detectadas.
+    """
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT 
+                COUNT(*) AS total_avaliacoes,
+                COALESCE(AVG(score_fidelidade), 1.0) AS media_fidelidade,
+                COALESCE(AVG(score_relevancia_resposta), 1.0) AS media_relevancia_resposta,
+                COALESCE(AVG(score_relevancia_contexto), 1.0) AS media_relevancia_contexto,
+                COUNT(CASE WHEN possivel_alucinacao = TRUE OR possivel_alucinacao = 1 THEN 1 END) AS total_alucinacoes
+            FROM ia_evaluations
+            WHERE empresa_id = {ph}
+        """, (empresa_id,))
+        totais = cursor.fetchone()
+
+        total_avaliacoes = int(totais["total_avaliacoes"] if totais else 0)
+        total_alucinacoes = int(totais["total_alucinacoes"] if totais else 0)
+        taxa_assertividade = 100.0 if total_avaliacoes == 0 else round(((total_avaliacoes - total_alucinacoes) / total_avaliacoes) * 100, 1)
+
+        cursor.execute(f"""
+            SELECT 
+                e.id, e.telemetria_id, e.pergunta, e.resposta,
+                e.score_fidelidade, e.score_relevancia_resposta, e.score_relevancia_contexto,
+                e.possivel_alucinacao, e.justificativa_avaliacao, e.avaliador_modelo,
+                e.criado_em,
+                t.vendor, t.modelo, t.latencia_ms
+            FROM ia_evaluations e
+            LEFT JOIN ia_telemetria_execucao t ON t.id = e.telemetria_id
+            WHERE e.empresa_id = {ph}
+            ORDER BY e.id DESC
+            LIMIT 15
+        """, (empresa_id,))
+        ultimas = [dict(r) for r in cursor.fetchall()]
+
+        return {
+            "total_avaliacoes": total_avaliacoes,
+            "media_fidelidade": round(float(totais["media_fidelidade"] if totais else 1.0), 3),
+            "media_relevancia_resposta": round(float(totais["media_relevancia_resposta"] if totais else 1.0), 3),
+            "media_relevancia_contexto": round(float(totais["media_relevancia_contexto"] if totais else 1.0), 3),
+            "total_alucinacoes": total_alucinacoes,
+            "taxa_assertividade_sem_alucinacao_percent": taxa_assertividade,
+            "ultimas_avaliacoes": ultimas
+        }
+    finally:
+        conexao.close()

@@ -7,7 +7,9 @@ CONFIGURACAO_PADRAO = {
     "empresa_id": 1,
     "numero_suporte_humano": "(11) 99999-9999",
     "mensagem_suporte": "Por favor, entre em contato com nossa equipe de atendimento.",
-    "gemini_api_key": None
+    "gemini_api_key": None,
+    "openai_api_key": None,
+    "provedor_ia_padrao": "google"
 }
 
 
@@ -23,7 +25,7 @@ def mascarar_api_key(chave: str | None) -> str:
 
 def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     """
-    Busca as configurações da empresa (como telefone, mensagem de suporte e chave BYOK).
+    Busca as configurações da empresa (como telefone, mensagem de suporte e chaves BYOK Google e OpenAI).
     Caso não exista configuração cadastrada, retorna os valores padrão do sistema.
     """
     conexao = conectar()
@@ -32,7 +34,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
     try:
         cursor.execute(f"""
-            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key
+            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -41,24 +43,31 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
         linha = cursor.fetchone()
 
         if linha:
-            chave_real = linha["gemini_api_key"] if "gemini_api_key" in linha.keys() else None
+            chave_gemini = linha.get("gemini_api_key") if isinstance(linha, dict) else linha["gemini_api_key"]
+            chave_openai = linha.get("openai_api_key") if isinstance(linha, dict) else linha["openai_api_key"]
+            provedor = linha.get("provedor_ia_padrao") if isinstance(linha, dict) else linha["provedor_ia_padrao"]
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
                 "mensagem_suporte": linha["mensagem_suporte"] or CONFIGURACAO_PADRAO["mensagem_suporte"],
-                "gemini_api_key": chave_real,
-                "gemini_api_key_mascarada": mascarar_api_key(chave_real),
-                "possui_chave_propria": bool(chave_real and chave_real.strip())
+                "gemini_api_key": chave_gemini,
+                "gemini_api_key_mascarada": mascarar_api_key(chave_gemini),
+                "openai_api_key": chave_openai,
+                "openai_api_key_mascarada": mascarar_api_key(chave_openai),
+                "provedor_ia_padrao": provedor or "google",
+                "possui_chave_propria": bool((chave_gemini and chave_gemini.strip()) or (chave_openai and chave_openai.strip()))
             }
 
         padrao = CONFIGURACAO_PADRAO.copy()
         padrao["gemini_api_key_mascarada"] = ""
+        padrao["openai_api_key_mascarada"] = ""
         padrao["possui_chave_propria"] = False
         return padrao
     except Exception as e:
         logger.error(f"[CompanyService] Erro ao buscar configurações da empresa {empresa_id}: {e}")
         padrao = CONFIGURACAO_PADRAO.copy()
         padrao["gemini_api_key_mascarada"] = ""
+        padrao["openai_api_key_mascarada"] = ""
         padrao["possui_chave_propria"] = False
         return padrao
     finally:
@@ -137,6 +146,55 @@ def atualizar_gemini_api_key(empresa_id: int, gemini_api_key: str | None) -> dic
     except Exception as e:
         conexao.rollback()
         logger.error(f"[CompanyService] Erro ao salvar chave Gemini da empresa {empresa_id}: {e}")
+        raise e
+    finally:
+        conexao.close()
+
+
+def atualizar_configuracao_ia(
+    empresa_id: int,
+    provedor_ia_padrao: str = "google",
+    openai_api_key: str | None = None,
+    gemini_api_key: str | None = None
+) -> dict:
+    """
+    Atualiza as preferências de IA Multi-Vendor (provedor padrão, chave Gemini e chave OpenAI) da empresa.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    chave_gemini_limpa = gemini_api_key.strip() if gemini_api_key and gemini_api_key.strip() else None
+    chave_openai_limpa = openai_api_key.strip() if openai_api_key and openai_api_key.strip() else None
+    provedor_limpo = (provedor_ia_padrao or "google").strip().lower()
+
+    try:
+        cursor.execute(f"SELECT id, gemini_api_key, openai_api_key FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            # Preserva chaves anteriores se não informadas na chamada
+            gemini_final = chave_gemini_limpa if gemini_api_key is not None else existente.get("gemini_api_key")
+            openai_final = chave_openai_limpa if openai_api_key is not None else existente.get("openai_api_key")
+
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET provedor_ia_padrao = {ph},
+                    gemini_api_key = {ph},
+                    openai_api_key = {ph}
+                WHERE empresa_id = {ph}
+            """, (provedor_limpo, gemini_final, openai_final, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (empresa_id, provedor_ia_padrao, gemini_api_key, openai_api_key)
+                VALUES ({ph}, {ph}, {ph}, {ph})
+            """, (empresa_id, provedor_limpo, chave_gemini_limpa, chave_openai_limpa))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao atualizar configurações de IA da empresa {empresa_id}: {e}")
         raise e
     finally:
         conexao.close()

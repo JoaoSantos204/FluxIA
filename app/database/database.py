@@ -237,6 +237,49 @@ def _criar_banco_sqlite(cursor):
         )
     """)
 
+    # 14. Telemetria de IA & Observabilidade
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ia_telemetria_execucao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            canal TEXT DEFAULT 'telegram' CHECK (canal IN ('telegram','portal')),
+            session_id TEXT,
+            vendor TEXT NOT NULL,
+            modelo TEXT NOT NULL,
+            tokens_prompt INTEGER DEFAULT 0,
+            tokens_completion INTEGER DEFAULT 0,
+            tokens_total INTEGER DEFAULT 0,
+            custo_estimado_usd REAL DEFAULT 0.0,
+            latencia_ms INTEGER DEFAULT 0,
+            status_execucao TEXT DEFAULT 'sucesso' CHECK (status_execucao IN ('sucesso','erro','fallback')),
+            tools_executadas TEXT,
+            mensagem_erro TEXT,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 15. Continuous Evaluation (RAG Triad & LLM-as-a-Judge)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ia_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telemetria_id INTEGER,
+            empresa_id INTEGER NOT NULL,
+            pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            contexto_utilizado TEXT,
+            score_fidelidade REAL,
+            score_relevancia_resposta REAL,
+            score_relevancia_contexto REAL,
+            possivel_alucinacao BOOLEAN DEFAULT 0,
+            justificativa_avaliacao TEXT,
+            avaliador_modelo TEXT,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (telemetria_id) REFERENCES ia_telemetria_execucao(id) ON DELETE SET NULL,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
     # Migrações idempotentes para bancos antigos
     cursor.execute("PRAGMA table_info(chunks)")
     colunas_chunks = [c["name"] for c in cursor.fetchall()]
@@ -278,6 +321,10 @@ def _criar_banco_sqlite(cursor):
     colunas_cfg = [c["name"] for c in cursor.fetchall()]
     if "gemini_api_key" not in colunas_cfg:
         cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN gemini_api_key TEXT")
+    if "openai_api_key" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN openai_api_key TEXT")
+    if "provedor_ia_padrao" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN provedor_ia_padrao TEXT DEFAULT 'google'")
 
     # Dados iniciais
     cursor.execute("SELECT COUNT(*) AS total FROM empresas")
@@ -486,6 +533,49 @@ def _criar_banco_postgres(cursor):
         )
     """)
 
+    # 14. Telemetria de IA & Observabilidade
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ia_telemetria_execucao (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL,
+            canal TEXT DEFAULT 'telegram' CHECK (canal IN ('telegram','portal')),
+            session_id TEXT,
+            vendor TEXT NOT NULL,
+            modelo TEXT NOT NULL,
+            tokens_prompt INTEGER DEFAULT 0,
+            tokens_completion INTEGER DEFAULT 0,
+            tokens_total INTEGER DEFAULT 0,
+            custo_estimado_usd DOUBLE PRECISION DEFAULT 0.0,
+            latencia_ms INTEGER DEFAULT 0,
+            status_execucao TEXT DEFAULT 'sucesso' CHECK (status_execucao IN ('sucesso','erro','fallback')),
+            tools_executadas TEXT,
+            mensagem_erro TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 15. Continuous Evaluation (RAG Triad & LLM-as-a-Judge)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ia_evaluations (
+            id SERIAL PRIMARY KEY,
+            telemetria_id INTEGER,
+            empresa_id INTEGER NOT NULL,
+            pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            contexto_utilizado TEXT,
+            score_fidelidade DOUBLE PRECISION,
+            score_relevancia_resposta DOUBLE PRECISION,
+            score_relevancia_contexto DOUBLE PRECISION,
+            possivel_alucinacao BOOLEAN DEFAULT FALSE,
+            justificativa_avaliacao TEXT,
+            avaliador_modelo TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (telemetria_id) REFERENCES ia_telemetria_execucao(id) ON DELETE SET NULL,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )
+    """)
+
     # Migrações idempotentes para Postgres
     cursor.execute("""
         DO $$
@@ -507,6 +597,12 @@ def _criar_banco_postgres(cursor):
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='gemini_api_key') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN gemini_api_key TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='openai_api_key') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN openai_api_key TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='provedor_ia_padrao') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN provedor_ia_padrao TEXT DEFAULT 'google';
             END IF;
         END $$;
     """)

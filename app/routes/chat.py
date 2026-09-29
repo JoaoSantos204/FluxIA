@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List
+import logging
 
 from app.services.semantic_search_service import buscar_chunks_semanticamente
 from app.services.ai_service import AIService
+from app.services.ai_engine_service import ai_engine
+from app.services.ai_evaluation_service import avaliar_interacao_ia
 from app.routes.analytics import registrar_pergunta_historico
 from app.database.database import conectar, _cursor, _placeholder
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/chat",
@@ -57,7 +62,7 @@ def obter_historico_recente_usuario(usuario_id: int = Query(...), limite: int = 
 
 
 @router.post("/")
-def conversar(pergunta: Pergunta):
+def conversar(pergunta: Pergunta, background_tasks: BackgroundTasks):
     """
     Chat Interno do Portal (Assistente Híbrido Corporativo):
     - Busca chunks semanticamente nos documentos da empresa (públicos e internos).
@@ -65,7 +70,8 @@ def conversar(pergunta: Pergunta):
     - Se NÃO encontrar contexto, NÃO RECUSA: responde utilizando conhecimento geral corporativo,
       esclarecendo que a resposta não provém dos documentos internos.
     - Persiste a interação em perguntas_historico com canal='portal'.
-    - Retorna a resposta com identificação do modelo de IA utilizado.
+    - Coleta telemetria de tokens, custo e latência via LangChain Callback.
+    - Dispara avaliação contínua em segundo plano (RAG Triad & LLM-as-a-judge).
     """
     texto_pergunta = pergunta.mensagem.strip()
     empresa_id = pergunta.empresa_id or 1
@@ -89,16 +95,40 @@ def conversar(pergunta: Pergunta):
                 f"{chunk.get('conteudo', '')}"
             )
 
-    # 2. Gera a resposta com o modelo de IA interno híbrido
-    resposta_texto, fonte = ai_service.gerar_resposta_interna(
-        pergunta=texto_pergunta,
-        contexto=contexto_texto,
-        empresa_id=empresa_id
-    )
+    # 2. Gera a resposta orquestrada via LangChain com Observabilidade
+    telemetria_id = 0
+    fonte = "base_conhecimento" if (contexto_texto and len(contexto_texto.strip()) >= 15) else "conhecimento_geral"
+
+    try:
+        resposta_texto, telemetria_id = ai_engine.gerar_resposta_orquestrada(
+            pergunta=texto_pergunta,
+            contexto=contexto_texto,
+            empresa_id=empresa_id,
+            canal="portal",
+            session_id=str(pergunta.usuario_id or "portal_user")
+        )
+    except Exception as e:
+        logger.warning(f"[ChatPortal] Falha no ai_engine, fallback direto para ai_service: {e}")
+        resposta_texto, fonte = ai_service.gerar_resposta_interna(
+            pergunta=texto_pergunta,
+            contexto=contexto_texto,
+            empresa_id=empresa_id
+        )
 
     teve_contexto = (fonte == "base_conhecimento")
 
-    # 3. Loga no histórico e analytics
+    # 3. Dispara continuous evaluation em background
+    if telemetria_id:
+        background_tasks.add_task(
+            avaliar_interacao_ia,
+            telemetria_id=telemetria_id,
+            empresa_id=empresa_id,
+            pergunta=texto_pergunta,
+            resposta=resposta_texto,
+            contexto_utilizado=contexto_texto if teve_contexto else None
+        )
+
+    # 4. Loga no histórico e analytics
     documentos_unicos = list(dict.fromkeys(d["nome_arquivo"] for d in documentos_usados))
 
     registrar_pergunta_historico(
@@ -118,5 +148,6 @@ def conversar(pergunta: Pergunta):
         "fonte": fonte,
         "teve_contexto": teve_contexto,
         "documentos_consultados": documentos_unicos if teve_contexto else [],
-        "modelo_usado": ai_service.primary_model
+        "modelo_usado": ai_service.primary_model,
+        "telemetria_id": telemetria_id
     }

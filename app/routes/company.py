@@ -6,6 +6,7 @@ from app.services.company_service import (
     obter_configuracao_empresa, 
     atualizar_configuracao_empresa,
     atualizar_gemini_api_key,
+    atualizar_configuracao_ia,
     listar_empresas,
     cadastrar_empresa,
     deletar_empresa
@@ -34,6 +35,15 @@ class GeminiApiKeyRequest(BaseModel):
     gemini_api_key: Optional[str] = Field(default="", description="Chave de API do Gemini")
     usuario_id: Optional[int] = Field(default=None, description="ID do usuário que realiza a alteração")
     usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário que realiza a alteração ('admin' ou 'master')")
+
+
+class MultiVendorIARequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    provedor_ia_padrao: str = Field(default="google", description="Provedor padrão: 'google' ou 'openai'")
+    gemini_api_key: Optional[str] = Field(default=None, description="Chave de API do Google Gemini (BYOK)")
+    openai_api_key: Optional[str] = Field(default=None, description="Chave de API da OpenAI (BYOK)")
+    usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
+    usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
 
 
 @router.get("/configuracoes")
@@ -98,6 +108,43 @@ def salvar_api_key_empresa(
 
     return {
         "mensagem": "Chave de API da empresa atualizada com sucesso!",
+        "configuracao": resultado
+    }
+
+
+@router.post("/provedor-ia")
+def salvar_provedor_ia_empresa(
+    dados: MultiVendorIARequest,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Configura o provedor de IA padrão (Google ou OpenAI) e cadastra chaves BYOK de ambos os vendors.
+    Exige perfil admin ou master.
+    """
+    if dados.usuario_perfil:
+        if dados.usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem alterar o provedor de IA da empresa."
+            )
+    else:
+        uid = dados.usuario_id or x_user_id
+        if not uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identificação do usuário é obrigatória."
+            )
+        validar_perfil_admin_ou_master(uid)
+
+    resultado = atualizar_configuracao_ia(
+        empresa_id=dados.empresa_id,
+        provedor_ia_padrao=dados.provedor_ia_padrao,
+        openai_api_key=dados.openai_api_key,
+        gemini_api_key=dados.gemini_api_key
+    )
+
+    return {
+        "mensagem": "Configurações de IA Multi-Vendor atualizadas com sucesso!",
         "configuracao": resultado
     }
 
