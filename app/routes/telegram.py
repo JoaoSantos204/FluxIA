@@ -214,6 +214,82 @@ def classificar_estagio_e_produto(pergunta: str, resposta: str, produtos: list[d
 
 
 # ============================================================================
+# CONTEXTO E SALVAGUARDAS DE CONTATO
+# ============================================================================
+
+def eh_cortesia_ou_agradecimento(texto: str) -> bool:
+    """Identifica se o texto é apenas uma cortesia, agradecimento ou saudação, evitando falsos cadastros de nome."""
+    t = texto.strip().lower()
+    cortesias = {
+        "obrigado", "muito obrigado", "muito obrigada", "obrigada", "valeu", "valeu!", "valeu mesmo",
+        "agradeço", "agradeco", "grato", "grata", "brigado", "brigada", "show", "show de bola", "beleza", "blz",
+        "perfeito", "perfeita", "ótimo", "otimo", "ótima", "otima", "maravilha", "ok", "certo", "entendi",
+        "tá bom", "ta bom", "tá bem", "ta bem", "tudo bem", "olá", "ola", "oi", "oie",
+        "bom dia", "boa tarde", "boa noite", "sim", "não", "nao", "claro", "combinado", "falou",
+        "tchau", "até mais", "ate mais", "abraço", "abraco"
+    }
+    t_sem_pontuacao = re.sub(r'[^\w\s]', '', t).strip()
+    if t_sem_pontuacao in cortesias or t in cortesias:
+        return True
+    if re.search(r'^(muito\s+)?obrigad[oa]|^(muito\s+)?grato|valeu(\s+demais)?|valeu\s+mesmo', t_sem_pontuacao):
+        return True
+    return False
+
+
+def eh_pergunta_ou_duvida(texto: str) -> bool:
+    """Verifica se o texto parece ser uma pergunta ou solicitação, não um nome."""
+    t = texto.strip().lower()
+    if "?" in texto:
+        return True
+    padroes = [
+        r'^(como|qual|quais|quando|onde|quem|por que|porque|quanto|quantos|quantas)\b',
+        r'\b(saber|tirar dúvida|duvida|gostaria de|preciso de|me ajuda|ajudar|cadastrar|cadastro|matrícula|matricula|preço|preco|plano|serviço|servico)\b'
+    ]
+    for p in padroes:
+        if re.search(p, t):
+            return True
+    return False
+
+
+def extrair_dados_contato(texto: str) -> dict:
+    """
+    Extrai e-mail, telefone e nome explícito com salvaguardas rigorosas contra falsos positivos.
+    """
+    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto)
+    phone_match = re.search(r'(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\s?)?\d{4,5}[-\s]?\d{4}', texto)
+
+    novo_email = email_match.group(0).lower() if email_match else None
+    novo_telefone = phone_match.group(0).strip() if phone_match else None
+
+    # Procura por prefixos explícitos de nome
+    match_nome_explicito = re.search(r'(?i)(?:meu nome [eé]|sou o|sou a|me chamo|nome:?)\s+([A-Za-zÀ-ÿ\s]{2,40})', texto)
+    nome_extraido = None
+    if match_nome_explicito:
+        cand = match_nome_explicito.group(1).strip()
+        if len(cand) >= 2 and not eh_cortesia_ou_agradecimento(cand) and not eh_pergunta_ou_duvida(cand):
+            nome_extraido = cand
+    elif novo_email or novo_telefone:
+        # Se veio e-mail ou telefone, verifica se sobrou um nome válido
+        texto_sem = texto
+        if email_match:
+            texto_sem = texto_sem.replace(email_match.group(0), "")
+        if phone_match:
+            texto_sem = texto_sem.replace(phone_match.group(0), "")
+        texto_sem = re.sub(r'(?i)(e-mail:?|email:?|telefone:?|tel:?|cel:?|whatsapp:?)', '', texto_sem)
+        texto_sem = re.sub(r'[,;\n\r\t]+', ' ', texto_sem).strip()
+        palavras = texto_sem.split()
+        if 1 <= len(palavras) <= 4 and len(texto_sem) >= 2 and not eh_cortesia_ou_agradecimento(texto_sem) and not eh_pergunta_ou_duvida(texto_sem):
+            nome_extraido = texto_sem
+
+    return {
+        "nome": nome_extraido,
+        "email": novo_email,
+        "telefone": novo_telefone,
+        "tem_contato": bool(nome_extraido or novo_email or novo_telefone)
+    }
+
+
+# ============================================================================
 # WEBHOOK DO TELEGRAM
 # ============================================================================
 
@@ -224,7 +300,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     - Sem exigência de e-mail (atendimento aberto e autônomo).
     - Checa se o chat está em modo 'humano' antes de chamar a IA.
     - Se 'bot', consulta base pública (RAG), responde via Gemini, atualiza histórico,
-      cria/evolui cliente e negócio no CRM e loga analytics.
+      cria/evolui cliente e negócio no CRM e loga analytics com observabilidade integral.
     """
     try:
         dados = await request.json()
@@ -278,7 +354,9 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 nome_atual.startswith("Lead ") or
                 nome_atual.startswith("Usuário ") or
                 nome_atual.startswith("Lead Telegram") or
-                chat_id in nome_atual
+                chat_id in nome_atual or
+                "?" in nome_atual or
+                nome_atual.lower() in ("muito obrigado", "obrigado", "valeu")
             )
             # Atualiza no banco se o nome atual for genérico e tivermos um nome real capturado
             if eh_generico and not nome_lead.startswith("Usuário #") and not nome_lead.startswith("Lead Telegram"):
@@ -293,6 +371,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         conv_status = cursor.fetchone()
         if conv_status and conv_status.get("status") == "humano":
             # Modo humano ativo: não dispara IA nem resposta automática, apenas registra
+            # Também desativa qualquer estado pendente de aguardando contato
+            cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
             cursor.execute(f"""
                 INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida)
                 VALUES ({ph}, {ph}, {ph}, {ph})
@@ -336,41 +416,49 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False)
             return {"status": "ok"}
 
-        # 3. PARTE 13: Estado 'aguardando dados de contato'
+        # 3. Estado 'aguardando dados de contato' com entendimento de contexto
         if cliente.get("aguardando_contato"):
-            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto_recebido)
-            phone_match = re.search(r'(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?(?:9\s?)?\d{4,5}[-\s]?\d{4}', texto_recebido)
+            # A) Se o usuário enviou uma cortesia ou agradecimento (ex: "Muito obrigado", "Valeu")
+            # NÃO altera o nome do lead! Apenas responde gentilmente e encerra o estado de espera.
+            if eh_cortesia_ou_agradecimento(texto_recebido):
+                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
+                conexao.commit()
+                msg_agradecimento = (
+                    "De nada! Fico sempre à sua disposição. Se precisar de mais alguma informação ou desejar falar com um consultor humano, "
+                    "basta me chamar ou usar o comando `/suporte`! 😊"
+                )
+                enviar_mensagem_telegram(chat_id, msg_agradecimento)
+                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_agradecimento, lida=False)
+                return {"status": "ok", "mensagem": "Agradecimento respondido com cortesia"}
 
-            novo_email = email_match.group(0).lower() if email_match else cliente.get("email")
-            novo_telefone = phone_match.group(0).strip() if phone_match else cliente.get("telefone")
+            # B) Se o usuário enviou dados reais de contato (email, telefone ou nome explícito)
+            dados_contato = extrair_dados_contato(texto_recebido)
+            if dados_contato["tem_contato"]:
+                novo_email = dados_contato["email"] or cliente.get("email")
+                novo_telefone = dados_contato["telefone"] or cliente.get("telefone")
+                nome_final = dados_contato["nome"] or cliente.get("nome") or nome_lead
 
-            # O restante do texto é interpretado como o nome
-            texto_sem_contatos = texto_recebido
-            if email_match:
-                texto_sem_contatos = texto_sem_contatos.replace(email_match.group(0), "")
-            if phone_match:
-                texto_sem_contatos = texto_sem_contatos.replace(phone_match.group(0), "")
+                cursor.execute(f"""
+                    UPDATE clientes
+                    SET nome = {ph}, email = {ph}, telefone = {ph}, aguardando_contato = {ph}
+                    WHERE id = {ph}
+                """, (nome_final, novo_email, novo_telefone, False, cliente_id))
+                conexao.commit()
 
-            texto_nome = re.sub(r'(?i)(meu nome [eé]|sou o|sou a|me chamo|nome:?|e-mail:?|email:?|telefone:?|tel:?|cel:?|whatsapp:?)', '', texto_sem_contatos)
-            texto_nome = re.sub(r'[,;\n\r\t]+', ' ', texto_nome).strip()
-            nome_final = texto_nome if len(texto_nome) >= 2 else (cliente.get("nome") or nome_lead or f"Usuário #{chat_id[-4:]}")
-
-            cursor.execute(f"""
-                UPDATE clientes
-                SET nome = {ph}, email = {ph}, telefone = {ph}, aguardando_contato = {ph}
-                WHERE id = {ph}
-            """, (nome_final, novo_email, novo_telefone, False, cliente_id))
-            conexao.commit()
-
-            msg_confirmacao = (
-                f"Perfeito, {nome_final}! Anotei seus dados de contato com sucesso "
-                f"(E-mail: {novo_email or 'não informado'} | Telefone: {novo_telefone or 'não informado'}).\n\n"
-                "Nossa equipe de atendimento foi acionada e entrará em contato em breve para te auxiliar melhor! "
-                "Se precisar de mais informações sobre nossos serviços, estou à sua disposição."
-            )
-            enviar_mensagem_telegram(chat_id, msg_confirmacao)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False)
-            return {"status": "ok", "mensagem": "Dados de contato salvos com sucesso"}
+                msg_confirmacao = (
+                    f"Perfeito, {nome_final}! Anotei seus dados de contato com sucesso "
+                    f"(E-mail: {novo_email or 'não informado'} | Telefone: {novo_telefone or 'não informado'}).\n\n"
+                    "Nossa equipe de atendimento foi acionada e entrará em contato em breve para te auxiliar melhor! "
+                    "Se precisar de mais informações sobre nossos serviços, estou à sua disposição."
+                )
+                enviar_mensagem_telegram(chat_id, msg_confirmacao)
+                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False)
+                return {"status": "ok", "mensagem": "Dados de contato salvos com sucesso"}
+            else:
+                # C) Se for uma pergunta ou comentário normal sem dados de contato,
+                # apenas desativa o aguardo de contato e prossegue para responder a dúvida normalmente com IA!
+                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
+                conexao.commit()
 
         # 4. RAG: Busca estritamente pública
         historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3)
@@ -381,34 +469,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             empresa_id=empresa_id
         )
 
-        # PARTE 13: Se NÃO for encontrado contexto relevante na base pública e faltar contato do cliente
         tem_contexto = bool(contexto_publico and len(contexto_publico.strip()) > 10)
-        tem_nome_cadastrado = cliente.get("nome") and not str(cliente["nome"]).startswith("Lead")
-        tem_email_cadastrado = bool(cliente.get("email") and cliente["email"].strip())
-        tem_tel_cadastrado = bool(cliente.get("telefone") and cliente["telefone"].strip())
-
-        if not tem_contexto and not (tem_nome_cadastrado and tem_email_cadastrado and tem_tel_cadastrado):
-            # Coloca em estado aguardando_contato e pede os dados de forma conversacional
-            cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (True, cliente_id))
-            conexao.commit()
-
-            msg_pedir_contato = (
-                "Não encontrei isso na nossa base pública, um atendente pode te ajudar melhor — "
-                "pode me passar seu nome, e-mail e telefone para contato?"
-            )
-            enviar_mensagem_telegram(chat_id, msg_pedir_contato)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_pedir_contato, lida=False)
-            registrar_pergunta_historico(
-                canal="telegram",
-                empresa_id=empresa_id,
-                pergunta=texto_recebido,
-                resposta=msg_pedir_contato,
-                telegram_chat_id=chat_id,
-                documentos_utilizados=[],
-                teve_contexto=False,
-                fonte_resposta="base_conhecimento"
-            )
-            return {"status": "ok", "acao": "solicitado_dados_contato"}
 
         # 5. Geração de resposta com LangChain Multi-Vendor + Observabilidade
         telemetria_id = 0
@@ -433,6 +494,18 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 empresa_id=empresa_id
             )
 
+        # Se não houver contexto na base pública e o lead não tiver dados de contato,
+        # orienta cordialmente sobre a possibilidade de deixar contato para um atendente
+        tem_nome_cadastrado = cliente.get("nome") and not str(cliente["nome"]).startswith("Lead") and not str(cliente["nome"]).startswith("Usuário #")
+        tem_email_cadastrado = bool(cliente.get("email") and cliente["email"].strip())
+        tem_tel_cadastrado = bool(cliente.get("telefone") and cliente["telefone"].strip())
+
+        if not tem_contexto and not (tem_nome_cadastrado and tem_email_cadastrado and tem_tel_cadastrado):
+            if "contato" not in resposta_ia.lower() and "telefone" not in resposta_ia.lower():
+                resposta_ia += "\n\n💡 *Caso deseje que um atendente fale diretamente com você, pode me informar seu e-mail ou telefone!*"
+                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (True, cliente_id))
+                conexao.commit()
+
         # Dispara continuous evaluation em background (latência zero para o cliente)
         if telemetria_id:
             from app.services.ai_evaluation_service import avaliar_interacao_ia
@@ -442,7 +515,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 empresa_id=empresa_id,
                 pergunta=texto_recebido,
                 resposta=resposta_ia,
-                contexto_utilizado=contexto_publico
+                contexto_utilizado=contexto_publico if tem_contexto else None
             )
 
         # 6. Envia resposta ao Telegram

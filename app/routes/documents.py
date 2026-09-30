@@ -259,6 +259,72 @@ def obter_documento(documento_id: int):
         conexao.close()
 
 
+@router.get("/{documento_id}/download")
+def baixar_documento(
+    documento_id: int,
+    usuario_id: int | None = Query(None),
+    usuario_perfil: str | None = Query(None),
+    x_user_id: int | None = Header(None, alias="X-User-Id"),
+    x_user_profile: str | None = Header(None, alias="X-User-Profile")
+):
+    """
+    Download do documento com RBAC restrito:
+    Apenas administradores e perfis 'master' podem realizar o download do arquivo.
+    Usuários comuns (funcionários) e clientes recebem HTTP 403 Forbidden.
+    """
+    perfil = usuario_perfil or x_user_profile
+    uid = usuario_id or x_user_id
+
+    if perfil:
+        if perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem baixar documentos da base de conhecimento."
+            )
+    elif uid:
+        validar_perfil_admin_ou_master(uid)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autenticação de administrador necessária para realizar o download."
+        )
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            SELECT id, nome_arquivo, tipo_arquivo, caminho_arquivo, conteudo_texto
+            FROM documentos
+            WHERE id = {ph}
+        """, (documento_id,))
+        doc = cursor.fetchone()
+        if not doc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado.")
+
+        caminho = Path(doc["caminho_arquivo"]) if doc.get("caminho_arquivo") else None
+        if caminho and caminho.exists():
+            from fastapi.responses import FileResponse
+            return FileResponse(
+                path=caminho,
+                filename=doc["nome_arquivo"],
+                media_type="application/octet-stream"
+            )
+
+        # Se o arquivo binário não existir mais em disco, retorna o texto extraído
+        from fastapi.responses import Response
+        conteudo = (doc.get("conteudo_texto") or "").encode("utf-8")
+        nome_download = doc["nome_arquivo"] if doc["nome_arquivo"].endswith(".txt") else f"{doc['nome_arquivo']}.txt"
+        return Response(
+            content=conteudo,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{nome_download}"'}
+        )
+    finally:
+        conexao.close()
+
+
 @router.delete("/{documento_id}")
 def deletar_documento(
     documento_id: int,

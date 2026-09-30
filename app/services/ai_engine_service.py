@@ -119,7 +119,7 @@ class MultiVendorAIEngine:
         if gemini_key:
             try:
                 model_gemini = ChatGoogleGenerativeAI(
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.5-flash-lite",
                     google_api_key=gemini_key,
                     temperature=temperature,
                     callbacks=callbacks
@@ -209,7 +209,26 @@ class MultiVendorAIEngine:
 
         try:
             resposta = llm.invoke(mensagens)
-            texto_final = resposta.content.strip() if hasattr(resposta, "content") else str(resposta).strip()
+            if hasattr(resposta, "content"):
+                if isinstance(resposta.content, str):
+                    texto_final = resposta.content.strip()
+                elif isinstance(resposta.content, list):
+                    partes = []
+                    for p in resposta.content:
+                        if isinstance(p, str):
+                            partes.append(p)
+                        elif isinstance(p, dict) and "text" in p:
+                            partes.append(p["text"])
+                        elif hasattr(p, "text"):
+                            partes.append(p.text)
+                        else:
+                            partes.append(str(p))
+                    texto_final = "\n".join(partes).strip()
+                else:
+                    texto_final = str(resposta.content).strip()
+            else:
+                texto_final = str(resposta).strip()
+
             telemetria_id = callback_obs.telemetria_id or 0
             return texto_final, telemetria_id
         except Exception as e:

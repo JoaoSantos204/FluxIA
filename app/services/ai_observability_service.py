@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 # Tabela de preços aproximada por 1 milhão de tokens (USD)
 TABELA_CUSTOS_USD = {
     "google": {
+        "gemini-3.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
         "gemini-2.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
         "gemini-2.5-flash": {"prompt": 0.15, "completion": 0.60},
-        "default": {"prompt": 0.15, "completion": 0.60}
+        "default": {"prompt": 0.075, "completion": 0.30}
     },
     "openai": {
         "gpt-4o-mini": {"prompt": 0.15, "completion": 0.60},
@@ -40,7 +41,7 @@ def registrar_telemetria(
     canal: str = "telegram",
     session_id: Optional[str] = None,
     vendor: str = "google",
-    modelo: str = "gemini-2.5-flash-lite",
+    modelo: str = "gemini-3.5-flash-lite",
     tokens_prompt: int = 0,
     tokens_completion: int = 0,
     latencia_ms: int = 0,
@@ -120,7 +121,7 @@ class AIObservabilityCallbackHandler(BaseCallbackHandler):
         self.start_time: float = 0.0
         self.end_time: float = 0.0
         self.vendor: str = "google"
-        self.modelo: str = "gemini-2.5-flash-lite"
+        self.modelo: str = "gemini-3.5-flash-lite"
         self.tokens_prompt: int = 0
         self.tokens_completion: int = 0
         self.tools_chamadas: List[Dict[str, Any]] = []

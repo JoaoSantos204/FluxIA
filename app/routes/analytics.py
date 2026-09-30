@@ -220,9 +220,14 @@ def listar_historico_perguntas(
             SELECT p.id, p.canal, p.empresa_id, p.usuario_id, p.telegram_chat_id,
                    p.pergunta, p.resposta, p.documentos_utilizados, p.teve_contexto,
                    p.fonte_resposta, p.criado_em,
-                   u.nome AS usuario_nome, u.email AS usuario_email
+                   u.nome AS usuario_nome, u.email AS usuario_email,
+                   cli.nome AS cliente_nome, cli.email AS cliente_email
             FROM perguntas_historico p
             LEFT JOIN usuarios u ON u.id = p.usuario_id
+            LEFT JOIN clientes cli ON (
+                cli.telegram_chat_id = p.telegram_chat_id
+                OR (p.telegram_chat_id IS NOT NULL AND cli.telegram_chat_id = CAST(p.telegram_chat_id AS TEXT))
+            )
             {where}
             ORDER BY p.id DESC
             LIMIT {ph} OFFSET {ph}
@@ -252,12 +257,13 @@ def listar_historico_perguntas(
 @router.get("/ia-telemetria")
 def obter_telemetria_ia(
     empresa_id: int = Query(1),
+    canal: Optional[str] = Query(None),
     usuario_id: Optional[int] = Query(None),
     usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
     """
-    Retorna métricas consolidadas de Observabilidade de IA:
+    Retorna métricas consolidadas de Observabilidade de IA (Telegram e Portal):
     Consumo de tokens, custo acumulado em USD/BRL, latência média e distribuição por provedor/modelo.
     """
     _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
@@ -266,7 +272,16 @@ def obter_telemetria_ia(
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        # Totais gerais
+        filtros = [f"empresa_id = {ph}"]
+        params = [empresa_id]
+
+        if canal:
+            filtros.append(f"canal = {ph}")
+            params.append(canal.strip().lower())
+
+        where = "WHERE " + " AND ".join(filtros)
+
+        # Totais gerais filtrados
         cursor.execute(f"""
             SELECT 
                 COUNT(*) AS total_interacoes,
@@ -276,11 +291,11 @@ def obter_telemetria_ia(
                 COALESCE(SUM(custo_estimado_usd), 0.0) AS custo_total_usd,
                 COALESCE(AVG(latencia_ms), 0) AS latencia_media_ms
             FROM ia_telemetria_execucao
-            WHERE empresa_id = {ph}
-        """, (empresa_id,))
+            {where}
+        """, tuple(params))
         totais = cursor.fetchone()
 
-        # Distribuição por Vendor/Modelo
+        # Distribuição por Provedor/Modelo
         cursor.execute(f"""
             SELECT 
                 vendor,
@@ -290,13 +305,26 @@ def obter_telemetria_ia(
                 COALESCE(SUM(custo_estimado_usd), 0.0) AS custo_usd,
                 COALESCE(AVG(latencia_ms), 0) AS latencia_media_ms
             FROM ia_telemetria_execucao
-            WHERE empresa_id = {ph}
+            {where}
             GROUP BY vendor, modelo
             ORDER BY total_chamadas DESC
-        """, (empresa_id,))
+        """, tuple(params))
         distribuicao = [dict(r) for r in cursor.fetchall()]
 
-        # Últimas 10 execuções detalhadas
+        # Distribuição por Canal (Telegram vs Portal)
+        cursor.execute(f"""
+            SELECT 
+                canal,
+                COUNT(*) AS total_chamadas,
+                COALESCE(SUM(tokens_total), 0) AS tokens_total,
+                COALESCE(SUM(custo_estimado_usd), 0.0) AS custo_usd
+            FROM ia_telemetria_execucao
+            WHERE empresa_id = {ph}
+            GROUP BY canal
+        """, (empresa_id,))
+        dist_canais = [dict(r) for r in cursor.fetchall()]
+
+        # Últimas 15 execuções detalhadas
         cursor.execute(f"""
             SELECT 
                 id, canal, session_id, vendor, modelo,
@@ -304,10 +332,10 @@ def obter_telemetria_ia(
                 custo_estimado_usd, latencia_ms, status_execucao,
                 tools_executadas, criado_em
             FROM ia_telemetria_execucao
-            WHERE empresa_id = {ph}
+            {where}
             ORDER BY id DESC
-            LIMIT 10
-        """, (empresa_id,))
+            LIMIT 15
+        """, tuple(params))
         ultimas = [dict(r) for r in cursor.fetchall()]
 
         custo_usd = float(totais["custo_total_usd"] if totais else 0.0)
@@ -320,6 +348,7 @@ def obter_telemetria_ia(
             "custo_total_brl": round(custo_usd * 5.60, 4), # Cotação referencial
             "latencia_media_ms": round(float(totais["latencia_media_ms"] if totais else 0), 1),
             "distribuicao_vendors": distribuicao,
+            "distribuicao_canais": dist_canais,
             "ultimas_interacoes": ultimas
         }
     finally:
@@ -329,6 +358,7 @@ def obter_telemetria_ia(
 @router.get("/ia-evaluations")
 def obter_evaluations_ia(
     empresa_id: int = Query(1),
+    canal: Optional[str] = Query(None),
     usuario_id: Optional[int] = Query(None),
     usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
@@ -336,6 +366,7 @@ def obter_evaluations_ia(
     """
     Retorna métricas consolidadas de Continuous Evaluation (RAG Triad & LLM-as-a-Judge):
     Fidelidade (Groundedness), Relevância da Resposta, Relevância do Contexto e Alucinações Detectadas.
+    Suporta filtros por canal (Telegram vs Portal).
     """
     _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
 
@@ -343,16 +374,26 @@ def obter_evaluations_ia(
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        filtros = [f"e.empresa_id = {ph}"]
+        params = [empresa_id]
+
+        if canal:
+            filtros.append(f"t.canal = {ph}")
+            params.append(canal.strip().lower())
+
+        where = "WHERE " + " AND ".join(filtros)
+
         cursor.execute(f"""
             SELECT 
                 COUNT(*) AS total_avaliacoes,
-                COALESCE(AVG(score_fidelidade), 1.0) AS media_fidelidade,
-                COALESCE(AVG(score_relevancia_resposta), 1.0) AS media_relevancia_resposta,
-                COALESCE(AVG(score_relevancia_contexto), 1.0) AS media_relevancia_contexto,
-                COUNT(CASE WHEN possivel_alucinacao = TRUE OR possivel_alucinacao = 1 THEN 1 END) AS total_alucinacoes
-            FROM ia_evaluations
-            WHERE empresa_id = {ph}
-        """, (empresa_id,))
+                COALESCE(AVG(e.score_fidelidade), 1.0) AS media_fidelidade,
+                COALESCE(AVG(e.score_relevancia_resposta), 1.0) AS media_relevancia_resposta,
+                COALESCE(AVG(e.score_relevancia_contexto), 1.0) AS media_relevancia_contexto,
+                COUNT(CASE WHEN e.possivel_alucinacao IS TRUE THEN 1 END) AS total_alucinacoes
+            FROM ia_evaluations e
+            LEFT JOIN ia_telemetria_execucao t ON t.id = e.telemetria_id
+            {where}
+        """, tuple(params))
         totais = cursor.fetchone()
 
         total_avaliacoes = int(totais["total_avaliacoes"] if totais else 0)
@@ -365,13 +406,13 @@ def obter_evaluations_ia(
                 e.score_fidelidade, e.score_relevancia_resposta, e.score_relevancia_contexto,
                 e.possivel_alucinacao, e.justificativa_avaliacao, e.avaliador_modelo,
                 e.criado_em,
-                t.vendor, t.modelo, t.latencia_ms
+                t.canal, t.session_id, t.vendor, t.modelo, t.latencia_ms
             FROM ia_evaluations e
             LEFT JOIN ia_telemetria_execucao t ON t.id = e.telemetria_id
-            WHERE e.empresa_id = {ph}
+            {where}
             ORDER BY e.id DESC
-            LIMIT 15
-        """, (empresa_id,))
+            LIMIT 20
+        """, tuple(params))
         ultimas = [dict(r) for r in cursor.fetchall()]
 
         return {

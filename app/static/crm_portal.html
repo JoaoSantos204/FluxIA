@@ -597,6 +597,19 @@
         </button>
       </div>
 
+      <!-- FILTROS POR CANAL / AGENTE (PARTE 18 EXPANDIDA) -->
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px; background:var(--surface); border:1px solid var(--border); padding:10px 16px; border-radius:10px;">
+        <span style="font-size:12px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtrar por Agente / Canal:
+        </span>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary btn-filtro-obs active" id="btn-filtro-obs-todos" onclick="filtrarCanalObservabilidade(null, this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">Todos os Agentes</button>
+          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-telegram" onclick="filtrarCanalObservabilidade('telegram', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">🤖 Assistente Telegram</button>
+          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-portal" onclick="filtrarCanalObservabilidade('portal', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">✦ Copiloto Interno (Portal)</button>
+        </div>
+      </div>
+
       <!-- KPI CARDS TELEMETRIA -->
       <div class="metrics-grid">
         <div class="metric-card">
@@ -1624,8 +1637,10 @@ async function carregarAnalytics() {
             ${itens.map(item => {
               const autor = (item.canal || 'portal') === 'portal'
                 ? (item.usuario_nome ? `${item.usuario_nome} (${item.usuario_email || ''})` : 'Usuário do Portal')
-                : (item.telegram_chat_id ? `Lead Telegram #${item.telegram_chat_id}` : 'Lead Telegram');
-              const dataHora = item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '';
+                : (item.cliente_nome && !item.cliente_nome.startsWith('Lead ') && !item.cliente_nome.startsWith('Usuário #')
+                    ? item.cliente_nome
+                    : (item.telegram_chat_id ? `Lead Telegram #${item.telegram_chat_id}` : 'Lead Telegram'));
+              const dataHora = item.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(item.criado_em) : new Date(item.criado_em).toLocaleString('pt-BR')) : '';
               return `
                 <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:12px;">
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1839,14 +1854,32 @@ async function salvarChaveGeminiEmpresa() {
 }
 
 // ===== OBSERVABILIDADE & CONTINUOUS EVALUATION (ENGENHARIA DE IA) =====
+let filtroCanalObservabilidadeAtivo = null;
+
+function filtrarCanalObservabilidade(canal, btn) {
+  filtroCanalObservabilidadeAtivo = canal;
+  document.querySelectorAll('.btn-filtro-obs').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = 'transparent';
+    b.style.color = 'var(--text)';
+  });
+  if (btn) {
+    btn.classList.add('active');
+    btn.style.background = '#534AB7';
+    btn.style.color = 'white';
+  }
+  carregarObservabilidadeEEvaluation();
+}
+
 async function carregarObservabilidadeEEvaluation() {
   const empresaId = obterEmpresaAtivaId();
   const uid = usuarioAtual ? usuarioAtual.id : null;
   const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+  const paramCanal = filtroCanalObservabilidadeAtivo ? `&canal=${filtroCanalObservabilidadeAtivo}` : '';
 
   // 1. Carrega Telemetria de IA
   try {
-    const res = await fetch(`/analytics/ia-telemetria?empresa_id=${empresaId}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
+    const res = await fetch(`/analytics/ia-telemetria?empresa_id=${empresaId}${paramCanal}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
       headers: { 'X-User-Id': String(uid || '') }
     });
     if (res.ok) {
@@ -1863,13 +1896,27 @@ async function carregarObservabilidadeEEvaluation() {
       if (elTok) elTok.textContent = data.total_tokens.toLocaleString('pt-BR');
       if (elTokDet) elTokDet.textContent = `Prompt: ${data.total_tokens_prompt.toLocaleString('pt-BR')} | Comp: ${data.total_tokens_completion.toLocaleString('pt-BR')}`;
 
-      // Renderiza provedores/modelos
+      // Renderiza provedores/modelos e canais
       const vContainer = document.getElementById('obs-vendors-container');
       if (vContainer) {
         if (!data.distribuicao_vendors || data.distribuicao_vendors.length === 0) {
-          vContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma chamada registrada ainda. Interaja pelo Telegram ou Chat RAG.</div>';
+          vContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma chamada registrada ainda para este filtro. Interaja pelo Telegram ou Chat RAG.</div>';
         } else {
-          vContainer.innerHTML = data.distribuicao_vendors.map(v => `
+          let canaisHtml = '';
+          if (data.distribuicao_canais && data.distribuicao_canais.length > 0) {
+            canaisHtml = `
+              <div style="display:flex; gap:8px; margin-bottom:12px;">
+                ${data.distribuicao_canais.map(c => `
+                  <div style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:11px;">
+                    <span style="font-weight:700; color:${c.canal === 'telegram' ? '#38bdf8' : '#818cf8'};">${c.canal === 'telegram' ? '🤖 TELEGRAM' : '✦ PORTAL'}</span>
+                    <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${c.total_chamadas} interações · $ ${c.custo_usd.toFixed(4)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          }
+
+          vContainer.innerHTML = canaisHtml + data.distribuicao_vendors.map(v => `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; margin-bottom:8px;">
               <div>
                 <strong style="color:var(--text); font-size:13px;">${v.vendor.toUpperCase()} · ${v.modelo}</strong>
@@ -1890,7 +1937,7 @@ async function carregarObservabilidadeEEvaluation() {
 
   // 2. Carrega Continuous Evaluation
   try {
-    const res = await fetch(`/analytics/ia-evaluations?empresa_id=${empresaId}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
+    const res = await fetch(`/analytics/ia-evaluations?empresa_id=${empresaId}${paramCanal}&usuario_id=${uid || ''}&usuario_perfil=${perfil}`, {
       headers: { 'X-User-Id': String(uid || '') }
     });
     if (res.ok) {
@@ -1925,7 +1972,7 @@ async function carregarObservabilidadeEEvaluation() {
       const tContainer = document.getElementById('obs-tabela-avaliacoes');
       if (tContainer) {
         if (!data.ultimas_avaliacoes || data.ultimas_avaliacoes.length === 0) {
-          tContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma avaliação registrada ainda. As avaliações RAG Triad são executadas automaticamente via LLM-as-a-Judge em cada interação.</div>';
+          tContainer.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Nenhuma avaliação registrada ainda. As avaliações RAG Triad são executadas automaticamente via LLM-as-a-Judge em cada interação no Telegram e no Portal.</div>';
         } else {
           tContainer.innerHTML = `
             <div style="overflow-x:auto;">
@@ -1933,6 +1980,7 @@ async function carregarObservabilidadeEEvaluation() {
                 <thead>
                   <tr style="border-bottom:1px solid var(--border); color:var(--text-muted);">
                     <th style="padding:10px;">Data/Hora</th>
+                    <th style="padding:10px;">Canal</th>
                     <th style="padding:10px;">Pergunta</th>
                     <th style="padding:10px;">Fidelidade</th>
                     <th style="padding:10px;">Relevância</th>
@@ -1943,13 +1991,17 @@ async function carregarObservabilidadeEEvaluation() {
                 </thead>
                 <tbody>
                   ${data.ultimas_avaliacoes.map(ev => {
-                    const dataFmt = ev.criado_em ? new Date(ev.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}) : '';
+                    const dataFmt = ev.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(ev.criado_em) : new Date(ev.criado_em).toLocaleTimeString('pt-BR')) : '';
                     const badgeAluc = ev.possivel_alucinacao 
                       ? '<span class="contract-status-badge cs-cancelled" style="font-size:10px;">⚠️ Alucinação</span>'
                       : '<span class="contract-status-badge cs-signed" style="font-size:10px;">✓ Fiel ao Contexto</span>';
+                    const badgeCanal = (ev.canal === 'telegram')
+                      ? '<span class="contract-status-badge" style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">🤖 Telegram</span>'
+                      : '<span class="contract-status-badge" style="font-size:10px; background:rgba(129,140,248,0.15); color:#818cf8; border:1px solid rgba(129,140,248,0.3);">✦ Portal</span>';
                     return `
                       <tr style="border-bottom:1px solid var(--border);">
                         <td style="padding:10px; white-space:nowrap; color:var(--text-muted);">${dataFmt}</td>
+                        <td style="padding:10px; white-space:nowrap;">${badgeCanal}</td>
                         <td style="padding:10px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${ev.pergunta}"><strong>${ev.pergunta}</strong></td>
                         <td style="padding:10px; font-weight:600; color:#10b981;">${(ev.score_fidelidade || 1.0).toFixed(2)}</td>
                         <td style="padding:10px; font-weight:600; color:#38bdf8;">${(ev.score_relevancia_resposta || 1.0).toFixed(2)}</td>
@@ -2038,13 +2090,13 @@ function renderizarDocumentos(docs) {
     const isPublic = nivel === 'publico';
 
     return `
-      <div class="kb-row">
+      <div class="kb-row" style="cursor:pointer;" onclick="abrirModalVisualizarDoc(${d.id})">
         <div class="kb-icon">📄</div>
         <div class="kb-info">
           <div class="kb-name">${d.nome_arquivo}</div>
-          <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt}</div>
+          <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt} · <span style="color:#38bdf8; text-decoration:underline;">👁️ Ver conteúdo</span></div>
         </div>
-        <div class="kb-status">
+        <div class="kb-status" onclick="event.stopPropagation()">
           ${ehAdmin ? `
             <select class="kanban-select" style="padding:4px 8px; font-size:11px; border-radius:6px; cursor:pointer;" onchange="alterarNivelAcessoDocumento(${d.id}, this.value)">
               <option value="publico" ${isPublic ? 'selected' : ''}>🌐 Público</option>
@@ -2056,8 +2108,14 @@ function renderizarDocumentos(docs) {
             </span>
           `}
         </div>
-        <div class="kb-actions">
+        <div class="kb-actions" style="display:flex; align-items:center; gap:6px;" onclick="event.stopPropagation()">
+          <div class="btn-icon" title="Visualizar Documento" onclick="abrirModalVisualizarDoc(${d.id})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
           ${ehAdmin ? `
+            <div class="btn-icon" title="Baixar Documento (Admin)" onclick="baixarDocumentoDireto(${d.id}, '${d.nome_arquivo}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
             <div class="btn-icon" title="Excluir" onclick="excluirDocumento(${d.id}, '${d.nome_arquivo}')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
             </div>
@@ -2066,6 +2124,99 @@ function renderizarDocumentos(docs) {
       </div>
     `;
   }).join('');
+}
+
+// ===== MODAL VISUALIZAÇÃO DE DOCUMENTO (COM RBAC DE DOWNLOAD) =====
+let documentoModalAtual = null;
+
+async function abrirModalVisualizarDoc(id) {
+  const modal = document.getElementById('modal-visualizar-doc');
+  if (!modal) return;
+
+  const tituloEl = document.getElementById('doc-modal-titulo');
+  const tipoEl = document.getElementById('doc-modal-tipo');
+  const nivelBadgeEl = document.getElementById('doc-modal-nivel-badge');
+  const dataEl = document.getElementById('doc-modal-data');
+  const tamanhoEl = document.getElementById('doc-modal-tamanho');
+  const conteudoEl = document.getElementById('doc-modal-conteudo');
+  const avisoRbacEl = document.getElementById('doc-modal-aviso-rbac');
+  const downloadContainer = document.getElementById('doc-modal-download-container');
+
+  tituloEl.textContent = 'Carregando documento...';
+  conteudoEl.textContent = 'Carregando conteúdo do documento indexado...';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await fetch(`/documents/${id}`);
+    if (!res.ok) throw new Error('Não foi possível carregar os detalhes do documento.');
+    const doc = await res.json();
+    documentoModalAtual = doc;
+
+    tituloEl.textContent = doc.nome_arquivo;
+    tipoEl.textContent = (doc.tipo_arquivo || 'DOC').replace('.', '').toUpperCase();
+
+    const isPublic = (doc.nivel_acesso || 'publico').toLowerCase() === 'publico';
+    nivelBadgeEl.className = `contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}`;
+    nivelBadgeEl.textContent = isPublic ? '🌐 Público' : '🔒 Interno';
+
+    dataEl.textContent = doc.data_upload ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(doc.data_upload) : doc.data_upload.substring(0, 10)) : '-';
+
+    const texto = doc.conteudo_texto || 'Documento sem texto extraído.';
+    tamanhoEl.textContent = `${texto.length.toLocaleString('pt-BR')} caracteres`;
+    conteudoEl.textContent = texto;
+
+    // Checagem de RBAC para download: Apenas administradores e masters podem baixar
+    const ehAdmin = usuarioAtual && ['admin', 'master'].includes(usuarioAtual.perfil);
+
+    if (ehAdmin) {
+      avisoRbacEl.innerHTML = '<span style="color:#10b981; font-weight:600;">✓ Permissão de Administrador ativa (Download liberado)</span>';
+      downloadContainer.innerHTML = `
+        <button class="btn-green" onclick="baixarDocumentoDireto(${doc.id}, '${doc.nome_arquivo}')" style="display:flex; align-items:center; gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Baixar Arquivo
+        </button>
+      `;
+    } else {
+      avisoRbacEl.innerHTML = '<span style="color:#f59e0b; font-weight:600;">🔒 Download restrito a administradores. Acesso somente leitura autorizado.</span>';
+      downloadContainer.innerHTML = `
+        <button class="btn-secondary" disabled style="opacity:0.5; cursor:not-allowed; display:flex; align-items:center; gap:6px;" title="Apenas administradores podem baixar arquivos da base de conhecimento">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Download Restrito
+        </button>
+      `;
+    }
+  } catch (err) {
+    conteudoEl.textContent = 'Erro ao carregar detalhes: ' + err.message;
+  }
+}
+
+function fecharModalVisualizarDoc() {
+  const modal = document.getElementById('modal-visualizar-doc');
+  if (modal) modal.style.display = 'none';
+  documentoModalAtual = null;
+}
+
+function copiarTextoDocModal() {
+  if (!documentoModalAtual || !documentoModalAtual.conteudo_texto) return;
+  navigator.clipboard.writeText(documentoModalAtual.conteudo_texto).then(() => {
+    alert('Texto do documento copiado para a área de transferência!');
+  });
+}
+
+function baixarDocumentoDireto(id, nomeArquivo) {
+  if (!usuarioAtual) return;
+  const ehAdmin = ['admin', 'master'].includes(usuarioAtual.perfil);
+  if (!ehAdmin) {
+    alert('Apenas administradores possuem permissão para realizar o download deste documento.');
+    return;
+  }
+  const url = `/documents/${id}/download?usuario_id=${usuarioAtual.id}&usuario_perfil=${usuarioAtual.perfil}`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeArquivo || 'documento';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // PARTE 16: Alterar nível de acesso de documento existente
@@ -2154,9 +2305,10 @@ async function excluirDocumento(id, nome) {
   }
 }
 
-// ===== CHAT INTERNO RAG (PARTE 11 e PARTE 17) =====
+// ===== CHAT INTERNO RAG (ENGENHARIA DE IA & SESSÕES POR USUÁRIO) =====
 let historicoRecenteChatRAG = [];
 let conversaAtivaHistoricaId = null;
+let sessaoAtivaChatRAGId = null;
 
 function formatarMarkdownParaHtml(texto) {
   if (!texto) return '';
@@ -2176,27 +2328,39 @@ async function carregarHistoricoRecenteChatRAG() {
   const empresaId = obterEmpresaAtivaId();
 
   try {
-    const res = await fetch(`/chat/historico-recente?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}&limite=3`);
+    const res = await fetch(`/chat/historico-recente?empresa_id=${empresaId}&usuario_id=${usuarioAtual.id}&limite=30`);
     if (!res.ok) return;
     const data = await res.json();
-    historicoRecenteChatRAG = data.conversas || [];
+    historicoRecenteChatRAG = data.conversas || data.historico || [];
 
     let html = `
-      <div class="rag-hist-item ${!conversaAtivaHistoricaId ? 'active' : ''}" onclick="limparChatRAG()" style="cursor:pointer;">
-        ✦ Nova Consulta
+      <div class="rag-hist-item ${!conversaAtivaHistoricaId ? 'active' : ''}" onclick="limparChatRAG()" style="cursor:pointer; font-weight:700; display:flex; align-items:center; gap:6px;">
+        <span style="color:#10b981;">✦</span> Nova Consulta
       </div>
     `;
 
-    html += historicoRecenteChatRAG.map(c => {
-      const isActive = conversaAtivaHistoricaId === c.id;
-      const dataHora = c.criado_em ? new Date(c.criado_em).toLocaleDateString('pt-BR') : '';
-      return `
-        <div class="rag-hist-item ${isActive ? 'active' : ''}" onclick="visualizarConversaHistoricaChat(${c.id})" style="cursor:pointer;" title="${c.pergunta}">
-          <div style="font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">❓ ${c.pergunta}</div>
-          <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${dataHora} · ${c.teve_contexto ? 'Base' : 'Geral'}</div>
-        </div>
-      `;
-    }).join('');
+    if (historicoRecenteChatRAG.length === 0) {
+      html += `<div style="padding:20px 10px; text-align:center; color:var(--text-muted); font-size:11px;">Nenhuma conversa anterior salva neste ambiente.</div>`;
+    } else {
+      html += `<div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); font-weight:700; padding:10px 12px 4px; letter-spacing:0.5px;">Consultas Recentes (${historicoRecenteChatRAG.length})</div>`;
+      html += historicoRecenteChatRAG.map(c => {
+        const isActive = conversaAtivaHistoricaId === c.id;
+        const dataHora = c.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(c.criado_em) : new Date(c.criado_em).toLocaleDateString('pt-BR')) : '';
+        const badgeCor = c.teve_contexto ? '#10b981' : '#38bdf8';
+        const badgeTexto = c.teve_contexto ? 'Base' : 'Geral';
+        return `
+          <div class="rag-hist-item ${isActive ? 'active' : ''}" onclick="visualizarConversaHistoricaChat(${c.id})" style="cursor:pointer; padding:10px 12px; margin-bottom:4px; border-radius:8px;" title="${c.pergunta}">
+            <div style="font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">
+              ❓ ${c.pergunta}
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
+              <span>🕒 ${dataHora}</span>
+              <span style="color:${badgeCor}; font-weight:600;">${badgeTexto}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     container.innerHTML = html;
   } catch (err) {
@@ -2204,31 +2368,46 @@ async function carregarHistoricoRecenteChatRAG() {
   }
 }
 
-function visualizarConversaHistoricaChat(id) {
-  const c = historicoRecenteChatRAG.find(item => item.id === id);
-  if (!c) return;
+async function visualizarConversaHistoricaChat(id) {
+  let c = historicoRecenteChatRAG.find(item => item.id === id);
   conversaAtivaHistoricaId = id;
   carregarHistoricoRecenteChatRAG();
 
   const container = document.getElementById('rag-chat-messages');
   if (!container) return;
 
-  const badgeFonte = c.teve_contexto 
+  if (!c) {
+    try {
+      const res = await fetch(`/chat/conversa/${id}`);
+      if (res.ok) c = await res.json();
+    } catch (_) {}
+  }
+  if (!c) return;
+
+  const isBase = (c.fonte === 'base_conhecimento' || c.teve_contexto);
+  const badgeFonte = isBase 
     ? '<span class="contract-status-badge cs-signed" style="font-size:10px; margin-bottom:6px; display:inline-block;">✓ Base de Conhecimento Interna</span>'
     : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
 
-  const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-2.5-flash'}</span>`;
+  const docsTexto = (c.documentos_consultados && c.documentos_consultados.length > 0)
+    ? `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${c.documentos_consultados.join(', ')}</strong></div>`
+    : '';
+
+  const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
+
+  const dataFmt = c.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(c.criado_em) : new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})) : 'Anterior';
 
   container.innerHTML = `
     <div class="msg-bubble msg-user">
       <div class="msg-text">${c.pergunta.replace(/\n/g, '<br>')}</div>
-      <div class="msg-time">${c.criado_em ? new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Anterior'}</div>
+      <div class="msg-time">${dataFmt}</div>
     </div>
     <div class="msg-bubble msg-bot">
       ${badgeFonte}
       <div class="msg-text">${formatarMarkdownParaHtml(c.resposta)}</div>
+      ${docsTexto}
       <div style="margin-top:6px;">${modeloTag}</div>
-      <div class="msg-time">${c.criado_em ? new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Anterior'}</div>
+      <div class="msg-time">${dataFmt}</div>
     </div>
   `;
   container.scrollTop = container.scrollHeight;
@@ -2239,8 +2418,17 @@ async function enviarPerguntaRAG() {
   const pergunta = input.value.trim();
   if (!pergunta) return;
 
+  if (!sessaoAtivaChatRAGId) {
+    sessaoAtivaChatRAGId = `session_user_${usuarioAtual ? usuarioAtual.id : 'anon'}_${Date.now()}`;
+  }
+
   input.value = '';
   const container = document.getElementById('rag-chat-messages');
+
+  // Se estava vendo conversa estática antiga, limpa para continuar nesta nova
+  if (conversaAtivaHistoricaId) {
+    conversaAtivaHistoricaId = null;
+  }
 
   // Bolha do Usuário
   container.innerHTML += `
@@ -2255,7 +2443,7 @@ async function enviarPerguntaRAG() {
   const loadingId = 'loading-' + Date.now();
   container.innerHTML += `
     <div class="msg-bubble msg-bot" id="${loadingId}">
-      <div class="msg-text" style="color:var(--text-muted); font-style:italic;">Consultando base de conhecimento e gerando resposta com IA...</div>
+      <div class="msg-text" style="color:var(--text-muted); font-style:italic;">Consultando base de conhecimento e orquestrando resposta com IA...</div>
     </div>
   `;
   container.scrollTop = container.scrollHeight;
@@ -2267,10 +2455,26 @@ async function enviarPerguntaRAG() {
       body: JSON.stringify({
         mensagem: pergunta,
         empresa_id: obterEmpresaAtivaId(),
-        usuario_id: usuarioAtual ? usuarioAtual.id : null
+        usuario_id: usuarioAtual ? usuarioAtual.id : null,
+        session_id: sessaoAtivaChatRAGId
       })
     });
+
+    if (!res.ok) {
+      let msgErro = `Falha no processamento (${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.detail) msgErro = errJson.detail;
+      } catch (_) {
+        const errTxt = await res.text();
+        if (errTxt) msgErro = errTxt.substring(0, 120);
+      }
+      throw new Error(msgErro);
+    }
+
     const data = await res.json();
+    if (data.session_id) sessaoAtivaChatRAGId = data.session_id;
+
     const loadEl = document.getElementById(loadingId);
 
     const isBase = (data.fonte === 'base_conhecimento');
@@ -2282,7 +2486,7 @@ async function enviarPerguntaRAG() {
       ? `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
       : '';
 
-    const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-2.5-flash'}</span>`;
+    const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
 
     if (loadEl) {
       loadEl.innerHTML = `
@@ -2294,7 +2498,7 @@ async function enviarPerguntaRAG() {
       `;
     }
 
-    // Atualiza sidebar de histórico recente
+    // Atualiza sidebar com a nova consulta
     carregarHistoricoRecenteChatRAG();
   } catch (err) {
     const loadEl = document.getElementById(loadingId);
@@ -2305,16 +2509,19 @@ async function enviarPerguntaRAG() {
 
 function limparChatRAG() {
   conversaAtivaHistoricaId = null;
+  sessaoAtivaChatRAGId = `session_user_${usuarioAtual ? usuarioAtual.id : 'anon'}_${Date.now()}`;
   carregarHistoricoRecenteChatRAG();
   const container = document.getElementById('rag-chat-messages');
   if (container) {
     container.innerHTML = `
       <div class="msg-bubble msg-bot">
-        <div class="msg-text">Nova sessão iniciada. Como posso ajudar com os documentos da empresa?</div>
+        <div class="msg-text">Olá! Eu sou o assistente interno da **FluxIA**. Posso tirar dúvidas consultando os documentos e procedimentos da sua empresa ou te auxiliar com respostas gerais corporativas. Como posso ajudar?</div>
         <div class="msg-time">Agora</div>
       </div>
     `;
   }
+  const input = document.getElementById('rag-input-text');
+  if (input) input.focus();
 }
 
 // ===== EQUIPE (BUG CRÍTICO E PARTE 12) =====
@@ -2594,6 +2801,60 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" style="background:transparent; color:var(--text); border-color:var(--border);" onclick="fecharModalMembroEquipe()">Cancelar</button>
       <button class="btn-green" onclick="salvarNovoColaborador()">Cadastrar Colaborador</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VISUALIZADOR DE DOCUMENTO COM RBAC DE DOWNLOAD -->
+<div class="modal-overlay" id="modal-visualizar-doc" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:800px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:22px;">📄</span>
+        <div>
+          <div class="modal-title" id="doc-modal-titulo" style="color:var(--text); font-weight:700; font-family:'Syne',sans-serif; font-size:15px;">Documento</div>
+          <div id="doc-modal-sub" style="font-size:11px; color:var(--text-muted); margin-top:2px;">Metadados e Conteúdo Indexado no RAG</div>
+        </div>
+      </div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer;" onclick="fecharModalVisualizarDoc()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px; overflow-y:auto; flex:1;">
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; background:var(--bg); padding:12px 16px; border-radius:8px; border:1px solid var(--border); align-items:center;">
+        <div style="font-size:11px; color:var(--text-muted);">
+          Formato: <strong id="doc-modal-tipo" style="color:var(--text); text-transform:uppercase;">PDF</strong>
+        </div>
+        <div style="color:var(--border);">|</div>
+        <div style="font-size:11px; color:var(--text-muted);">
+          Nível de Acesso: <span id="doc-modal-nivel-badge" class="contract-status-badge cs-signed" style="font-size:10px;">🌐 Público</span>
+        </div>
+        <div style="color:var(--border);">|</div>
+        <div style="font-size:11px; color:var(--text-muted);">
+          Data Upload: <strong id="doc-modal-data" style="color:var(--text);">-</strong>
+        </div>
+        <div style="color:var(--border);">|</div>
+        <div style="font-size:11px; color:var(--text-muted);">
+          Extensão Textual: <strong id="doc-modal-tamanho" style="color:var(--text);">0 caracteres</strong>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:12px; font-weight:700; color:var(--text);">Conteúdo Extraído para Busca Vetorial Semântica:</span>
+        <button class="btn-secondary" onclick="copiarTextoDocModal()" style="font-size:11px; padding:3px 10px;">📋 Copiar Texto</button>
+      </div>
+      <div id="doc-modal-conteudo" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; max-height:360px; overflow-y:auto; color:var(--text); font-family:monospace;">
+        Carregando conteúdo...
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
+      <div id="doc-modal-aviso-rbac" style="font-size:11px;">
+        <!-- Mensagem de permissão RBAC -->
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn-secondary" onclick="fecharModalVisualizarDoc()">Fechar</button>
+        <div id="doc-modal-download-container">
+          <!-- Botão ativo para admin / disabled para funcionario -->
+        </div>
+      </div>
     </div>
   </div>
 </div>

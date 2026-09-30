@@ -44,7 +44,7 @@ def salvar_avaliacao_no_banco(
     resposta: str,
     contexto_utilizado: Optional[str],
     eval_resultado: Dict[str, Any],
-    avaliador_modelo: str = "gemini-2.5-flash-lite"
+    avaliador_modelo: str = "gemini-3.5-flash-lite"
 ) -> int:
     """Persiste a avaliação na tabela ia_evaluations do banco de dados (Neon Postgres)."""
     conexao = conectar()
@@ -130,7 +130,7 @@ def avaliar_interacao_ia(
     """
 
     eval_json = None
-    avaliador_modelo = "gemini-2.5-flash-lite"
+    avaliador_modelo = "gemini-3.5-flash-lite"
 
     # Tenta via Gemini primeiro
     if gemini_key:
@@ -139,7 +139,7 @@ def avaliar_interacao_ia(
             from langchain_core.messages import SystemMessage, HumanMessage
 
             llm_judge = ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash-lite",
+                model="gemini-3.5-flash-lite",
                 google_api_key=gemini_key,
                 temperature=0.0
             )
@@ -147,7 +147,14 @@ def avaliar_interacao_ia(
                 SystemMessage(content=PROMPT_EVALUATOR_SYSTEM),
                 HumanMessage(content=prompt_analise)
             ])
-            conteudo = resp.content.strip()
+            raw_resp = resp.content
+            if isinstance(raw_resp, str):
+                conteudo = raw_resp
+            elif isinstance(raw_resp, list):
+                conteudo = "".join(part if isinstance(part, str) else str(part.get("text", part) if isinstance(part, dict) else part) for part in raw_resp)
+            else:
+                conteudo = str(raw_resp or "")
+            conteudo = conteudo.strip()
             # Remove blocos markdown se existirem
             if conteudo.startswith("```"):
                 linhas = conteudo.split("\n")
@@ -157,7 +164,7 @@ def avaliar_interacao_ia(
                     linhas = linhas[:-1]
                 conteudo = "\n".join(linhas).strip()
             eval_json = json.loads(conteudo)
-            avaliador_modelo = "gemini-2.5-flash-lite"
+            avaliador_modelo = "gemini-3.5-flash-lite"
         except Exception as e:
             logger.warning(f"[AIEvaluation] Falha no avaliador Gemini: {e}")
 
@@ -176,7 +183,14 @@ def avaliar_interacao_ia(
                 SystemMessage(content=PROMPT_EVALUATOR_SYSTEM),
                 HumanMessage(content=prompt_analise)
             ])
-            conteudo = resp.content.strip()
+            raw_resp = resp.content
+            if isinstance(raw_resp, str):
+                conteudo = raw_resp
+            elif isinstance(raw_resp, list):
+                conteudo = "".join(part if isinstance(part, str) else str(part.get("text", part) if isinstance(part, dict) else part) for part in raw_resp)
+            else:
+                conteudo = str(raw_resp or "")
+            conteudo = conteudo.strip()
             if conteudo.startswith("```"):
                 linhas = conteudo.split("\n")
                 if linhas[0].startswith("```"):
