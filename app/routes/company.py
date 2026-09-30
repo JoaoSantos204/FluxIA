@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
+import os
+import logging
+import requests
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header, Request
 from pydantic import BaseModel, Field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.services.company_service import (
     obter_configuracao_empresa, 
@@ -8,6 +13,7 @@ from app.services.company_service import (
     atualizar_gemini_api_key,
     atualizar_configuracao_ia,
     atualizar_fuso_horario,
+    atualizar_telegram_bot_empresa,
     listar_empresas,
     cadastrar_empresa,
     deletar_empresa
@@ -50,6 +56,14 @@ class MultiVendorIARequest(BaseModel):
 class FusoHorarioRequest(BaseModel):
     empresa_id: int = Field(default=1, description="ID da empresa")
     fuso_horario: str = Field(default="America/Sao_Paulo", description="Identificador IANA do fuso horário (ex: 'America/Sao_Paulo', 'auto')")
+    usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
+    usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
+
+
+class TelegramBotConfigRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    telegram_bot_token: Optional[str] = Field(default="", description="Token do bot gerado pelo @BotFather")
+    url_webhook_base: Optional[str] = Field(default=None, description="URL pública base opcional para o webhook")
     usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
     usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
 
@@ -188,6 +202,131 @@ def salvar_fuso_horario_empresa(
 
     return {
         "mensagem": f"Fuso horário global atualizado para {dados.fuso_horario} com sucesso!",
+        "configuracao": resultado
+    }
+
+
+@router.post("/telegram-bot")
+def salvar_telegram_bot_empresa(
+    dados: TelegramBotConfigRequest,
+    request: Request = None,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Configura o bot do Telegram dedicado para a empresa:
+    - Valida o token com a API do Telegram (getMe)
+    - Recupera o @username e nome do bot
+    - Registra automaticamente o webhook no Telegram para {base_url}/telegram/webhook/{empresa_id}
+    - Salva na tabela configuracoes_empresa
+    """
+    if dados.usuario_perfil:
+        if dados.usuario_perfil.strip().lower() not in ("admin", "master"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas administradores podem configurar o bot do Telegram da empresa."
+            )
+    else:
+        uid = dados.usuario_id or x_user_id
+        if not uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Identificação do usuário é obrigatória para configurar o bot do Telegram."
+            )
+        validar_perfil_admin_ou_master(uid)
+
+    token = (dados.telegram_bot_token or "").strip()
+    if not token:
+        # Remoção do bot dedicado (retorna para o bot compartilhado/padrão)
+        resultado = atualizar_telegram_bot_empresa(
+            empresa_id=dados.empresa_id,
+            telegram_bot_token=None,
+            telegram_bot_username=None,
+            telegram_webhook_ativo=False
+        )
+        return {
+            "sucesso": True,
+            "mensagem": "Bot dedicado removido. A empresa utilizará o bot padrão global se configurado.",
+            "configuracao": resultado
+        }
+
+    # Validação do Token junto à API oficial do Telegram
+    try:
+        resp = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+        res_json = resp.json()
+        if not res_json.get("ok"):
+            desc = res_json.get("description", "Token inválido")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Token do Telegram rejeitado pelo Telegram: {desc}"
+            )
+        bot_info = res_json.get("result", {})
+        bot_username = bot_info.get("username", "")
+        bot_first_name = bot_info.get("first_name", "")
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro de conexão com o Telegram: {e}"
+        )
+
+    # Determina a URL base pública para o webhook
+    base_url = (
+        dados.url_webhook_base or 
+        os.getenv("RENDER_EXTERNAL_URL") or 
+        (str(request.base_url).rstrip("/") if request else None) or
+        "http://localhost:8000"
+    ).rstrip("/")
+    if not base_url.startswith("http://") and not base_url.startswith("https://"):
+        base_url = f"https://{base_url}"
+
+    webhook_url = f"{base_url}/telegram/webhook/{dados.empresa_id}"
+    webhook_ativo = False
+    webhook_detalhes = None
+
+    # Tenta registrar o webhook oficial no Telegram para esta empresa
+    try:
+        set_resp = requests.post(
+            f"https://api.telegram.org/bot{token}/setWebhook",
+            json={"url": webhook_url},
+            timeout=10
+        )
+        set_json = set_resp.json()
+        if set_json.get("ok"):
+            webhook_ativo = True
+            webhook_detalhes = set_json.get("description", "Webhook registrado com sucesso")
+        else:
+            logger.warning(f"[TelegramBot] Aviso ao registrar webhook: {set_json}")
+            webhook_detalhes = set_json.get("description")
+    except Exception as e:
+        logger.warning(f"[TelegramBot] Erro ao registrar webhook para empresa {dados.empresa_id}: {e}")
+        webhook_detalhes = str(e)
+
+    # Registra comandos padrão do bot
+    try:
+        comandos = [
+            {"command": "start", "description": "Iniciar atendimento com a IA"},
+            {"command": "ajuda", "description": "Instruções de como utilizar o assistente"},
+            {"command": "suporte", "description": "Contato da equipe humana de suporte"}
+        ]
+        requests.post(f"https://api.telegram.org/bot{token}/setMyCommands", json={"commands": comandos}, timeout=5)
+    except Exception as e:
+        logger.warning(f"[TelegramBot] Falha ao registrar comandos padrão do bot: {e}")
+
+    # Atualiza banco de dados
+    resultado = atualizar_telegram_bot_empresa(
+        empresa_id=dados.empresa_id,
+        telegram_bot_token=token,
+        telegram_bot_username=bot_username,
+        telegram_webhook_ativo=webhook_ativo
+    )
+
+    return {
+        "sucesso": True,
+        "mensagem": f"Bot @{bot_username} ({bot_first_name}) conectado com sucesso para a empresa!",
+        "bot_username": bot_username,
+        "bot_first_name": bot_first_name,
+        "webhook_url": webhook_url,
+        "webhook_ativo": webhook_ativo,
+        "webhook_detalhes": webhook_detalhes,
         "configuracao": resultado
     }
 

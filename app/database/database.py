@@ -615,6 +615,21 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='fuso_horario') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN fuso_horario TEXT DEFAULT 'America/Sao_Paulo';
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='telegram_bot_token') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN telegram_bot_token TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='telegram_bot_username') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN telegram_bot_username TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='telegram_webhook_ativo') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN telegram_webhook_ativo BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='historico_conversas' AND column_name='empresa_id') THEN
+                ALTER TABLE historico_conversas ADD COLUMN empresa_id INTEGER DEFAULT 1;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='empresa_id') THEN
+                ALTER TABLE conversas_telegram ADD COLUMN empresa_id INTEGER DEFAULT 1;
+            END IF;
         END $$;
     """)
 

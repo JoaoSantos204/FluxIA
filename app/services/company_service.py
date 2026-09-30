@@ -10,7 +10,10 @@ CONFIGURACAO_PADRAO = {
     "gemini_api_key": None,
     "openai_api_key": None,
     "provedor_ia_padrao": "google",
-    "fuso_horario": "America/Sao_Paulo"
+    "fuso_horario": "America/Sao_Paulo",
+    "telegram_bot_token": None,
+    "telegram_bot_username": None,
+    "telegram_webhook_ativo": False
 }
 
 
@@ -26,7 +29,8 @@ def mascarar_api_key(chave: str | None) -> str:
 
 def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     """
-    Busca as configurações da empresa (como telefone, mensagem de suporte, fuso horário e chaves BYOK Google e OpenAI).
+    Busca as configurações da empresa (como telefone, mensagem de suporte, fuso horário e chaves BYOK Google e OpenAI,
+    além do token dedicado do bot do Telegram da empresa).
     Caso não exista configuração cadastrada, retorna os valores padrão do sistema.
     """
     conexao = conectar()
@@ -35,7 +39,8 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
     try:
         cursor.execute(f"""
-            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario
+            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario,
+                   telegram_bot_token, telegram_bot_username, telegram_webhook_ativo
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -48,6 +53,10 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             chave_openai = linha.get("openai_api_key") if isinstance(linha, dict) else linha["openai_api_key"]
             provedor = linha.get("provedor_ia_padrao") if isinstance(linha, dict) else linha["provedor_ia_padrao"]
             fuso = linha.get("fuso_horario") if isinstance(linha, dict) else linha["fuso_horario"]
+            tg_token = linha.get("telegram_bot_token") if isinstance(linha, dict) else linha["telegram_bot_token"]
+            tg_user = linha.get("telegram_bot_username") if isinstance(linha, dict) else linha["telegram_bot_username"]
+            tg_ativo = bool(linha.get("telegram_webhook_ativo") if isinstance(linha, dict) else linha["telegram_webhook_ativo"])
+
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
@@ -58,13 +67,20 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
                 "openai_api_key_mascarada": mascarar_api_key(chave_openai),
                 "provedor_ia_padrao": provedor or "google",
                 "fuso_horario": fuso or "America/Sao_Paulo",
-                "possui_chave_propria": bool((chave_gemini and chave_gemini.strip()) or (chave_openai and chave_openai.strip()))
+                "possui_chave_propria": bool((chave_gemini and chave_gemini.strip()) or (chave_openai and chave_openai.strip())),
+                "telegram_bot_token": tg_token,
+                "telegram_bot_token_mascarada": mascarar_api_key(tg_token),
+                "telegram_bot_username": tg_user,
+                "telegram_webhook_ativo": tg_ativo,
+                "possui_bot_proprio": bool(tg_token and tg_token.strip())
             }
 
         padrao = CONFIGURACAO_PADRAO.copy()
         padrao["gemini_api_key_mascarada"] = ""
         padrao["openai_api_key_mascarada"] = ""
         padrao["possui_chave_propria"] = False
+        padrao["telegram_bot_token_mascarada"] = ""
+        padrao["possui_bot_proprio"] = False
         return padrao
     except Exception as e:
         logger.error(f"[CompanyService] Erro ao buscar configurações da empresa {empresa_id}: {e}")
@@ -341,6 +357,57 @@ def deletar_empresa(empresa_id: int) -> bool:
         cursor.execute(f"DELETE FROM empresas WHERE id = {ph}", (empresa_id,))
         conexao.commit()
         return True
+    finally:
+        conexao.close()
+
+
+def atualizar_telegram_bot_empresa(
+    empresa_id: int,
+    telegram_bot_token: str | None,
+    telegram_bot_username: str | None = None,
+    telegram_webhook_ativo: bool = False
+) -> dict:
+    """
+    Atualiza as configurações do bot do Telegram da empresa (Token do BotFather, username e status).
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"SELECT id FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET telegram_bot_token = {ph},
+                    telegram_bot_username = {ph},
+                    telegram_webhook_ativo = {ph}
+                WHERE empresa_id = {ph}
+            """, (telegram_bot_token, telegram_bot_username, telegram_webhook_ativo, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (
+                    empresa_id, numero_suporte_humano, mensagem_suporte,
+                    telegram_bot_token, telegram_bot_username, telegram_webhook_ativo
+                )
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            """, (
+                empresa_id,
+                CONFIGURACAO_PADRAO["numero_suporte_humano"],
+                CONFIGURACAO_PADRAO["mensagem_suporte"],
+                telegram_bot_token,
+                telegram_bot_username,
+                telegram_webhook_ativo
+            ))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao atualizar bot do Telegram da empresa {empresa_id}: {e}")
+        raise e
     finally:
         conexao.close()
 

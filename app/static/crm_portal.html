@@ -786,31 +786,63 @@
             </button>
           </div>
 
+          <!-- BOT TELEGRAM DEDICADO POR EMPRESA & WEBHOOK MULTI-TENANT -->
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon" style="background:#229ED9; color:white;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
               </div>
-              Conexão Webhook Telegram
+              Bot do Telegram da Empresa (Dedicado)
             </div>
-            <div id="webhook-status-badge" class="status-connected">
-              <div class="flow-dot dot-green"></div>
-              Consultando status oficial...
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              Conecte o bot exclusivo desta empresa. Ele responderá <strong>apenas com base nos documentos e procedimentos cadastrados neste ambiente</strong>.
             </div>
-            <div id="webhook-info-extra" style="font-size:11px; margin-top:6px; color:var(--text-muted);">
-              Aguardando consulta à API do Telegram...
-            </div>
-            <div style="margin-top:14px;">
-              <div class="config-field">
-                <div class="cf-label">URL Oficial Registrada</div>
-                <input class="cf-input" id="webhook-url-input" value="Carregando..." readonly />
+
+            <!-- Status do Bot Conectado -->
+            <div id="telegram-bot-status-container" style="margin-bottom:14px; padding:10px 12px; border-radius:8px; background:rgba(34,158,217,0.08); border:1px solid rgba(34,158,217,0.2);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; color:#38bdf8;">Status do Bot</span>
+                <span id="telegram-bot-badge" style="font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(255,255,255,0.08); color:var(--text-muted);">Consultando...</span>
               </div>
-              <div class="config-field">
-                <div class="cf-label">Ação de Sincronização</div>
-                <button class="btn-green" style="width:100%; justify-content:center; padding:10px;" onclick="registrarWebhookTelegram()">
-                  ⚡ Registrar / Atualizar Webhook no Telegram
-                </button>
+              <div id="telegram-bot-username-info" style="font-size:13px; font-weight:600; color:var(--text);">
+                Nenhum bot exclusivo conectado
               </div>
+              <div id="telegram-webhook-info-extra" style="font-size:11px; margin-top:4px; color:var(--text-muted);">
+                Aguardando informações...
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label" style="display:flex; justify-content:space-between;">
+                <span>Token do Bot (@BotFather)</span>
+                <a href="https://t.me/BotFather" target="_blank" style="color:#38bdf8; text-decoration:none; font-size:11px;">Abrir @BotFather ↗</a>
+              </div>
+              <input type="password" class="cf-input" id="config-telegram-bot-token" placeholder="Cole o token HTTP API gerado pelo BotFather..." />
+              <div id="telegram-bot-token-status" style="font-size:11px; margin-top:4px; color:var(--text-muted);">
+                Exemplo: 7123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label">URL Oficial do Webhook Desta Empresa</div>
+              <input class="cf-input" id="webhook-url-input" value="Carregando..." readonly style="background:rgba(0,0,0,0.15); font-family:monospace; font-size:11px;" />
+            </div>
+
+            <div style="display:flex; gap:8px;">
+              <button class="btn-green" style="flex:1; justify-content:center; padding:10px;" onclick="salvarConfiguracaoBotTelegram()">
+                ⚡ Salvar & Conectar Bot do Telegram
+              </button>
+              <button class="btn-secondary" id="btn-remover-bot-telegram" style="padding:10px 14px; font-size:12px; display:none;" onclick="removerBotTelegramEmpresa()">
+                Desconectar
+              </button>
+            </div>
+
+            <div style="margin-top:12px; padding:10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid var(--border); font-size:11px; color:var(--text-muted); line-height:1.4;">
+              <strong style="color:var(--text);">💡 Como criar o bot da sua empresa:</strong><br>
+              1. No Telegram, abra o <strong>@BotFather</strong> e envie <code>/newbot</code>.<br>
+              2. Escolha o nome público e o username (terminado em <em>bot</em>).<br>
+              3. Copie o Token HTTP API gerado, cole no campo acima e clique em <strong>Salvar & Conectar</strong>.<br>
+              4. O FluxIA registrará o webhook da empresa automaticamente!
             </div>
           </div>
 
@@ -1046,7 +1078,16 @@ async function carregarConversasTelegram() {
           if (headerName && headerName.textContent !== nomeExibicao) headerName.textContent = nomeExibicao;
           const lpName = document.getElementById('lp-name');
           if (lpName && lpName.textContent !== nomeExibicao) lpName.textContent = nomeExibicao;
+        } else {
+          // A conversa anteriormente ativa não pertence à empresa selecionada
+          if (listaConversasTelegram.length > 0) {
+            selecionarConversaTelegram(listaConversasTelegram[0].chat_id);
+          } else {
+            limparPainelChatVazio();
+          }
         }
+      } else if (listaConversasTelegram.length === 0) {
+        limparPainelChatVazio();
       }
     }
   } catch (e) {
@@ -1055,6 +1096,45 @@ async function carregarConversasTelegram() {
       containerList.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px;">Erro ao carregar: ${e.message}</div>`;
     }
   }
+}
+
+function limparPainelChatVazio() {
+  conversaAtivaChatId = null;
+  const headerName = document.getElementById('chat-header-name');
+  if (headerName) headerName.textContent = 'Selecione uma conversa';
+  const headerAvatar = document.getElementById('chat-header-avatar');
+  if (headerAvatar) headerAvatar.textContent = '✈️';
+  const modoEl = document.getElementById('chat-header-modo');
+  if (modoEl) {
+    modoEl.textContent = 'Assistente IA';
+    modoEl.style.color = '#38bdf8';
+  }
+  const btn = document.getElementById('btn-toggle-atendimento');
+  if (btn) btn.style.display = 'none';
+
+  const container = document.getElementById('lead-chat-messages');
+  if (container) {
+    container.innerHTML = `
+      <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; line-height:1.6;">
+        <div style="font-size:36px; margin-bottom:12px;">✈️</div>
+        <strong>Histórico de Conversas do Telegram</strong><br>
+        Selecione um contato à esquerda para carregar as mensagens trocadas com o bot em tempo real.
+      </div>
+    `;
+  }
+
+  const lpName = document.getElementById('lp-name');
+  if (lpName) lpName.textContent = 'Nenhum Contato Selecionado';
+  const lpChatId = document.getElementById('lp-chat-id');
+  if (lpChatId) lpChatId.textContent = 'Chat ID: -';
+  const lpAvatar = document.getElementById('lp-avatar');
+  if (lpAvatar) lpAvatar.textContent = '--';
+  const lpTelefone = document.getElementById('lp-telefone');
+  if (lpTelefone) lpTelefone.textContent = '-';
+  const lpEmpresa = document.getElementById('lp-empresa');
+  if (lpEmpresa) lpEmpresa.textContent = '-';
+  const lpTotalMsgs = document.getElementById('lp-total-msgs');
+  if (lpTotalMsgs) lpTotalMsgs.textContent = '0';
 }
 
 function renderizarListaConversasTelegram(filtradas = null) {
@@ -1230,8 +1310,10 @@ async function carregarMensagensTelegram(chatId, silencioso = false) {
   const container = document.getElementById('lead-chat-messages');
   if (!container || !chatId) return;
 
+  const empresaId = obterEmpresaAtivaId();
+
   try {
-    const res = await fetch(`/telegram/conversas/${chatId}/mensagens`);
+    const res = await fetch(`/telegram/conversas/${chatId}/mensagens?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao obter mensagens');
 
     // Previne condição de corrida se o usuário trocou de conversa antes da resposta chegar
@@ -1333,6 +1415,7 @@ function atualizarUIAssumirDevolver(nomeAtendente) {
 
 async function alternarModoAtendimento() {
   if (!conversaAtivaChatId || !usuarioAtual) return;
+  const empresaId = parseInt(obterEmpresaAtivaId()) || 1;
 
   if (modoAtendimentoAtual === 'bot') {
     if (!confirm('Deseja assumir o atendimento deste cliente? A IA deixará de responder automaticamente.')) return;
@@ -1340,7 +1423,7 @@ async function alternarModoAtendimento() {
       const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/assumir`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ atendente_id: usuarioAtual.id })
+        body: JSON.stringify({ atendente_id: usuarioAtual.id, empresa_id: empresaId })
       });
       if (!res.ok) throw new Error('Falha ao assumir');
       modoAtendimentoAtual = 'humano';
@@ -1380,7 +1463,10 @@ async function enviarMensagemOperadorTelegram() {
     const res = await fetch(`/telegram/conversas/${conversaAtivaChatId}/enviar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto: texto })
+      body: JSON.stringify({
+        texto: texto,
+        empresa_id: parseInt(obterEmpresaAtivaId()) || 1
+      })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Falha ao enviar mensagem');
@@ -1671,21 +1757,27 @@ async function carregarAnalytics() {
 
 // ===== CONFIGURAÇÕES & WEBHOOK (PARTE 2c) =====
 async function carregarStatusWebhook() {
-  const badgeEl = document.getElementById('webhook-status-badge');
+  const empresaId = obterEmpresaAtivaId();
+  const badgeEl = document.getElementById('telegram-bot-badge');
+  const userEl = document.getElementById('telegram-bot-username-info');
   const urlEl = document.getElementById('webhook-url-input');
-  const extraEl = document.getElementById('webhook-info-extra');
+  const extraEl = document.getElementById('telegram-webhook-info-extra');
+  const btnRemover = document.getElementById('btn-remover-bot-telegram');
+  const tokenInput = document.getElementById('config-telegram-bot-token');
+  const tokenStatus = document.getElementById('telegram-bot-token-status');
 
   try {
-    const res = await fetch('/telegram/status-webhook');
+    const res = await fetch(`/telegram/status-webhook?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao consultar status');
     const data = await res.json();
 
     if (data.configurado) {
       if (badgeEl) {
-        badgeEl.className = 'status-connected';
-        badgeEl.innerHTML = '<div class="flow-dot dot-green"></div> Webhook Oficial Registrado & Ativo';
+        badgeEl.style.background = 'rgba(52,211,153,0.15)';
+        badgeEl.style.color = '#34d399';
+        badgeEl.textContent = '● Webhook Ativo';
       }
-      if (urlEl) urlEl.value = data.url_registrada || '';
+      if (urlEl) urlEl.value = data.url_registrada || `${window.location.origin}/telegram/webhook/${empresaId}`;
       if (extraEl) {
         let msg = `Pendentes: ${data.pendentes || 0}`;
         if (data.ultimo_erro) msg += ` | Último Erro: ${data.ultimo_erro}`;
@@ -1694,12 +1786,15 @@ async function carregarStatusWebhook() {
       }
     } else {
       if (badgeEl) {
-        badgeEl.className = 'status-connected';
+        badgeEl.style.background = 'rgba(251,191,36,0.15)';
         badgeEl.style.color = '#fbbf24';
-        badgeEl.innerHTML = '<div class="flow-dot" style="background:#fbbf24;"></div> Webhook Não Registrado';
+        badgeEl.textContent = '○ Não Conectado';
       }
-      if (urlEl) urlEl.value = 'Nenhuma URL registrada no Telegram';
-      if (extraEl) extraEl.textContent = data.erro || 'Clique no botão abaixo para registrar o webhook oficial.';
+      if (urlEl) urlEl.value = `${window.location.origin}/telegram/webhook/${empresaId}`;
+      if (extraEl) {
+        extraEl.textContent = data.mensagem || 'Insira o token do bot da empresa para ativar o webhook.';
+        extraEl.style.color = 'var(--text-muted)';
+      }
     }
   } catch (e) {
     console.error('Erro ao buscar status do webhook:', e);
@@ -1766,6 +1861,40 @@ async function carregarConfiguracoesEmpresa() {
       } catch (e) {}
       fusoStatus.innerHTML = `<span style="color:var(--text-muted);">💻 Fuso local detectado neste dispositivo: <strong style="color:var(--text);">${fusoNavegador}</strong></span>`;
     }
+
+    // Configuração do Bot Dedicado do Telegram
+    const tokenInput = document.getElementById('config-telegram-bot-token');
+    const tokenStatus = document.getElementById('telegram-bot-token-status');
+    const userEl = document.getElementById('telegram-bot-username-info');
+    const btnRemover = document.getElementById('btn-remover-bot-telegram');
+    const urlEl = document.getElementById('webhook-url-input');
+
+    if (data.telegram_bot_username) {
+      if (userEl) userEl.innerHTML = `🤖 <strong>@${data.telegram_bot_username}</strong> (Bot Dedicado Desta Empresa)`;
+      if (tokenInput) {
+        tokenInput.placeholder = data.telegram_bot_token_mascarada || '••••••••';
+        tokenInput.value = '';
+      }
+      if (tokenStatus) {
+        tokenStatus.innerHTML = `<span style="color:#34d399;">✓ Token conectado (${data.telegram_bot_token_mascarada})</span>`;
+      }
+      if (btnRemover) btnRemover.style.display = 'inline-flex';
+    } else {
+      if (userEl) userEl.innerHTML = `🌐 <em>Utilizando bot padrão global</em> (ou adicione o bot próprio desta empresa)`;
+      if (tokenInput) {
+        tokenInput.placeholder = 'Cole o token HTTP API gerado pelo BotFather...';
+        tokenInput.value = '';
+      }
+      if (tokenStatus) {
+        tokenStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Nenhum bot exclusivo cadastrado para este ambiente</span>`;
+      }
+      if (btnRemover) btnRemover.style.display = 'none';
+    }
+
+    if (urlEl) {
+      urlEl.value = `${window.location.origin}/telegram/webhook/${empresaId}`;
+    }
+    carregarStatusWebhook();
   } catch (err) {
     if (geminiStatus) geminiStatus.innerHTML = `<span style="color:#ef4444;">Erro: ${err.message}</span>`;
   }
@@ -1851,6 +1980,70 @@ async function salvarConfiguracaoMultiVendor() {
 
 async function salvarChaveGeminiEmpresa() {
   return salvarConfiguracaoMultiVendor();
+}
+
+async function salvarConfiguracaoBotTelegram() {
+  const tokenInput = document.getElementById('config-telegram-bot-token');
+  const token = tokenInput ? tokenInput.value.trim() : '';
+  if (!token) {
+    alert('Por favor, informe o token do bot gerado pelo @BotFather.');
+    return;
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await fetch('/empresa/telegram-bot', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        telegram_bot_token: token,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao conectar bot');
+    alert(data.mensagem || 'Bot do Telegram conectado com sucesso!');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    alert('Erro ao conectar bot do Telegram: ' + err.message);
+  }
+}
+
+async function removerBotTelegramEmpresa() {
+  if (!confirm('Deseja realmente desconectar o bot dedicado desta empresa? Ela passará a usar o bot padrão global caso configurado.')) return;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await fetch('/empresa/telegram-bot', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        telegram_bot_token: '',
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao remover bot');
+    alert(data.mensagem || 'Bot dedicado removido com sucesso!');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    alert('Erro ao remover bot do Telegram: ' + err.message);
+  }
 }
 
 // ===== OBSERVABILIDADE & CONTINUOUS EVALUATION (ENGENHARIA DE IA) =====
@@ -2742,6 +2935,8 @@ async function atualizarInterfaceTenant() {
 
 function trocarEmpresaAtiva(novaEmpresaId) {
   localStorage.setItem('fluxia_active_empresa_id', novaEmpresaId);
+  conversaAtivaChatId = null;
+  limparPainelChatVazio();
   carregarDocumentos();
   carregarConfiguracoesEmpresa();
   carregarConversasTelegram();

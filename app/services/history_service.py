@@ -4,9 +4,9 @@ from app.database.database import conectar, _cursor, _placeholder
 logger = logging.getLogger(__name__)
 
 
-def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: str, lida: bool = False) -> int | None:
+def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: str, lida: bool = False, empresa_id: int = 1) -> int | None:
     """
-    Grava uma interação (pergunta do usuário e resposta da IA) no histórico de conversas.
+    Grava uma interação (pergunta do usuário e resposta da IA) no histórico de conversas com escopo de empresa.
     """
     conexao = conectar()
     cursor = _cursor(conexao)
@@ -14,9 +14,9 @@ def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: 
 
     try:
         cursor.execute(f"""
-            INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida)
-            VALUES ({ph}, {ph}, {ph}, {ph})
-        """, (str(telegram_chat_id), mensagem_usuario, resposta_ia, lida))
+            INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+        """, (str(telegram_chat_id), mensagem_usuario, resposta_ia, lida, empresa_id))
         conexao.commit()
 
         # lastrowid no SQLite; fallback para Postgres
@@ -64,23 +64,32 @@ def marcar_interacoes_como_lidas(telegram_chat_id: str) -> int:
         conexao.close()
 
 
-def obter_ultimas_interacoes(telegram_chat_id: str, limite: int = 3) -> list[dict]:
+def obter_ultimas_interacoes(telegram_chat_id: str, limite: int = 3, empresa_id: int | None = None) -> list[dict]:
     """
     Recupera as últimas interações de um determinado chat_id no Telegram,
-    retornando em ordem cronológica (da mais antiga para a mais recente).
+    retornando em ordem cronológica (da mais antiga para a mais recente) filtrada por empresa.
     """
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
-        cursor.execute(f"""
-            SELECT mensagem_usuario, resposta_ia, data_interacao
-            FROM historico_conversas
-            WHERE telegram_chat_id = {ph}
-            ORDER BY id DESC
-            LIMIT {ph}
-        """, (str(telegram_chat_id), limite))
+        if empresa_id:
+            cursor.execute(f"""
+                SELECT mensagem_usuario, resposta_ia, data_interacao
+                FROM historico_conversas
+                WHERE telegram_chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)
+                ORDER BY id DESC
+                LIMIT {ph}
+            """, (str(telegram_chat_id), empresa_id, limite))
+        else:
+            cursor.execute(f"""
+                SELECT mensagem_usuario, resposta_ia, data_interacao
+                FROM historico_conversas
+                WHERE telegram_chat_id = {ph}
+                ORDER BY id DESC
+                LIMIT {ph}
+            """, (str(telegram_chat_id), limite))
         linhas = cursor.fetchall()
 
         interacoes = [

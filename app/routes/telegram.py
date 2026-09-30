@@ -113,11 +113,39 @@ def configurar_comandos_bot_telegram():
         logger.warning(f"[Telegram] Falha ao configurar comandos no bot: {e}")
 
 
-def enviar_mensagem_telegram(chat_id: str, texto: str):
-    """Envia uma mensagem de resposta via API do Telegram com fallback para texto puro."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+def obter_token_bot_empresa(empresa_id: int | None = None, chat_id: str | None = None) -> str | None:
+    """Recupera o token do bot da respectiva empresa, com fallback inteligente para o bot padrão."""
+    token = None
+    if empresa_id:
+        try:
+            cfg = obter_configuracao_empresa(empresa_id)
+            token = cfg.get("telegram_bot_token")
+        except Exception:
+            pass
+
+    if not token and chat_id:
+        try:
+            con = conectar()
+            cur = _cursor(con)
+            cur.execute(f"SELECT empresa_id FROM clientes WHERE telegram_chat_id = {_placeholder()} ORDER BY id DESC LIMIT 1", (str(chat_id),))
+            row = cur.fetchone()
+            con.close()
+            if row and row.get("empresa_id"):
+                cfg = obter_configuracao_empresa(row["empresa_id"])
+                token = cfg.get("telegram_bot_token")
+        except Exception:
+            pass
+
     if not token:
-        logger.warning(f"[Telegram] TELEGRAM_BOT_TOKEN não configurado. Mensagem para {chat_id}: {texto}")
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+    return token
+
+
+def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = None):
+    """Envia uma mensagem de resposta via API do Telegram com fallback para texto puro e suporte a multi-tenant."""
+    token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
+    if not token:
+        logger.warning(f"[Telegram] Token do bot não configurado para empresa={empresa_id}, chat={chat_id}. Mensagem: {texto}")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -136,9 +164,9 @@ def enviar_mensagem_telegram(chat_id: str, texto: str):
         logger.error(f"[Telegram] Erro ao enviar mensagem para chat {chat_id}: {e}")
 
 
-def buscar_nome_telegram_api(chat_id: str) -> str | None:
+def buscar_nome_telegram_api(chat_id: str, empresa_id: int | None = None) -> str | None:
     """Consulta os dados do chat na API do Telegram para obter o nome real do usuário."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
     if not token or not chat_id:
         return None
     try:
@@ -294,13 +322,18 @@ def extrair_dados_contato(texto: str) -> dict:
 # ============================================================================
 
 @router.post("/webhook")
-async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
+@router.post("/webhook/{empresa_id}")
+async def telegram_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    empresa_id: int = 1
+):
     """
-    Webhook público do Telegram:
-    - Sem exigência de e-mail (atendimento aberto e autônomo).
-    - Checa se o chat está em modo 'humano' antes de chamar a IA.
-    - Se 'bot', consulta base pública (RAG), responde via Gemini, atualiza histórico,
-      cria/evolui cliente e negócio no CRM e loga analytics com observabilidade integral.
+    Webhook público e multi-tenant do Telegram:
+    - Suporta bot dedicado por empresa através da rota /webhook/{empresa_id}
+    - Identifica automaticamente a empresa via deep link (/start empresa_X)
+    - Consulta estritamente a base de conhecimento e documentos da respectiva empresa
+    - Cria/evolui clientes e negócios isolados no CRM do tenant
     """
     try:
         dados = await request.json()
@@ -313,7 +346,17 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
     chat_id = str(mensagem["chat"]["id"])
     texto_recebido = str(mensagem.get("text", "")).strip()
-    empresa_id = 1
+
+    # Identificação por deep link (/start empresa_X ou /start emp_X)
+    if texto_recebido.startswith("/start"):
+        partes_cmd = texto_recebido.split()
+        if len(partes_cmd) > 1:
+            ref_param = partes_cmd[1].lower().strip()
+            if ref_param.startswith("empresa_") or ref_param.startswith("emp_"):
+                try:
+                    empresa_id = int(ref_param.split("_")[-1])
+                except ValueError:
+                    pass
 
     # Extração de nome real do usuário do Telegram (from ou chat)
     remetente = mensagem.get("from") or {}
@@ -328,7 +371,7 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     elif username:
         nome_lead = f"@{username}"
     else:
-        nome_api = buscar_nome_telegram_api(chat_id)
+        nome_api = buscar_nome_telegram_api(chat_id, empresa_id=empresa_id)
         nome_lead = nome_api if nome_api else f"Usuário #{chat_id[-4:] if len(chat_id) >= 4 else chat_id}"
 
     conexao = conectar()
@@ -336,8 +379,11 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     ph = _placeholder()
 
     try:
-        # 0. Garante que o registro do cliente exista no CRM com o nome real
-        cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
+        # 0. Garante que o registro do cliente exista no CRM da respectiva empresa com o nome real
+        cursor.execute(
+            f"SELECT id, nome, email, telefone, aguardando_contato, empresa_id FROM clientes WHERE telegram_chat_id = {ph} AND empresa_id = {ph}",
+            (chat_id, empresa_id)
+        )
         cliente = cursor.fetchone()
         if not cliente:
             cursor.execute(f"""
@@ -345,7 +391,10 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 VALUES ({ph}, {ph}, {ph}, 'telegram', {ph})
             """, (empresa_id, nome_lead, chat_id, False))
             conexao.commit()
-            cursor.execute(f"SELECT id, nome, email, telefone, aguardando_contato FROM clientes WHERE telegram_chat_id = {ph}", (chat_id,))
+            cursor.execute(
+                f"SELECT id, nome, email, telefone, aguardando_contato, empresa_id FROM clientes WHERE telegram_chat_id = {ph} AND empresa_id = {ph}",
+                (chat_id, empresa_id)
+            )
             cliente = cursor.fetchone()
         else:
             nome_atual = (cliente.get("nome") or "").strip()
@@ -367,16 +416,15 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
         cliente_id = cliente["id"]
 
         # 1. Checa atribuição de atendente humano (Bot vs Humano)
-        cursor.execute(f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph}", (chat_id,))
+        cursor.execute(f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)", (chat_id, empresa_id))
         conv_status = cursor.fetchone()
         if conv_status and conv_status.get("status") == "humano":
             # Modo humano ativo: não dispara IA nem resposta automática, apenas registra
-            # Também desativa qualquer estado pendente de aguardando contato
             cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
             cursor.execute(f"""
-                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida)
-                VALUES ({ph}, {ph}, {ph}, {ph})
-            """, (chat_id, texto_recebido, "", False))
+                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            """, (chat_id, texto_recebido, "", False, empresa_id))
             conexao.commit()
             return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
 
@@ -392,8 +440,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 "• `/ajuda` - Como usar o assistente\n"
                 "• `/suporte` - Falar com um consultor humano"
             )
-            enviar_mensagem_telegram(chat_id, msg_start)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_start, lida=False)
+            enviar_mensagem_telegram(chat_id, msg_start, empresa_id=empresa_id)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_start, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
         if comando in ["/ajuda", "/help", "ajuda", "help"]:
@@ -403,8 +451,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 "• Nossas respostas são fundamentadas nas informações e diretrizes oficiais da empresa.\n"
                 "• Se precisar falar com um atendente humano, use o comando `/suporte`."
             )
-            enviar_mensagem_telegram(chat_id, msg_ajuda)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False)
+            enviar_mensagem_telegram(chat_id, msg_ajuda, empresa_id=empresa_id)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
         if comando in ["/suporte", "/support", "suporte", "support"]:
@@ -412,8 +460,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
             telefone = config_suporte.get("numero_suporte_humano", "(11) 99999-9999")
             orientacao = config_suporte.get("mensagem_suporte", "Entre em contato com nossa equipe.")
             msg_suporte = f"📞 **Suporte e Atendimento:**\n\n{orientacao}\n📱 Contato: `{telefone}`"
-            enviar_mensagem_telegram(chat_id, msg_suporte)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False)
+            enviar_mensagem_telegram(chat_id, msg_suporte, empresa_id=empresa_id)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
         # 3. Estado 'aguardando dados de contato' com entendimento de contexto
@@ -427,8 +475,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                     "De nada! Fico sempre à sua disposição. Se precisar de mais alguma informação ou desejar falar com um consultor humano, "
                     "basta me chamar ou usar o comando `/suporte`! 😊"
                 )
-                enviar_mensagem_telegram(chat_id, msg_agradecimento)
-                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_agradecimento, lida=False)
+                enviar_mensagem_telegram(chat_id, msg_agradecimento, empresa_id=empresa_id)
+                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_agradecimento, lida=False, empresa_id=empresa_id)
                 return {"status": "ok", "mensagem": "Agradecimento respondido com cortesia"}
 
             # B) Se o usuário enviou dados reais de contato (email, telefone ou nome explícito)
@@ -451,8 +499,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                     "Nossa equipe de atendimento foi acionada e entrará em contato em breve para te auxiliar melhor! "
                     "Se precisar de mais informações sobre nossos serviços, estou à sua disposição."
                 )
-                enviar_mensagem_telegram(chat_id, msg_confirmacao)
-                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False)
+                enviar_mensagem_telegram(chat_id, msg_confirmacao, empresa_id=empresa_id)
+                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False, empresa_id=empresa_id)
                 return {"status": "ok", "mensagem": "Dados de contato salvos com sucesso"}
             else:
                 # C) Se for uma pergunta ou comentário normal sem dados de contato,
@@ -460,8 +508,8 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
                 conexao.commit()
 
-        # 4. RAG: Busca estritamente pública
-        historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3)
+        # 4. RAG: Busca estritamente pública da respectiva empresa
+        historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
         config_suporte = obter_configuracao_empresa(empresa_id=empresa_id)
 
         contexto_publico, docs_usados = buscar_contexto_relevante(
@@ -518,15 +566,16 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
                 contexto_utilizado=contexto_publico if tem_contexto else None
             )
 
-        # 6. Envia resposta ao Telegram
-        enviar_mensagem_telegram(chat_id, resposta_ia)
+        # 6. Envia resposta ao Telegram da respectiva empresa
+        enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id)
 
-        # 7. Salva no histórico de conversas
+        # 7. Salva no histórico de conversas da empresa
         salvar_interacao(
             telegram_chat_id=chat_id,
             mensagem_usuario=texto_recebido,
             resposta_ia=resposta_ia,
-            lida=False
+            lida=False,
+            empresa_id=empresa_id
         )
 
         # 8. Log no Analytics (Perguntas Histórico)
@@ -631,18 +680,23 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 
 class WebhookConfigRequest(BaseModel):
     url: Optional[str] = None
+    empresa_id: Optional[int] = 1
     usuario_id: Optional[int] = None
 
 
 @router.post("/configurar-webhook")
 def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request: Request = None):
     """
-    Registra a URL do webhook no Telegram oficial.
+    Registra a URL do webhook no Telegram oficial para a empresa solicitada.
     Monta a URL usando RENDER_EXTERNAL_URL ou parâmetro informado.
     """
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    empresa_id = dados.empresa_id or 1
+    token = obter_token_bot_empresa(empresa_id=empresa_id)
     if not token:
-        raise HTTPException(status_code=400, detail="TELEGRAM_BOT_TOKEN não configurado no .env.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Token do Telegram não configurado para a empresa {empresa_id} nem no servidor."
+        )
 
     # Prioridade de URL: 1. Informada no body | 2. RENDER_EXTERNAL_URL | 3. Base URL da requisição
     base_url = dados.url or os.getenv("RENDER_EXTERNAL_URL")
@@ -657,7 +711,7 @@ def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request
     if not base_url.startswith("http://") and not base_url.startswith("https://"):
         base_url = f"https://{base_url}"
 
-    webhook_url = f"{base_url}/telegram/webhook"
+    webhook_url = f"{base_url}/telegram/webhook/{empresa_id}"
     telegram_api_url = f"https://api.telegram.org/bot{token}/setWebhook"
 
     try:
@@ -666,8 +720,18 @@ def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request
         if not resultado.get("ok"):
             raise HTTPException(status_code=400, detail=f"Erro retornado pelo Telegram: {resultado.get('description')}")
 
+        try:
+            con = conectar()
+            cur = _cursor(con)
+            cur.execute(f"UPDATE configuracoes_empresa SET telegram_webhook_ativo = {_placeholder()} WHERE empresa_id = {_placeholder()}", (True, empresa_id))
+            con.commit()
+            con.close()
+        except Exception:
+            pass
+
         return {
             "sucesso": True,
+            "empresa_id": empresa_id,
             "url_registrada": webhook_url,
             "telegram_resposta": resultado
         }
@@ -676,14 +740,15 @@ def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request
 
 
 @router.get("/status-webhook")
-def obter_status_webhook():
-    """Consulta o status real do webhook diretamente na API do Telegram (getWebhookInfo)."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+def obter_status_webhook(empresa_id: int = 1):
+    """Consulta o status real do webhook diretamente na API do Telegram (getWebhookInfo) para a empresa."""
+    token = obter_token_bot_empresa(empresa_id=empresa_id)
     if not token:
         return {
             "ativo": False,
             "configurado": False,
-            "mensagem": "TELEGRAM_BOT_TOKEN não configurado no servidor."
+            "empresa_id": empresa_id,
+            "mensagem": f"Nenhum token do Telegram configurado para a empresa {empresa_id}."
         }
 
     try:
@@ -693,6 +758,7 @@ def obter_status_webhook():
             return {
                 "ativo": False,
                 "configurado": False,
+                "empresa_id": empresa_id,
                 "erro": dados.get("description", "Erro desconhecido")
             }
 
@@ -705,16 +771,18 @@ def obter_status_webhook():
         return {
             "ativo": tem_url and (not ultimo_erro or pendentes == 0),
             "configurado": tem_url,
+            "empresa_id": empresa_id,
             "url_registrada": url_registrada,
             "pendentes": pendentes,
             "ultimo_erro": ultimo_erro,
             "ultima_sincronizacao": resultado.get("last_synchronization_error_date")
         }
     except Exception as e:
-        logger.error(f"[Telegram] Erro ao consultar getWebhookInfo: {e}")
+        logger.error(f"[Telegram] Erro ao consultar getWebhookInfo para empresa {empresa_id}: {e}")
         return {
             "ativo": False,
             "configurado": False,
+            "empresa_id": empresa_id,
             "erro": str(e)
         }
 
@@ -725,6 +793,7 @@ def obter_status_webhook():
 
 class AssumirAtendimentoRequest(BaseModel):
     atendente_id: int
+    empresa_id: Optional[int] = None
 
 
 @router.post("/conversas/{chat_id}/assumir")
@@ -733,6 +802,7 @@ def assumir_conversa_atendente(chat_id: str, dados: AssumirAtendimentoRequest):
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
+    emp_id = dados.empresa_id or 1
     try:
         # UPSERT compatível com SQLite e Postgres
         cursor.execute(f"SELECT chat_id FROM conversas_telegram WHERE chat_id = {ph}", (str(chat_id),))
@@ -741,14 +811,14 @@ def assumir_conversa_atendente(chat_id: str, dados: AssumirAtendimentoRequest):
         if existe:
             cursor.execute(f"""
                 UPDATE conversas_telegram
-                SET status = 'humano', atendente_id = {ph}, atualizado_em = CURRENT_TIMESTAMP
+                SET status = 'humano', atendente_id = {ph}, empresa_id = {ph}, atualizado_em = CURRENT_TIMESTAMP
                 WHERE chat_id = {ph}
-            """, (dados.atendente_id, str(chat_id)))
+            """, (dados.atendente_id, emp_id, str(chat_id)))
         else:
             cursor.execute(f"""
-                INSERT INTO conversas_telegram (chat_id, status, atendente_id)
-                VALUES ({ph}, 'humano', {ph})
-            """, (str(chat_id), dados.atendente_id))
+                INSERT INTO conversas_telegram (chat_id, status, atendente_id, empresa_id)
+                VALUES ({ph}, 'humano', {ph}, {ph})
+            """, (str(chat_id), dados.atendente_id, emp_id))
 
         conexao.commit()
         return {"sucesso": True, "status": "humano", "atendente_id": dados.atendente_id}
@@ -781,19 +851,28 @@ def devolver_conversa_ao_bot(chat_id: str):
 
 class EnviarMensagemOperadorRequest(BaseModel):
     texto: str
+    empresa_id: Optional[int] = None
 
 
 @router.get("/conversas")
 def listar_conversas_telegram(empresa_id: int | None = None):
     """
     Lista contatos e conversas do Telegram com status de atendimento (Bot vs Humano)
-    e identificação do atendente responsável.
+    e identificação do atendente responsável, isolada por empresa.
     """
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
+        filtros = []
+        params = []
+        if empresa_id:
+            filtros.append(f"(h.empresa_id = {ph} OR (h.empresa_id IS NULL AND cli.empresa_id = {ph}))")
+            params.extend([empresa_id, empresa_id])
+
+        where_sql = f"WHERE {' AND '.join(filtros)}" if filtros else ""
+
         query = f"""
             SELECT 
                 h.telegram_chat_id,
@@ -806,22 +885,31 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 ct.atendente_id,
                 u_atend.nome AS nome_atendente
             FROM historico_conversas h
-            LEFT JOIN clientes cli ON cli.telegram_chat_id = h.telegram_chat_id
-            LEFT JOIN conversas_telegram ct ON ct.chat_id = h.telegram_chat_id
+            LEFT JOIN clientes cli ON cli.telegram_chat_id = h.telegram_chat_id AND (cli.empresa_id = h.empresa_id OR h.empresa_id IS NULL)
+            LEFT JOIN conversas_telegram ct ON ct.chat_id = h.telegram_chat_id AND (ct.empresa_id = h.empresa_id OR ct.empresa_id IS NULL)
             LEFT JOIN usuarios u_atend ON u_atend.id = ct.atendente_id
+            {where_sql}
             GROUP BY h.telegram_chat_id, cli.nome, cli.telefone, ct.status, ct.atendente_id, u_atend.nome
             ORDER BY data_ultima_mensagem DESC
         """
-        cursor.execute(query)
+        cursor.execute(query, tuple(params))
         linhas = cursor.fetchall()
 
         # Consulta mensagens não lidas agrupadas por chat_id
-        cursor.execute(f"""
-            SELECT telegram_chat_id, COUNT(*) AS nao_lidas
-            FROM historico_conversas
-            WHERE (lida = {ph} OR lida IS NULL) AND mensagem_usuario != ''
-            GROUP BY telegram_chat_id
-        """, (False,))
+        if empresa_id:
+            cursor.execute(f"""
+                SELECT telegram_chat_id, COUNT(*) AS nao_lidas
+                FROM historico_conversas
+                WHERE (lida = {ph} OR lida IS NULL) AND mensagem_usuario != '' AND (empresa_id = {ph} OR empresa_id IS NULL)
+                GROUP BY telegram_chat_id
+            """, (False, empresa_id))
+        else:
+            cursor.execute(f"""
+                SELECT telegram_chat_id, COUNT(*) AS nao_lidas
+                FROM historico_conversas
+                WHERE (lida = {ph} OR lida IS NULL) AND mensagem_usuario != ''
+                GROUP BY telegram_chat_id
+            """, (False,))
         nao_lidas_map = {r["telegram_chat_id"]: r["nao_lidas"] for r in cursor.fetchall()}
 
         conversas = []
@@ -839,7 +927,7 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             if ultima_row:
                 ultima_msg = ultima_row["mensagem_usuario"] or ultima_row["resposta_ia"] or ""
 
-            # PARTE 19: Retornar nome do cliente cadastrado ou resolver via Telegram API se genérico
+            # Retornar nome do cliente cadastrado ou resolver via Telegram API se genérico
             nome_cliente = l["cliente_nome"]
             eh_generico = (
                 not nome_cliente or 
@@ -849,11 +937,14 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 chat_id in str(nome_cliente)
             )
             if eh_generico:
-                nome_api = buscar_nome_telegram_api(chat_id)
+                nome_api = buscar_nome_telegram_api(chat_id, empresa_id=empresa_id)
                 if nome_api:
                     nome_cliente = nome_api
                     try:
-                        cursor.execute(f"UPDATE clientes SET nome = {ph} WHERE telegram_chat_id = {ph}", (nome_api, chat_id))
+                        if empresa_id:
+                            cursor.execute(f"UPDATE clientes SET nome = {ph} WHERE telegram_chat_id = {ph} AND empresa_id = {ph}", (nome_api, chat_id, empresa_id))
+                        else:
+                            cursor.execute(f"UPDATE clientes SET nome = {ph} WHERE telegram_chat_id = {ph}", (nome_api, chat_id))
                         conexao.commit()
                     except Exception:
                         pass
@@ -901,7 +992,7 @@ def listar_conversas_telegram(empresa_id: int | None = None):
 @router.patch("/conversas/{chat_id}/marcar-lida")
 def marcar_conversa_lida(chat_id: str):
     """
-    PARTE 20: Marca todas as mensagens desta conversa como lidas pelo atendente.
+    Marca todas as mensagens desta conversa como lidas pelo atendente.
     """
     qtd = marcar_interacoes_como_lidas(str(chat_id))
     return {
@@ -912,18 +1003,26 @@ def marcar_conversa_lida(chat_id: str):
 
 
 @router.get("/conversas/{chat_id}/mensagens")
-def obter_mensagens_conversa(chat_id: str):
+def obter_mensagens_conversa(chat_id: str, empresa_id: int | None = None):
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
 
     try:
-        cursor.execute(f"""
-            SELECT id, mensagem_usuario, resposta_ia, data_interacao
-            FROM historico_conversas
-            WHERE telegram_chat_id = {ph}
-            ORDER BY id ASC
-        """, (str(chat_id),))
+        if empresa_id:
+            cursor.execute(f"""
+                SELECT id, mensagem_usuario, resposta_ia, data_interacao
+                FROM historico_conversas
+                WHERE telegram_chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)
+                ORDER BY id ASC
+            """, (str(chat_id), empresa_id))
+        else:
+            cursor.execute(f"""
+                SELECT id, mensagem_usuario, resposta_ia, data_interacao
+                FROM historico_conversas
+                WHERE telegram_chat_id = {ph}
+                ORDER BY id ASC
+            """, (str(chat_id),))
         linhas = cursor.fetchall()
 
         mensagens = []
@@ -956,12 +1055,20 @@ def obter_mensagens_conversa(chat_id: str):
                 })
 
         # Consulta também o status atual desta conversa
-        cursor.execute(f"""
-            SELECT ct.status, ct.atendente_id, u.nome AS nome_atendente
-            FROM conversas_telegram ct
-            LEFT JOIN usuarios u ON u.id = ct.atendente_id
-            WHERE ct.chat_id = {ph}
-        """, (str(chat_id),))
+        if empresa_id:
+            cursor.execute(f"""
+                SELECT ct.status, ct.atendente_id, u.nome AS nome_atendente
+                FROM conversas_telegram ct
+                LEFT JOIN usuarios u ON u.id = ct.atendente_id
+                WHERE ct.chat_id = {ph} AND (ct.empresa_id = {ph} OR ct.empresa_id IS NULL)
+            """, (str(chat_id), empresa_id))
+        else:
+            cursor.execute(f"""
+                SELECT ct.status, ct.atendente_id, u.nome AS nome_atendente
+                FROM conversas_telegram ct
+                LEFT JOIN usuarios u ON u.id = ct.atendente_id
+                WHERE ct.chat_id = {ph}
+            """, (str(chat_id),))
         status_info = cursor.fetchone()
 
         return {
@@ -985,14 +1092,15 @@ def enviar_resposta_operador(chat_id: str, dados: EnviarMensagemOperadorRequest)
     if not texto:
         raise HTTPException(status_code=400, detail="O texto da mensagem não pode estar vazio.")
 
-    enviar_mensagem_telegram(chat_id, texto)
+    enviar_mensagem_telegram(chat_id, texto, empresa_id=dados.empresa_id)
 
     salvar_interacao(
         telegram_chat_id=chat_id,
         mensagem_usuario="",
-        resposta_ia=f"[Operador]: {texto}"
+        resposta_ia=f"[Operador]: {texto}",
+        lida=False,
+        empresa_id=dados.empresa_id or 1
     )
-
     return {
         "sucesso": True,
         "mensagem": "Mensagem enviada com sucesso ao Telegram do cliente!"
