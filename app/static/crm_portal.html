@@ -1160,6 +1160,13 @@ let listaEmpresasCadastradas = [];
 let equipeCarregada = [];
 let fusoHorarioEmpresa = 'America/Sao_Paulo';
 
+function escapeHtml(texto) {
+  if (texto === null || texto === undefined) return '';
+  const div = document.createElement('div');
+  div.textContent = String(texto);
+  return div.innerHTML;
+}
+
 function obterFusoAtivo() {
   if (fusoHorarioEmpresa && fusoHorarioEmpresa !== 'auto') {
     return fusoHorarioEmpresa;
@@ -1219,6 +1226,30 @@ function formatarDataHoraCompleta(dataStr) {
   } catch (e) {
     return String(dataStr);
   }
+}
+
+function formatarData(dataStr) {
+  if (!dataStr) return '-';
+  try {
+    let str = String(dataStr).trim();
+    if (!str.includes('T') && str.includes(' ')) str = str.replace(' ', 'T') + 'Z';
+    else if (str.includes('T') && !str.endsWith('Z') && !str.includes('+') && !str.includes('-')) str = str + 'Z';
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str.substring(0, 10);
+    const tz = obterFusoAtivo();
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: tz,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(d);
+  } catch (e) {
+    return String(dataStr).substring(0, 10);
+  }
+}
+
+function formatarDataFuso(dataStr) {
+  return formatarDataHoraCompleta(dataStr);
 }
 
 function switchTab(tabId, navEl) {
