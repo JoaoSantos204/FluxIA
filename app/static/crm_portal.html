@@ -94,6 +94,65 @@
       outline: none;
       cursor: pointer;
     }
+    /* CRM Tables & Modals */
+    .crm-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .crm-table th {
+      text-align: left;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .crm-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: middle;
+    }
+    .crm-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-active {
+      background: rgba(52, 211, 153, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+    .badge-inactive {
+      background: rgba(248, 113, 113, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+    .badge-default {
+      background: rgba(129, 140, 248, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(129, 140, 248, 0.3);
+    }
+    .kanban-col.drag-over {
+      border: 2px dashed #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.05);
+    }
+    .kanban-card[draggable="true"] {
+      cursor: grab;
+    }
+    .kanban-card[draggable="true"]:active {
+      cursor: grabbing;
+    }
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -139,7 +198,7 @@
         <div class="nav-label">Inteligência Artificial</div>
         <div class="nav-item" onclick="switchTab('chatrag', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
-          Chat IA (RAG)
+          Chat IA
         </div>
         <div class="nav-item" onclick="switchTab('documentos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -147,7 +206,7 @@
         </div>
         <div class="nav-item" id="nav-item-analytics" onclick="switchTab('analytics', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          Analytics RAG
+          Analytics
         </div>
         <div class="nav-item" id="nav-item-observabilidade" onclick="switchTab('observabilidade', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -157,13 +216,29 @@
 
       <div class="nav-section">
         <div class="nav-label">Vendas & CRM</div>
+        <div class="nav-item" onclick="switchTab('clientes', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Clientes
+        </div>
+        <div class="nav-item" onclick="switchTab('produtos', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          Produtos
+        </div>
         <div class="nav-item" onclick="switchTab('fluxos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-          Funil (Kanban CRM)
+          Funil (Kanban)
+        </div>
+        <div class="nav-item" onclick="switchTab('propostas', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Propostas
         </div>
         <div class="nav-item" onclick="switchTab('contratos', this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           Contratos
+        </div>
+        <div class="nav-item" id="nav-item-pipelines" onclick="switchTab('pipelines', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          Pipelines
         </div>
       </div>
 
@@ -268,6 +343,23 @@
           <div class="metric-label">Taxa de Conversão</div>
           <div class="metric-value" id="card-taxa-conversao">0%</div>
           <div class="metric-change up">Fechados vs Total</div>
+        </div>
+      </div>
+
+      <!-- SÉRIE TEMPORAL COMERCIAL (PARTE 24) -->
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; box-shadow:var(--shadow-sm);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+          <div>
+            <div style="font-weight:700; font-size:15px; color:var(--text); font-family:'Syne',sans-serif;">Desempenho Comercial — Série Temporal (12 Meses)</div>
+            <div style="font-size:12px; color:var(--text-muted);">Evolução mensal agregada e isolada por ambiente</div>
+          </div>
+          <div style="display:flex; gap:6px; background:var(--bg); padding:4px; border-radius:8px; border:1px solid var(--border);">
+            <button id="btn-metrica-clientes" class="btn-secondary" style="padding:4px 12px; font-size:11px; border:none; background:var(--surface); color:#38bdf8; font-weight:600; cursor:pointer;" onclick="trocarMetricaSerieTemporal('clientes')">Novos Clientes</button>
+            <button id="btn-metrica-vendas" class="btn-secondary" style="padding:4px 12px; font-size:11px; border:none; background:transparent; color:var(--text-muted); font-weight:600; cursor:pointer;" onclick="trocarMetricaSerieTemporal('vendas')">Vendas Fechadas (R$)</button>
+          </div>
+        </div>
+        <div id="dashboard-chart-container" style="min-height:220px; width:100%; display:flex; align-items:center; justify-content:center;">
+          <div style="font-size:12px; color:var(--text-muted);">Carregando série temporal...</div>
         </div>
       </div>
 
@@ -385,15 +477,99 @@
       </div>
     </div>
 
-    <!-- FLUXOS & KANBAN CRM -->
-    <div class="screen" id="screen-fluxos">
-      <div class="flow-header">
+    <!-- CLIENTES (PARTE 23) -->
+    <div class="screen" id="screen-clientes">
+      <div class="dash-header">
         <div>
-          <div class="page-title">Funil de Vendas (Kanban CRM)</div>
-          <div class="page-sub">Gestão visual do ciclo de vida dos leads e oportunidades</div>
+          <div class="page-title">Gestão de Clientes & Leads</div>
+          <div class="page-sub">Cadastro unificado de clientes originados do Telegram, CRM e formulários</div>
         </div>
         <div style="display:flex; gap:10px;">
-          <button class="btn-secondary" onclick="carregarKanbanNegocios()" style="font-size:12px;">🔄 Atualizar Funil</button>
+          <button class="btn-green" onclick="abrirModalCliente()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Cliente
+          </button>
+          <button class="btn-secondary" onclick="carregarClientesCRM()" style="font-size:12px;">🔄 Atualizar</button>
+        </div>
+      </div>
+
+      <div style="margin: 16px 0; display:flex; gap:10px; align-items:center;">
+        <input class="login-input" id="busca-clientes-input" placeholder="Buscar por nome, e-mail ou telefone..." style="max-width:380px; padding:10px 14px; background:var(--surface); border:1px solid var(--border);" oninput="filtrarClientesCRM(this.value)" />
+      </div>
+
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm);">
+        <table class="crm-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Telefone</th>
+              <th>Origem</th>
+              <th>Cadastro</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-clientes-corpo">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando clientes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PRODUTOS (PARTE 23) -->
+    <div class="screen" id="screen-produtos">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Catálogo de Produtos & Serviços</div>
+          <div class="page-sub">Gestão de produtos com precificação e suporte a funis de venda específicos</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-green" onclick="abrirModalProduto()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Produto
+          </button>
+          <button class="btn-secondary" onclick="carregarProdutosCRM()" style="font-size:12px;">🔄 Atualizar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); margin-top:16px;">
+        <table class="crm-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Produto / Serviço</th>
+              <th>Descrição</th>
+              <th>Preço Base</th>
+              <th>Status</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-produtos-corpo">
+            <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FUNIL & KANBAN DINÂMICO (PARTE 22 & 23) -->
+    <div class="screen" id="screen-fluxos">
+      <div class="flow-header" style="flex-wrap:wrap; gap:12px;">
+        <div>
+          <div class="page-title">Funil de Vendas (Kanban CRM)</div>
+          <div class="page-sub">Selecione o pipeline para visualizar etapas e oportunidades</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:6px; background:var(--surface); padding:4px 10px; border-radius:8px; border:1px solid var(--border);">
+            <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">Pipeline:</span>
+            <select id="select-pipeline-kanban" style="background:transparent; border:none; color:var(--text); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="aoMudarPipelineKanban(this.value)">
+              <option value="">Carregando pipelines...</option>
+            </select>
+          </div>
+          <button class="btn-green" onclick="abrirModalNovoNegocio()" style="font-size:12px;">
+            + Novo Negócio
+          </button>
+          <button class="btn-secondary" onclick="carregarPipelinesKanban()" style="font-size:12px;">🔄 Atualizar Funil</button>
         </div>
       </div>
 
@@ -404,12 +580,50 @@
       </div>
     </div>
 
-    <!-- CONTRATOS -->
+    <!-- PROPOSTAS (PARTE 27) -->
+    <div class="screen" id="screen-propostas">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Propostas Comerciais</div>
+          <div class="page-sub">Geração automatizada de propostas em HTML a partir de negócios, com indexação no RAG e envio por e-mail</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-green" onclick="abrirModalCriarProposta()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova Proposta
+          </button>
+          <button class="btn-secondary" onclick="carregarPropostasCRM()" style="font-size:12px;">🔄 Atualizar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); margin-top:16px;">
+        <table class="crm-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Cliente</th>
+              <th>Negócio</th>
+              <th>Produto</th>
+              <th>Valor</th>
+              <th>Validade</th>
+              <th>Data Emissão</th>
+              <th>Envio E-mail</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-propostas-corpo">
+            <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CONTRATOS (PARTE 26) -->
     <div class="screen" id="screen-contratos">
       <div class="flow-header">
         <div>
           <div class="page-title">Contratos & Formalizações</div>
-          <div class="page-sub">Contratos originados de negócios fechados no CRM</div>
+          <div class="page-sub">Contratos originados de negócios fechados no CRM · Ao assinar, vira documento interno na base de conhecimento</div>
         </div>
         <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">🔄 Atualizar Lista</button>
       </div>
@@ -418,6 +632,29 @@
           <div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">
             Carregando contratos da empresa...
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PIPELINES (CONFIGURAÇÃO) (PARTE 22 & 23) -->
+    <div class="screen" id="screen-pipelines">
+      <div class="dash-header">
+        <div>
+          <div class="page-title">Configuração de Pipelines & Etapas</div>
+          <div class="page-sub">Crie funis personalizados para produtos específicos ou fluxos comerciais gerais</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-green" onclick="abrirModalNovoPipeline()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Pipeline
+          </button>
+          <button class="btn-secondary" onclick="carregarPipelinesAdmin()" style="font-size:12px;">🔄 Atualizar</button>
+        </div>
+      </div>
+
+      <div id="lista-pipelines-admin" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
+        <div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">
+          Carregando pipelines configurados...
         </div>
       </div>
     </div>
@@ -812,6 +1049,11 @@
               </div>
             </div>
 
+            <!-- BANNER DE ALERTA QUANDO NÃO CONFIGURADO (PARTE 28) -->
+            <div id="telegram-bot-aviso-desconectado" style="display:none; margin-bottom:14px; padding:12px 14px; border-radius:8px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; font-size:12px; line-height:1.5;">
+              ⚠️ <strong>Bot do Telegram não configurado</strong> — cadastre o token do seu bot abaixo para habilitar o atendimento via Telegram. Sem essa configuração, o canal não funciona.
+            </div>
+
             <div class="config-field" style="margin-bottom:10px;">
               <div class="cf-label" style="display:flex; justify-content:space-between;">
                 <span>Token do Bot (@BotFather)</span>
@@ -824,7 +1066,10 @@
             </div>
 
             <div class="config-field" style="margin-bottom:12px;">
-              <div class="cf-label">URL Oficial do Webhook Desta Empresa</div>
+              <div class="cf-label" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>URL Oficial do Webhook Desta Empresa</span>
+                <button id="btn-registrar-webhook" class="btn-secondary" style="font-size:11px; padding:3px 10px; cursor:not-allowed; opacity:0.4;" onclick="registrarWebhookTelegram()">Registrar Webhook Oficial</button>
+              </div>
               <input class="cf-input" id="webhook-url-input" value="Carregando..." readonly style="background:rgba(0,0,0,0.15); font-family:monospace; font-size:11px;" />
             </div>
 
@@ -977,8 +1222,8 @@ function formatarDataHoraCompleta(dataStr) {
 }
 
 function switchTab(tabId, navEl) {
-  // PARTE 15: Restrição de acesso para funcionários (Analytics e Configurações)
-  if ((tabId === 'analytics' || tabId === 'config') && usuarioAtual && usuarioAtual.perfil === 'funcionario') {
+  // Restrição de acesso para funcionários (Analytics, Configurações e Pipelines)
+  if ((tabId === 'analytics' || tabId === 'config' || tabId === 'pipelines') && usuarioAtual && usuarioAtual.perfil === 'funcionario') {
     alert('Acesso restrito. Apenas administradores podem acessar esta seção.');
     return;
   }
@@ -1002,9 +1247,14 @@ function switchTab(tabId, navEl) {
   if (tabId === 'dashboard') {
     carregarConversasTelegram();
     carregarDashboardMetricas();
+    carregarSerieTemporalDashboard();
   }
-  if (tabId === 'fluxos') carregarKanbanNegocios();
+  if (tabId === 'clientes') carregarClientesCRM();
+  if (tabId === 'produtos') carregarProdutosCRM();
+  if (tabId === 'fluxos') carregarPipelinesKanban();
+  if (tabId === 'propostas') carregarPropostasCRM();
   if (tabId === 'contratos') carregarContratosCRM();
+  if (tabId === 'pipelines') carregarPipelinesAdmin();
   if (tabId === 'config') {
     carregarStatusWebhook();
     carregarConfiguracoesEmpresa();
@@ -1528,60 +1778,433 @@ function renderizarMiniKanbanDashboard(estagios) {
   }).join('');
 }
 
-// ===== KANBAN CRM DINÂMICO (PARTE 9c) =====
-async function carregarKanbanNegocios() {
+// ===== DASHBOARD SÉRIE TEMPORAL (PARTE 24) =====
+let metricaSerieTemporalAtiva = 'clientes';
+
+async function carregarSerieTemporalDashboard(metrica = metricaSerieTemporalAtiva) {
+  metricaSerieTemporalAtiva = metrica;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const container = document.getElementById('dashboard-chart-container');
+  if (!container) return;
+
+  const btnCli = document.getElementById('btn-metrica-clientes');
+  const btnVen = document.getElementById('btn-metrica-vendas');
+  if (btnCli && btnVen) {
+    if (metrica === 'clientes') {
+      btnCli.style.background = 'var(--surface)';
+      btnCli.style.color = '#38bdf8';
+      btnVen.style.background = 'transparent';
+      btnVen.style.color = 'var(--text-muted)';
+    } else {
+      btnVen.style.background = 'var(--surface)';
+      btnVen.style.color = '#34d399';
+      btnCli.style.background = 'transparent';
+      btnCli.style.color = 'var(--text-muted)';
+    }
+  }
+
+  try {
+    const res = await fetch(`/dashboard/serie-temporal?empresa_id=${empresaId}&metrica=${metrica}&meses=12`, {
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (!res.ok) throw new Error('Falha ao carregar série temporal');
+    const data = await res.json();
+    renderizarGraficoSerieTemporal(data.dados || [], metrica);
+  } catch (err) {
+    container.innerHTML = `<div style="color:#ef4444; font-size:12px;">Erro ao carregar série temporal: ${err.message}</div>`;
+  }
+}
+
+function trocarMetricaSerieTemporal(metrica) {
+  carregarSerieTemporalDashboard(metrica);
+}
+
+function renderizarGraficoSerieTemporal(pontos, metrica) {
+  const container = document.getElementById('dashboard-chart-container');
+  if (!container) return;
+
+  if (!pontos || pontos.length === 0) {
+    container.innerHTML = `<div style="color:var(--text-muted); font-size:12px; padding:30px;">Sem dados disponíveis para o período.</div>`;
+    return;
+  }
+
+  const valores = pontos.map(p => parseFloat(p.valor) || 0);
+  const maxVal = Math.max(...valores, 1);
+  const totalPeriodo = valores.reduce((a, b) => a + b, 0);
+
+  const corBarra = metrica === 'clientes' ? '#38bdf8' : '#34d399';
+  const chartHeight = 160;
+  const chartWidth = 600;
+
+  const barWidth = 28;
+  const espacamento = (chartWidth - (pontos.length * barWidth)) / (pontos.length + 1);
+
+  let barrasSvg = '';
+  let labelsSvg = '';
+  let valoresSvg = '';
+
+  pontos.forEach((p, i) => {
+    const val = parseFloat(p.valor) || 0;
+    const h = (val / maxVal) * (chartHeight - 45);
+    const x = espacamento + i * (barWidth + espacamento);
+    const y = chartHeight - h - 25;
+
+    const valFormatado = metrica === 'clientes' 
+      ? `${val}` 
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
+
+    barrasSvg += `
+      <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(h, 3)}" rx="4" fill="${corBarra}" opacity="0.85">
+        <title>${p.rotulo}: ${valFormatado}</title>
+      </rect>
+    `;
+    valoresSvg += `
+      <text x="${x + barWidth/2}" y="${y - 6}" font-size="9" font-weight="600" fill="var(--text)" text-anchor="middle">
+        ${val > 0 ? (metrica === 'clientes' ? val : (val >= 1000 ? (val/1000).toFixed(1) + 'k' : val)) : ''}
+      </text>
+    `;
+    labelsSvg += `
+      <text x="${x + barWidth/2}" y="${chartHeight - 6}" font-size="10" fill="var(--text-muted)" text-anchor="middle">
+        ${p.rotulo}
+      </text>
+    `;
+  });
+
+  const totalFormatado = metrica === 'clientes'
+    ? `${totalPeriodo} novos clientes`
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPeriodo);
+
+  container.innerHTML = `
+    <div style="width:100%; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:0 10px;">
+        <span style="font-size:12px; color:var(--text-muted);">Total 12 meses: <strong style="color:var(--text);">${totalFormatado}</strong></span>
+        <span style="font-size:11px; color:var(--text-muted);">Pico mensal: <strong style="color:${corBarra};">${metrica === 'clientes' ? maxVal : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(maxVal)}</strong></span>
+      </div>
+      <div style="width:100%; overflow-x:auto;">
+        <svg viewBox="0 0 ${chartWidth} ${chartHeight}" style="width:100%; height:180px; min-width:480px; display:block;">
+          <line x1="0" y1="${chartHeight - 22}" x2="${chartWidth}" y2="${chartHeight - 22}" stroke="var(--border)" stroke-width="1" />
+          <line x1="0" y1="${(chartHeight - 22)/2}" x2="${chartWidth}" y2="${(chartHeight - 22)/2}" stroke="var(--border)" stroke-dasharray="4 4" stroke-width="0.8" opacity="0.4" />
+          ${barrasSvg}
+          ${valoresSvg}
+          ${labelsSvg}
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+// ===== CLIENTES CRM (PARTE 23) =====
+let clientesCache = [];
+
+async function carregarClientesCRM() {
+  const empresaId = obterEmpresaAtivaId();
+  const corpo = document.getElementById('tabela-clientes-corpo');
+  if (!corpo) return;
+
+  try {
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando clientes...</td></tr>`;
+    const res = await fetch(`/clientes?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar clientes');
+    const data = await res.json();
+    clientesCache = data.clientes || [];
+    renderizarTabelaClientes(clientesCache);
+  } catch (err) {
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
+  }
+}
+
+function filtrarClientesCRM(termo) {
+  const t = (termo || '').toLowerCase().trim();
+  if (!t) {
+    renderizarTabelaClientes(clientesCache);
+    return;
+  }
+  const filtrados = clientesCache.filter(c => 
+    (c.nome || '').toLowerCase().includes(t) ||
+    (c.email || '').toLowerCase().includes(t) ||
+    (c.telefone || '').toLowerCase().includes(t)
+  );
+  renderizarTabelaClientes(filtrados);
+}
+
+function renderizarTabelaClientes(clientes) {
+  const corpo = document.getElementById('tabela-clientes-corpo');
+  if (!corpo) return;
+
+  if (clientes.length === 0) {
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhum cliente encontrado.</td></tr>`;
+    return;
+  }
+
+  corpo.innerHTML = clientes.map(c => `
+    <tr>
+      <td style="color:var(--text-muted); font-size:11px;">#${c.id}</td>
+      <td style="font-weight:600; color:var(--text);">${escapeHtml(c.nome || 'Sem nome')}</td>
+      <td>${c.email ? `<span style="color:#38bdf8;">${escapeHtml(c.email)}</span>` : '<span style="color:var(--text-muted); font-size:11px;">(Sem e-mail)</span>'}</td>
+      <td>${c.telefone ? escapeHtml(c.telefone) : '<span style="color:var(--text-muted); font-size:11px;">-</span>'}</td>
+      <td><span class="badge-status badge-default" style="text-transform:capitalize;">${c.origem || 'manual'}</span></td>
+      <td style="color:var(--text-muted); font-size:11px;">${formatarData(c.criado_em)}</td>
+      <td style="text-align:right;">
+        <button class="btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="abrirModalCliente(${JSON.stringify(c).replace(/"/g, '&quot;')})">Editar</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function abrirModalCliente(cliente = null) {
+  document.getElementById('modal-cliente-id').value = cliente ? cliente.id : '';
+  document.getElementById('modal-cliente-nome').value = cliente ? cliente.nome || '' : '';
+  document.getElementById('modal-cliente-email').value = cliente ? cliente.email || '' : '';
+  document.getElementById('modal-cliente-telefone').value = cliente ? cliente.telefone || '' : '';
+  document.getElementById('modal-cliente-origem').value = cliente ? cliente.origem || 'manual' : 'manual';
+  document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar Cliente' : 'Novo Cliente';
+  document.getElementById('modal-cliente').style.display = 'flex';
+}
+
+function fecharModalCliente() {
+  document.getElementById('modal-cliente').style.display = 'none';
+}
+
+async function salvarClienteCRM() {
+  const id = document.getElementById('modal-cliente-id').value;
+  const nome = document.getElementById('modal-cliente-nome').value.trim();
+  const email = document.getElementById('modal-cliente-email').value.trim();
+  const telefone = document.getElementById('modal-cliente-telefone').value.trim();
+  const origem = document.getElementById('modal-cliente-origem').value;
+  const empresaId = obterEmpresaAtivaId();
+
+  if (!nome) {
+    alert('Informe o nome do cliente.');
+    return;
+  }
+
+  try {
+    const payload = { empresa_id: empresaId, nome, email: email || null, telefone: telefone || null, origem };
+    const url = id ? `/clientes/${id}` : '/clientes';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao salvar cliente');
+    }
+    fecharModalCliente();
+    carregarClientesCRM();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// ===== PRODUTOS CRM (PARTE 23) =====
+let produtosCache = [];
+
+async function carregarProdutosCRM() {
+  const empresaId = obterEmpresaAtivaId();
+  const corpo = document.getElementById('tabela-produtos-corpo');
+  if (!corpo) return;
+
+  try {
+    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>`;
+    const res = await fetch(`/produtos?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar produtos');
+    const data = await res.json();
+    produtosCache = data.produtos || [];
+    renderizarTabelaProdutos(produtosCache);
+  } catch (err) {
+    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
+  }
+}
+
+function renderizarTabelaProdutos(produtos) {
+  const corpo = document.getElementById('tabela-produtos-corpo');
+  if (!corpo) return;
+
+  if (produtos.length === 0) {
+    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhum produto cadastrado.</td></tr>`;
+    return;
+  }
+
+  corpo.innerHTML = produtos.map(p => `
+    <tr>
+      <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
+      <td style="font-weight:600; color:var(--text);">${escapeHtml(p.nome)}</td>
+      <td style="color:var(--text-muted); font-size:12px; max-width:280px;">${escapeHtml(p.descricao || 'Sem descrição')}</td>
+      <td style="font-weight:700; color:#34d399;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</td>
+      <td>
+        <span class="badge-status ${p.ativo ? 'badge-active' : 'badge-inactive'}">
+          ${p.ativo ? '● Ativo' : '○ Inativo'}
+        </span>
+      </td>
+      <td style="text-align:right; display:flex; gap:6px; justify-content:flex-end;">
+        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalProduto(${JSON.stringify(p).replace(/"/g, '&quot;')})">Editar</button>
+        <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:${p.ativo ? '#f87171' : '#34d399'};" onclick="alternarStatusProduto(${p.id})">
+          ${p.ativo ? 'Desativar' : 'Ativar'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function abrirModalProduto(produto = null) {
+  document.getElementById('modal-produto-id').value = produto ? produto.id : '';
+  document.getElementById('modal-produto-nome').value = produto ? produto.nome || '' : '';
+  document.getElementById('modal-produto-descricao').value = produto ? produto.descricao || '' : '';
+  document.getElementById('modal-produto-preco').value = produto ? produto.preco || '' : '';
+  document.getElementById('modal-produto-ativo').checked = produto ? Boolean(produto.ativo) : true;
+  document.getElementById('modal-produto-titulo').textContent = produto ? 'Editar Produto' : 'Novo Produto';
+  document.getElementById('modal-produto').style.display = 'flex';
+}
+
+function fecharModalProduto() {
+  document.getElementById('modal-produto').style.display = 'none';
+}
+
+async function salvarProdutoCRM() {
+  const id = document.getElementById('modal-produto-id').value;
+  const nome = document.getElementById('modal-produto-nome').value.trim();
+  const descricao = document.getElementById('modal-produto-descricao').value.trim();
+  const preco = parseFloat(document.getElementById('modal-produto-preco').value) || 0;
+  const ativo = document.getElementById('modal-produto-ativo').checked;
+  const empresaId = obterEmpresaAtivaId();
+
+  if (!nome) {
+    alert('Informe o nome do produto.');
+    return;
+  }
+
+  try {
+    const payload = { empresa_id: empresaId, nome, descricao: descricao || null, preco, ativo };
+    const url = id ? `/produtos/${id}` : '/produtos';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao salvar produto');
+    }
+    fecharModalProduto();
+    carregarProdutosCRM();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function alternarStatusProduto(produtoId) {
+  try {
+    const res = await fetch(`/produtos/${produtoId}/toggle-ativo`, { method: 'PATCH' });
+    if (!res.ok) throw new Error('Falha ao alternar status');
+    carregarProdutosCRM();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// ===== PIPELINES & KANBAN DINÂMICO (PARTE 22 & 23) =====
+let pipelinesCache = [];
+let pipelineAtivoId = null;
+let negociosPipelineCache = [];
+
+async function carregarPipelinesKanban() {
+  const empresaId = obterEmpresaAtivaId();
+  const select = document.getElementById('select-pipeline-kanban');
+  if (!select) return;
+
+  try {
+    const res = await fetch(`/pipelines?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar pipelines');
+    const data = await res.json();
+    pipelinesCache = data.pipelines || [];
+
+    if (pipelinesCache.length === 0) {
+      select.innerHTML = '<option value="">Nenhum pipeline disponível</option>';
+      document.getElementById('kanban-board-container').innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhum pipeline configurado para esta empresa. Crie um em "Pipelines".</div>';
+      return;
+    }
+
+    select.innerHTML = pipelinesCache.map(p => `
+      <option value="${p.id}" ${p.id === pipelineAtivoId || (!pipelineAtivoId && p.padrao) ? 'selected' : ''}>
+        ${escapeHtml(p.nome)} ${p.padrao ? '★ (Padrão)' : ''} ${p.produto_nome ? `[${escapeHtml(p.produto_nome)}]` : ''}
+      </option>
+    `).join('');
+
+    const selecionado = pipelinesCache.find(p => p.id === pipelineAtivoId) || pipelinesCache.find(p => p.padrao) || pipelinesCache[0];
+    pipelineAtivoId = selecionado.id;
+    select.value = pipelineAtivoId;
+    await carregarNegociosDoPipeline(pipelineAtivoId);
+  } catch (err) {
+    console.error('Erro ao carregar pipelines:', err);
+    select.innerHTML = `<option value="">Erro ao carregar</option>`;
+  }
+}
+
+async function aoMudarPipelineKanban(pipelineId) {
+  pipelineAtivoId = parseInt(pipelineId);
+  await carregarNegociosDoPipeline(pipelineAtivoId);
+}
+
+async function carregarNegociosDoPipeline(pipelineId) {
   const empresaId = obterEmpresaAtivaId();
   const container = document.getElementById('kanban-board-container');
   if (!container) return;
 
+  const pipeline = pipelinesCache.find(p => p.id === pipelineId);
+  if (!pipeline) return;
+
   try {
-    const res = await fetch(`/negocios?empresa_id=${empresaId}`);
-    if (!res.ok) throw new Error('Falha ao listar negócios');
+    container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px; width:100%;">Carregando oportunidades do funil...</div>`;
+    const res = await fetch(`/negocios?empresa_id=${empresaId}&pipeline_id=${pipelineId}`);
+    if (!res.ok) throw new Error('Falha ao listar oportunidades');
     const data = await res.json();
-    const negocios = data.negocios || [];
-    renderizarKanban(negocios);
+    negociosPipelineCache = data.negocios || [];
+    renderizarKanbanDinamico(pipeline, negociosPipelineCache);
   } catch (e) {
-    console.error('Erro ao carregar kanban:', e);
-    container.innerHTML = `<div style="padding:20px; color:#ef4444;">Erro ao carregar funil de vendas: ${e.message}</div>`;
+    container.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444; font-size:13px; width:100%;">Erro: ${e.message}</div>`;
   }
 }
 
-function renderizarKanban(negocios) {
+function renderizarKanbanDinamico(pipeline, negocios) {
   const container = document.getElementById('kanban-board-container');
   if (!container) return;
 
-  const colunas = [
-    { id: 'novo', label: 'Novo Lead', cor: '#38bdf8' },
-    { id: 'qualificado', label: 'Qualificado', cor: '#818cf8' },
-    { id: 'proposta', label: 'Proposta Enviada', cor: '#fbbf24' },
-    { id: 'negociacao', label: 'Negociação', cor: '#f97316' },
-    { id: 'fechado', label: 'Fechado 🎉', cor: '#34d399' },
-    { id: 'perdido', label: 'Perdido', cor: '#f87171' }
-  ];
+  const etapas = pipeline.etapas || [];
+  if (etapas.length === 0) {
+    container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px; width:100%;">Este pipeline não possui etapas cadastradas. Configure as etapas no menu Pipelines.</div>`;
+    return;
+  }
 
-  container.innerHTML = colunas.map(col => {
-    const itens = negocios.filter(n => (n.estagio || 'novo').toLowerCase() === col.id);
+  container.innerHTML = etapas.map((etapa, idx) => {
+    const itens = negocios.filter(n => n.etapa_id === etapa.id);
     const somaValor = itens.reduce((acc, curr) => acc + (parseFloat(curr.valor_estimado) || 0), 0);
+    const proximaEtapa = idx < etapas.length - 1 ? etapas[idx + 1] : null;
 
     return `
-      <div class="kanban-col">
-        <div class="kanban-col-header" style="color:${col.cor};">
-          <span>${col.label} (${itens.length})</span>
-          <span style="font-size:11px; color:var(--text-muted);">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaValor)}</span>
+      <div class="kanban-col" data-etapa-id="${etapa.id}" ondragover="allowDropNegocio(event)" ondragleave="dragLeaveNegocio(event)" ondrop="dropNegocio(event, ${etapa.id})">
+        <div class="kanban-col-header" style="border-top:3px solid ${etapa.cor || '#38bdf8'};">
+          <span style="color:${etapa.cor || 'var(--text)'}; font-weight:700;">${escapeHtml(etapa.nome)} (${itens.length})</span>
+          <span style="font-size:11px; color:var(--text-muted); font-weight:600;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaValor)}</span>
         </div>
         <div class="kanban-col-body">
           ${itens.length === 0 ? `
-            <div style="padding:24px 10px; text-align:center; color:var(--text-muted); font-size:11px;">
-              Vazio
+            <div style="padding:26px 10px; text-align:center; color:var(--text-muted); font-size:11px; border:1px dashed var(--border); border-radius:6px;">
+              Sem negócios aqui
             </div>
           ` : itens.map(n => `
-            <div class="kanban-card stage-${col.id}">
+            <div class="kanban-card" draggable="true" ondragstart="dragNegocio(event, ${n.id})" style="border-left: 3px solid ${etapa.cor || '#38bdf8'};">
               <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div style="font-weight:600; color:var(--text); font-size:13px;">${n.cliente_nome || 'Lead'}</div>
+                <div style="font-weight:600; color:var(--text); font-size:13px;">${escapeHtml(n.cliente_nome || 'Lead')}</div>
                 <span style="font-size:10px; color:var(--text-muted);">#${n.id}</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin:4px 0;">
-                📦 ${n.produto_nome || 'Produto não definido'}
+                📦 ${escapeHtml(n.produto_nome || 'Geral')}
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <div style="font-weight:700; color:#34d399; font-size:13px;">
@@ -1589,11 +2212,18 @@ function renderizarKanban(negocios) {
                 </div>
                 ${n.proposta_enviada ? '<span class="contract-status-badge cs-signed" style="font-size:9px;">Proposta</span>' : ''}
               </div>
-              <select class="kanban-select" onchange="atualizarEstagioNegocio(${n.id}, this.value)">
-                ${colunas.map(c => `
-                  <option value="${c.id}" ${c.id === col.id ? 'selected' : ''}>Mover: ${c.label}</option>
-                `).join('')}
-              </select>
+              <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+                <select class="kanban-select" style="margin-top:0; flex:1;" onchange="atualizarEtapaNegocio(${n.id}, parseInt(this.value))">
+                  ${etapas.map(e => `
+                    <option value="${e.id}" ${e.id === etapa.id ? 'selected' : ''}>Mover: ${escapeHtml(e.nome)}</option>
+                  `).join('')}
+                </select>
+                ${proximaEtapa ? `
+                  <button title="Avançar para: ${escapeHtml(proximaEtapa.nome)}" class="btn-icon" style="background:var(--bg); border:1px solid var(--border); padding:5px 8px; font-size:11px; color:var(--text);" onclick="atualizarEtapaNegocio(${n.id}, ${proximaEtapa.id})">
+                    →
+                  </button>
+                ` : ''}
+              </div>
             </div>
           `).join('')}
         </div>
@@ -1602,37 +2232,616 @@ function renderizarKanban(negocios) {
   }).join('');
 }
 
-async function atualizarEstagioNegocio(negocioId, novoEstagio) {
+// Drag & Drop
+let idNegocioArrastado = null;
+
+function dragNegocio(event, negocioId) {
+  idNegocioArrastado = negocioId;
+  event.dataTransfer.setData('text/plain', String(negocioId));
+}
+
+function allowDropNegocio(event) {
+  event.preventDefault();
+  const col = event.currentTarget;
+  if (col) col.classList.add('drag-over');
+}
+
+function dragLeaveNegocio(event) {
+  const col = event.currentTarget;
+  if (col) col.classList.remove('drag-over');
+}
+
+async function dropNegocio(event, novaEtapaId) {
+  event.preventDefault();
+  const col = event.currentTarget;
+  if (col) col.classList.remove('drag-over');
+  if (idNegocioArrastado) {
+    await atualizarEtapaNegocio(idNegocioArrastado, novaEtapaId);
+    idNegocioArrastado = null;
+  }
+}
+
+async function atualizarEtapaNegocio(negocioId, novaEtapaId) {
   try {
     const res = await fetch(`/negocios/${negocioId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ estagio: novoEstagio })
+      body: JSON.stringify({ etapa_id: novaEtapaId })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Erro ao mover estágio');
+      throw new Error(err.detail || 'Erro ao mover negócio');
     }
-    carregarKanbanNegocios();
+    await carregarNegociosDoPipeline(pipelineAtivoId);
     carregarDashboardMetricas();
+    carregarSerieTemporalDashboard();
   } catch (e) {
-    alert('Erro ao atualizar negócio: ' + e.message);
+    alert('Erro ao atualizar estágio do negócio: ' + e.message);
   }
 }
 
-// ===== CONTRATOS CRM =====
+async function abrirModalNovoNegocio() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const [resCli, resProd] = await Promise.all([
+      fetch(`/clientes?empresa_id=${empresaId}`),
+      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`)
+    ]);
+    const dataCli = await resCli.json();
+    const dataProd = await resProd.json();
+
+    const selCli = document.getElementById('modal-negocio-cliente-id');
+    const selProd = document.getElementById('modal-negocio-produto-id');
+
+    selCli.innerHTML = (dataCli.clientes || []).map(c => `
+      <option value="${c.id}">${escapeHtml(c.nome)} (${c.email || c.telefone || 'Sem contato'})</option>
+    `).join('') || '<option value="">Nenhum cliente cadastrado</option>';
+
+    selProd.innerHTML = '<option value="">Sem produto específico</option>' + (dataProd.produtos || []).map(p => `
+      <option value="${p.id}" data-preco="${p.preco || 0}">${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</option>
+    `).join('');
+
+    document.getElementById('modal-negocio-valor').value = '';
+    document.getElementById('modal-negocio').style.display = 'flex';
+  } catch (e) {
+    alert('Erro ao preparar formulário de negócio: ' + e.message);
+  }
+}
+
+function aoSelecionarProdutoNegocio(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.dataset.preco) {
+    const valInput = document.getElementById('modal-negocio-valor');
+    if (valInput && !valInput.value) {
+      valInput.value = opt.dataset.preco;
+    }
+  }
+}
+
+function fecharModalNovoNegocio() {
+  document.getElementById('modal-negocio').style.display = 'none';
+}
+
+async function salvarNovoNegocio() {
+  const clienteId = document.getElementById('modal-negocio-cliente-id').value;
+  const produtoIdVal = document.getElementById('modal-negocio-produto-id').value;
+  const valor = parseFloat(document.getElementById('modal-negocio-valor').value) || 0;
+  const empresaId = obterEmpresaAtivaId();
+
+  if (!clienteId) {
+    alert('Selecione um cliente.');
+    return;
+  }
+
+  try {
+    const payload = {
+      empresa_id: empresaId,
+      cliente_id: parseInt(clienteId),
+      produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
+      valor_estimado: valor
+    };
+    const res = await fetch('/negocios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao criar negócio');
+    }
+    fecharModalNovoNegocio();
+    await carregarPipelinesKanban();
+    carregarDashboardMetricas();
+  } catch (e) {
+    alert('Erro ao criar negócio: ' + e.message);
+  }
+}
+
+// ===== PIPELINES ADMIN (PARTE 22 & 23) =====
+async function carregarPipelinesAdmin() {
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const container = document.getElementById('lista-pipelines-admin');
+  if (!container) return;
+
+  try {
+    container.innerHTML = `<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">Carregando pipelines...</div>`;
+    const res = await fetch(`/pipelines?empresa_id=${empresaId}`, {
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (!res.ok) throw new Error('Falha ao listar pipelines');
+    const data = await res.json();
+    const pipelines = data.pipelines || [];
+
+    if (pipelines.length === 0) {
+      container.innerHTML = `<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhum pipeline configurado.</div>`;
+      return;
+    }
+
+    container.innerHTML = pipelines.map(p => `
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; box-shadow:var(--shadow-sm);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:700; font-size:16px; color:var(--text); font-family:'Syne',sans-serif;">${escapeHtml(p.nome)}</span>
+              ${p.padrao ? '<span class="badge-status badge-default">★ Padrão</span>' : ''}
+              <span class="badge-status" style="background:rgba(255,255,255,0.06); color:var(--text-muted);">
+                ${p.produto_nome ? `Produto: ${escapeHtml(p.produto_nome)}` : 'Funil Geral'}
+              </span>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+              ${(p.etapas || []).length} etapas configuradas neste funil
+            </div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-secondary" style="padding:6px 12px; font-size:11px;" onclick="abrirModalEtapa(${p.id})">+ Nova Etapa</button>
+            ${!p.padrao ? `<button class="btn-secondary" style="padding:6px 12px; font-size:11px; color:#f87171;" onclick="excluirPipeline(${p.id})">Excluir Pipeline</button>` : ''}
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+          ${(p.etapas || []).map((et, idx) => `
+            <div style="background:var(--bg); border:1px solid var(--border); border-left:3px solid ${et.cor || '#38bdf8'}; border-radius:8px; padding:10px 14px; min-width:180px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:600; font-size:12px; color:var(--text);">${escapeHtml(et.nome)}</div>
+                <div style="font-size:10px; color:var(--text-muted);">Ordem: #${et.ordem}</div>
+              </div>
+              <div style="display:flex; gap:4px;">
+                ${idx > 0 ? `<button title="Mover para esquerda" class="btn-icon" style="padding:2px 5px; font-size:10px;" onclick="moverEtapaOrdem(${p.id}, ${et.id}, -1)">←</button>` : ''}
+                ${idx < (p.etapas || []).length - 1 ? `<button title="Mover para direita" class="btn-icon" style="padding:2px 5px; font-size:10px;" onclick="moverEtapaOrdem(${p.id}, ${et.id}, 1)">→</button>` : ''}
+                <button title="Excluir etapa" class="btn-icon" style="padding:2px 5px; font-size:10px; color:#f87171;" onclick="excluirEtapaPipeline(${p.id}, ${et.id})">✕</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = `<div style="color:#ef4444; padding:20px; font-size:13px;">Erro: ${err.message}</div>`;
+  }
+}
+
+async function abrirModalNovoPipeline() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await fetch(`/produtos?empresa_id=${empresaId}&ativo=true`);
+    const data = await res.json();
+    const selProd = document.getElementById('modal-pipeline-produto-id');
+    selProd.innerHTML = '<option value="">Geral (Todos os Produtos)</option>' + (data.produtos || []).map(p => `
+      <option value="${p.id}">${escapeHtml(p.nome)}</option>
+    `).join('');
+
+    document.getElementById('modal-pipeline-nome').value = '';
+    document.getElementById('modal-pipeline-padrao').checked = false;
+    document.getElementById('modal-pipeline').style.display = 'flex';
+  } catch (e) {
+    alert('Erro ao carregar produtos para o pipeline: ' + e.message);
+  }
+}
+
+function fecharModalNovoPipeline() {
+  document.getElementById('modal-pipeline').style.display = 'none';
+}
+
+async function salvarNovoPipeline() {
+  const nome = document.getElementById('modal-pipeline-nome').value.trim();
+  const produtoIdVal = document.getElementById('modal-pipeline-produto-id').value;
+  const padrao = document.getElementById('modal-pipeline-padrao').checked;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+
+  if (!nome) {
+    alert('Informe o nome do pipeline.');
+    return;
+  }
+
+  try {
+    const payload = {
+      empresa_id: empresaId,
+      nome,
+      produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
+      padrao
+    };
+    const res = await fetch('/pipelines', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao criar pipeline');
+    }
+    fecharModalNovoPipeline();
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function excluirPipeline(pipelineId) {
+  if (!confirm('Deseja realmente excluir este pipeline e suas etapas?')) return;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+
+  try {
+    const res = await fetch(`/pipelines/${pipelineId}?empresa_id=${empresaId}`, {
+      method: 'DELETE',
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao excluir pipeline');
+    }
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+function abrirModalEtapa(pipelineId) {
+  document.getElementById('modal-etapa-pipeline-id').value = pipelineId;
+  document.getElementById('modal-etapa-nome').value = '';
+  document.getElementById('modal-etapa-cor').value = '#38bdf8';
+  document.getElementById('modal-etapa').style.display = 'flex';
+}
+
+function fecharModalEtapa() {
+  document.getElementById('modal-etapa').style.display = 'none';
+}
+
+async function salvarEtapaPipeline() {
+  const pipelineId = document.getElementById('modal-etapa-pipeline-id').value;
+  const nome = document.getElementById('modal-etapa-nome').value.trim();
+  const cor = document.getElementById('modal-etapa-cor').value;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+
+  if (!nome) {
+    alert('Informe o nome da etapa.');
+    return;
+  }
+
+  try {
+    const payload = { nome, cor };
+    const res = await fetch(`/pipelines/${pipelineId}/etapas?empresa_id=${empresaId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao adicionar etapa');
+    }
+    fecharModalEtapa();
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function moverEtapaOrdem(pipelineId, etapaId, delta) {
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const p = pipelinesCache.find(x => x.id === pipelineId);
+  if (!p || !p.etapas) return;
+
+  const etapas = [...p.etapas];
+  const idx = etapas.findIndex(e => e.id === etapaId);
+  if (idx < 0) return;
+  const novoIdx = idx + delta;
+  if (novoIdx < 0 || novoIdx >= etapas.length) return;
+
+  const temp = etapas[idx];
+  etapas[idx] = etapas[novoIdx];
+  etapas[novoIdx] = temp;
+
+  const novaOrdemIds = etapas.map(e => e.id);
+
+  try {
+    const res = await fetch(`/pipelines/${pipelineId}/etapas/reordenar?empresa_id=${empresaId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify(novaOrdemIds)
+    });
+    if (!res.ok) throw new Error('Falha ao reordenar etapas');
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro ao reordenar: ' + e.message);
+  }
+}
+
+async function excluirEtapaPipeline(pipelineId, etapaId) {
+  if (!confirm('Deseja realmente excluir esta etapa? Negócios vinculados a ela serão movidos para a primeira etapa do pipeline.')) return;
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+
+  try {
+    const res = await fetch(`/pipelines/${pipelineId}/etapas/${etapaId}?empresa_id=${empresaId}`, {
+      method: 'DELETE',
+      headers: { 'X-User-Id': String(uid || '') }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao excluir etapa');
+    }
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro ao excluir etapa: ' + e.message);
+  }
+}
+
+// ===== PROPOSTAS CRM (PARTE 27) =====
+let propostasCache = [];
+let negociosAbertosCache = [];
+
+async function carregarPropostasCRM() {
+  const empresaId = obterEmpresaAtivaId();
+  const corpo = document.getElementById('tabela-propostas-corpo');
+  if (!corpo) return;
+
+  try {
+    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>`;
+    const res = await fetch(`/propostas?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao listar propostas');
+    const data = await res.json();
+    propostasCache = data.propostas || [];
+    renderizarTabelaPropostas(propostasCache);
+  } catch (err) {
+    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
+  }
+}
+
+function renderizarTabelaPropostas(propostas) {
+  const corpo = document.getElementById('tabela-propostas-corpo');
+  if (!corpo) return;
+
+  if (propostas.length === 0) {
+    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhuma proposta gerada ainda. Clique em "Nova Proposta" para emitir uma.</td></tr>`;
+    return;
+  }
+
+  corpo.innerHTML = propostas.map(p => `
+    <tr>
+      <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
+      <td style="font-weight:600; color:var(--text);">${escapeHtml(p.cliente_nome || 'Lead')}</td>
+      <td style="color:var(--text-muted); font-size:11px;">Negócio #${p.negocio_id}</td>
+      <td>${escapeHtml(p.produto_nome || 'Produto')}</td>
+      <td style="font-weight:700; color:#34d399;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor || 0)}</td>
+      <td style="color:var(--text-muted); font-size:11px;">${escapeHtml(p.validade || '15 dias')}</td>
+      <td style="color:var(--text-muted); font-size:11px;">${formatarData(p.criado_em)}</td>
+      <td>
+        <span class="badge-status ${p.email_enviado ? 'badge-active' : 'badge-default'}">
+          ${p.email_enviado ? '✓ Enviado' : 'Gerada (Local)'}
+        </span>
+      </td>
+      <td style="text-align:right;">
+        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">Ver HTML</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function abrirModalCriarProposta() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await fetch(`/negocios?empresa_id=${empresaId}`);
+    const data = await res.json();
+    negociosAbertosCache = (data.negocios || []).filter(n => (n.estagio || '').toLowerCase() !== 'perdido');
+
+    const selNeg = document.getElementById('proposta-negocio-id');
+    if (negociosAbertosCache.length === 0) {
+      selNeg.innerHTML = '<option value="">Nenhum negócio ativo disponível</option>';
+    } else {
+      selNeg.innerHTML = '<option value="">Selecione um negócio...</option>' + negociosAbertosCache.map(n => `
+        <option value="${n.id}">
+          #${n.id} — ${escapeHtml(n.cliente_nome || 'Lead')} (${escapeHtml(n.produto_nome || 'Produto')} - ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0)})
+        </option>
+      `).join('');
+    }
+
+    limparCamposModalProposta();
+    document.getElementById('modal-criar-proposta').style.display = 'flex';
+  } catch (e) {
+    alert('Erro ao carregar oportunidades para gerar proposta: ' + e.message);
+  }
+}
+
+function fecharModalCriarProposta() {
+  document.getElementById('modal-criar-proposta').style.display = 'none';
+}
+
+function limparCamposModalProposta() {
+  document.getElementById('proposta-cliente-nome').textContent = '-';
+  document.getElementById('proposta-cliente-email').textContent = '-';
+  document.getElementById('proposta-produto-nome').textContent = '-';
+  document.getElementById('proposta-valor-estimado').textContent = '-';
+  document.getElementById('proposta-aviso-sem-email').style.display = 'none';
+  document.getElementById('btn-gerar-enviar-proposta').disabled = true;
+  document.getElementById('btn-previa-proposta').disabled = true;
+}
+
+async function aoSelecionarNegocioProposta(negocioId) {
+  if (!negocioId) {
+    limparCamposModalProposta();
+    return;
+  }
+
+  const n = negociosAbertosCache.find(x => x.id === parseInt(negocioId));
+  if (!n) return;
+
+  const empresaId = obterEmpresaAtivaId();
+
+  // Busca dados completos do cliente para confirmar e-mail
+  let emailCliente = '';
+  try {
+    const resCli = await fetch(`/clientes?empresa_id=${empresaId}`);
+    const dataCli = await resCli.json();
+    const cli = (dataCli.clientes || []).find(c => c.id === n.cliente_id);
+    if (cli) emailCliente = (cli.email || '').trim();
+  } catch (e) {}
+
+  document.getElementById('proposta-cliente-nome').textContent = n.cliente_nome || 'Cliente';
+  document.getElementById('proposta-cliente-email').textContent = emailCliente || '(Não cadastrado)';
+  document.getElementById('proposta-produto-nome').textContent = n.produto_nome || 'Produto não especificado';
+  document.getElementById('proposta-valor-estimado').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0);
+
+  const avisoSemEmail = document.getElementById('proposta-aviso-sem-email');
+  const btnEnviar = document.getElementById('btn-gerar-enviar-proposta');
+  const btnPrevia = document.getElementById('btn-previa-proposta');
+
+  if (!emailCliente) {
+    avisoSemEmail.style.display = 'block';
+    btnEnviar.disabled = true;
+    btnEnviar.style.opacity = '0.4';
+    btnEnviar.style.cursor = 'not-allowed';
+    btnPrevia.disabled = false;
+  } else {
+    avisoSemEmail.style.display = 'none';
+    btnEnviar.disabled = false;
+    btnEnviar.style.opacity = '1';
+    btnEnviar.style.cursor = 'pointer';
+    btnPrevia.disabled = false;
+  }
+}
+
+async function previsualizarProposta() {
+  const negocioId = document.getElementById('proposta-negocio-id').value;
+  if (!negocioId) {
+    alert('Selecione um negócio para pré-visualizar a proposta.');
+    return;
+  }
+
+  const condicoes = document.getElementById('proposta-condicoes').value.trim();
+  const validade = document.getElementById('proposta-validade').value.trim();
+
+  try {
+    const res = await fetch(`/negocios/${negocioId}/previa-proposta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ condicoes_pagamento: condicoes, validade })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao gerar prévia da proposta');
+    }
+    const data = await res.json();
+    exibirModalPreviaHTML(data.html);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function gerarEEnviarProposta() {
+  const negocioId = document.getElementById('proposta-negocio-id').value;
+  if (!negocioId) {
+    alert('Selecione um negócio.');
+    return;
+  }
+
+  const email = document.getElementById('proposta-cliente-email').textContent.trim();
+  if (!email || email.includes('Não cadastrado')) {
+    alert('Cliente sem e-mail cadastrado — complete o cadastro antes de enviar a proposta.');
+    return;
+  }
+
+  const condicoes = document.getElementById('proposta-condicoes').value.trim();
+  const validade = document.getElementById('proposta-validade').value.trim();
+
+  const btnEnviar = document.getElementById('btn-gerar-enviar-proposta');
+  btnEnviar.disabled = true;
+  btnEnviar.textContent = 'Enviando...';
+
+  try {
+    const res = await fetch(`/negocios/${negocioId}/gerar-proposta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ condicoes_pagamento: condicoes, validade })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Erro ao gerar e enviar proposta');
+    }
+    alert(data.mensagem || 'Proposta gerada com sucesso e indexada na base de conhecimento!');
+    fecharModalCriarProposta();
+    carregarPropostasCRM();
+    carregarPipelinesKanban();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  } finally {
+    btnEnviar.disabled = false;
+    btnEnviar.textContent = 'Gerar e Enviar';
+  }
+}
+
+function exibirModalPreviaHTML(htmlConteudo) {
+  const modal = document.getElementById('modal-previa-proposta');
+  const container = document.getElementById('container-previa-html');
+  if (container) {
+    container.srcdoc = htmlConteudo;
+  }
+  if (modal) modal.style.display = 'flex';
+}
+
+function fecharModalPreviaProposta() {
+  document.getElementById('modal-previa-proposta').style.display = 'none';
+}
+
+function visualizarHTMLProposta(propostaId) {
+  const p = propostasCache.find(x => x.id === propostaId);
+  if (!p || !p.conteudo_html) {
+    alert('Conteúdo da proposta não encontrado.');
+    return;
+  }
+  exibirModalPreviaHTML(p.conteudo_html);
+}
+
+// ===== CONTRATOS CRM (PARTE 26) =====
 async function carregarContratosCRM() {
   const empresaId = obterEmpresaAtivaId();
   const container = document.getElementById('lista-contratos-crm');
   if (!container) return;
 
   try {
-    const res = await fetch(`/negocios?empresa_id=${empresaId}&estagio=fechado`);
+    const res = await fetch(`/contratos?empresa_id=${empresaId}`);
     if (!res.ok) return;
     const data = await res.json();
-    const fechados = data.negocios || [];
+    const contratos = data.contratos || [];
 
-    if (fechados.length === 0) {
+    if (contratos.length === 0) {
       container.innerHTML = `
         <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">
           Nenhum contrato formalizado ainda. Negócios movidos para o estágio "Fechado" gerarão contratos automaticamente.
@@ -1641,21 +2850,47 @@ async function carregarContratosCRM() {
       return;
     }
 
-    container.innerHTML = fechados.map(n => `
-      <div class="contract-card" style="margin-bottom:12px;">
-        <div class="contract-icon fi-green">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+    container.innerHTML = contratos.map(c => `
+      <div class="contract-card" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="contract-icon ${c.status === 'assinado' ? 'fi-green' : 'fi-blue'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${c.status === 'assinado' ? '#0F6E56' : '#229ED9'}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="contract-info">
+            <div class="contract-name">Contrato Comercial #${c.id} — ${escapeHtml(c.produto_nome || 'FluxIA')}</div>
+            <div class="contract-client">Cliente: ${escapeHtml(c.cliente_nome || 'Lead')} · Negócio #${c.negocio_id} · ${formatarData(c.criado_em)}</div>
+          </div>
         </div>
-        <div class="contract-info">
-          <div class="contract-name">Contrato Comercial — ${n.produto_nome || 'FluxIA'}</div>
-          <div class="contract-client">Cliente: ${n.cliente_nome} · Lead #${n.cliente_id}</div>
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor || 0)}</div>
+          <span class="contract-status-badge ${c.status === 'assinado' ? 'cs-signed' : 'cs-draft'}">
+            ${c.status === 'assinado' ? '✓ Assinado (RAG)' : 'Minuta'}
+          </span>
+          ${c.status !== 'assinado' ? `
+            <button class="btn-green" style="font-size:11px; padding:4px 10px;" onclick="assinarContratoCRM(${c.id})">Assinar & Indexar</button>
+          ` : ''}
         </div>
-        <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0)}</div>
-        <span class="contract-status-badge cs-signed">Formalizado</span>
       </div>
     `).join('');
   } catch (e) {
     console.error('Erro ao carregar contratos:', e);
+  }
+}
+
+async function assinarContratoCRM(contratoId) {
+  if (!confirm('Deseja marcar este contrato como Assinado? Ele será automaticamente transformado em documento interno na Base de Conhecimento e indexado no Copiloto IA.')) return;
+  try {
+    const res = await fetch(`/contratos/${contratoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'assinado' })
+    });
+    if (!res.ok) throw new Error('Falha ao assinar contrato');
+    alert('Contrato assinado com sucesso e indexado no Copiloto IA!');
+    carregarContratosCRM();
+    carregarDocumentos();
+  } catch (e) {
+    alert('Erro: ' + e.message);
   }
 }
 
@@ -1862,15 +3097,25 @@ async function carregarConfiguracoesEmpresa() {
       fusoStatus.innerHTML = `<span style="color:var(--text-muted);">💻 Fuso local detectado neste dispositivo: <strong style="color:var(--text);">${fusoNavegador}</strong></span>`;
     }
 
-    // Configuração do Bot Dedicado do Telegram
+    // Configuração do Bot Dedicado do Telegram (PARTE 28)
     const tokenInput = document.getElementById('config-telegram-bot-token');
     const tokenStatus = document.getElementById('telegram-bot-token-status');
     const userEl = document.getElementById('telegram-bot-username-info');
     const btnRemover = document.getElementById('btn-remover-bot-telegram');
     const urlEl = document.getElementById('webhook-url-input');
+    const avisoEl = document.getElementById('telegram-bot-aviso-desconectado');
+    const btnWebhook = document.getElementById('btn-registrar-webhook');
 
-    if (data.telegram_bot_username) {
-      if (userEl) userEl.innerHTML = `🤖 <strong>@${data.telegram_bot_username}</strong> (Bot Dedicado Desta Empresa)`;
+    const temBotProprio = Boolean(data.telegram_bot_token_mascarada || data.telegram_bot_username);
+
+    if (temBotProprio) {
+      if (avisoEl) avisoEl.style.display = 'none';
+      if (btnWebhook) {
+        btnWebhook.disabled = false;
+        btnWebhook.style.opacity = '1';
+        btnWebhook.style.cursor = 'pointer';
+      }
+      if (userEl) userEl.innerHTML = `🤖 <strong>@${data.telegram_bot_username || 'Bot'}</strong> (Bot Próprio Conectado)`;
       if (tokenInput) {
         tokenInput.placeholder = data.telegram_bot_token_mascarada || '••••••••';
         tokenInput.value = '';
@@ -1880,13 +3125,19 @@ async function carregarConfiguracoesEmpresa() {
       }
       if (btnRemover) btnRemover.style.display = 'inline-flex';
     } else {
-      if (userEl) userEl.innerHTML = `🌐 <em>Utilizando bot padrão global</em> (ou adicione o bot próprio desta empresa)`;
+      if (avisoEl) avisoEl.style.display = 'block';
+      if (btnWebhook) {
+        btnWebhook.disabled = true;
+        btnWebhook.style.opacity = '0.35';
+        btnWebhook.style.cursor = 'not-allowed';
+      }
+      if (userEl) userEl.innerHTML = `<span style="color:#f87171;">⚠️ Nenhum bot próprio configurado para esta empresa</span>`;
       if (tokenInput) {
-        tokenInput.placeholder = 'Cole o token HTTP API gerado pelo BotFather...';
+        tokenInput.placeholder = 'Cole o token HTTP API gerado pelo @BotFather...';
         tokenInput.value = '';
       }
       if (tokenStatus) {
-        tokenStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Nenhum bot exclusivo cadastrado para este ambiente</span>`;
+        tokenStatus.innerHTML = `<span style="color:#f87171;">Bot inativo. O canal Telegram permanece desabilitado até configurar o token.</span>`;
       }
       if (btnRemover) btnRemover.style.display = 'none';
     }
@@ -2018,7 +3269,7 @@ async function salvarConfiguracaoBotTelegram() {
 }
 
 async function removerBotTelegramEmpresa() {
-  if (!confirm('Deseja realmente desconectar o bot dedicado desta empresa? Ela passará a usar o bot padrão global caso configurado.')) return;
+  if (!confirm('Deseja realmente desconectar o bot desta empresa? O atendimento via Telegram ficará desativado até nova configuração de token próprio.')) return;
   const empresaId = obterEmpresaAtivaId();
   const uid = usuarioAtual ? usuarioAtual.id : null;
   const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
@@ -2941,7 +4192,13 @@ function trocarEmpresaAtiva(novaEmpresaId) {
   carregarConfiguracoesEmpresa();
   carregarConversasTelegram();
   carregarDashboardMetricas();
-  carregarKanbanNegocios();
+  carregarSerieTemporalDashboard();
+  carregarPipelinesKanban();
+  carregarClientesCRM();
+  carregarProdutosCRM();
+  carregarPropostasCRM();
+  carregarPipelinesAdmin();
+  carregarContratosCRM();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2958,6 +4215,8 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarConfiguracoesEmpresa();
   carregarConversasTelegram();
   carregarDashboardMetricas();
+  carregarSerieTemporalDashboard();
+  carregarPipelinesKanban();
 
   // Polling automático de conversas
   setInterval(carregarConversasTelegram, 15000);
@@ -3050,6 +4309,249 @@ document.addEventListener('DOMContentLoaded', () => {
           <!-- Botão ativo para admin / disabled para funcionario -->
         </div>
       </div>
+    </div>
+  </div>
+<!-- MODAL CLIENTE (PARTE 23) -->
+<div class="modal-overlay" id="modal-cliente" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" id="modal-cliente-titulo" style="font-weight:700; font-family:'Syne',sans-serif;">Novo Cliente</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalCliente()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <input type="hidden" id="modal-cliente-id" />
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome Completo / Razão Social *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-cliente-nome" placeholder="Ex: Maria Silva ou Empresa XYZ" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">E-mail (Necessário para Propostas)</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-cliente-email" type="email" placeholder="cliente@email.com" />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Telefone / WhatsApp</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-cliente-telefone" placeholder="(11) 99999-9999" />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Origem do Contato</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-cliente-origem">
+          <option value="manual">Cadastro Manual</option>
+          <option value="telegram">Telegram Bot</option>
+          <option value="site">Website / Landing Page</option>
+          <option value="indicacao">Indicação</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalCliente()">Cancelar</button>
+      <button class="btn-green" onclick="salvarClienteCRM()">Salvar Cliente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRODUTO (PARTE 23) -->
+<div class="modal-overlay" id="modal-produto" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" id="modal-produto-titulo" style="font-weight:700; font-family:'Syne',sans-serif;">Novo Produto</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalProduto()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <input type="hidden" id="modal-produto-id" />
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome do Produto / Serviço *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-nome" placeholder="Ex: Consultoria em IA Enterprise" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Descrição</div>
+        <textarea class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); height:70px; resize:none;" id="modal-produto-descricao" placeholder="Breve resumo das entregas e benefícios..."></textarea>
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Preço Base (R$)</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-preco" type="number" step="0.01" placeholder="Ex: 2500.00" />
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+        <input type="checkbox" id="modal-produto-ativo" checked style="cursor:pointer;" />
+        <label for="modal-produto-ativo" style="font-size:13px; color:var(--text); cursor:pointer;">Produto Ativo no Catálogo</label>
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalProduto()">Cancelar</button>
+      <button class="btn-green" onclick="salvarProdutoCRM()">Salvar Produto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO NEGÓCIO (PARTE 22 & 23) -->
+<div class="modal-overlay" id="modal-negocio" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Nova Oportunidade (Negócio)</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalNovoNegocio()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Cliente / Lead *</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-cliente-id">
+          <option value="">Carregando clientes...</option>
+        </select>
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Produto / Serviço</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-produto-id" onchange="aoSelecionarProdutoNegocio(this)">
+          <option value="">Sem produto específico</option>
+        </select>
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Valor Estimado (R$)</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-valor" type="number" step="0.01" placeholder="0.00" />
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+        * O negócio será alocado automaticamente na primeira etapa do pipeline dedicado ao produto (se houver) ou no pipeline padrão da empresa.
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalNovoNegocio()">Cancelar</button>
+      <button class="btn-green" onclick="salvarNovoNegocio()">Criar Negócio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO PIPELINE (PARTE 22 & 23) -->
+<div class="modal-overlay" id="modal-pipeline" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Novo Pipeline de Vendas</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalNovoPipeline()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome do Pipeline *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-pipeline-nome" placeholder="Ex: Funil Enterprise, Suporte N2..." required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Vincular a um Produto Específico</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-pipeline-produto-id">
+          <option value="">Geral (Todos os Produtos)</option>
+        </select>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Negócios deste produto entrarão automaticamente neste pipeline.</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+        <input type="checkbox" id="modal-pipeline-padrao" style="cursor:pointer;" />
+        <label for="modal-pipeline-padrao" style="font-size:13px; color:var(--text); cursor:pointer;">Definir como Pipeline Padrão da Empresa</label>
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalNovoPipeline()">Cancelar</button>
+      <button class="btn-green" onclick="salvarNovoPipeline()">Salvar Pipeline</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ETAPA PIPELINE (PARTE 22) -->
+<div class="modal-overlay" id="modal-etapa" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:400px;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Adicionar Etapa</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalEtapa()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px;">
+      <input type="hidden" id="modal-etapa-pipeline-id" />
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome da Etapa *</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-etapa-nome" placeholder="Ex: Demonstração Agendada" required />
+      </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Cor de Destaque</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input type="color" id="modal-etapa-cor" value="#38bdf8" style="border:none; width:40px; height:36px; border-radius:6px; cursor:pointer; background:none;" />
+          <span style="font-size:12px; color:var(--text-muted);">Escolha uma cor para identificar esta coluna no funil</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalEtapa()">Cancelar</button>
+      <button class="btn-green" onclick="salvarEtapaPipeline()">Salvar Etapa</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CRIAR PROPOSTA (PARTE 27) -->
+<div class="modal-overlay" id="modal-criar-proposta" style="display:none; align-items:center; justify-content:center; z-index:9999;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:600px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Gerar Proposta Comercial</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalCriarProposta()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px; overflow-y:auto; flex:1;">
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Selecione o Negócio / Oportunidade *</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="proposta-negocio-id" onchange="aoSelecionarNegocioProposta(this.value)">
+          <option value="">Carregando oportunidades...</option>
+        </select>
+      </div>
+
+      <!-- Resumo do Negócio Selecionado -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">Cliente:</div>
+          <strong id="proposta-cliente-nome" style="color:var(--text);">-</strong>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">E-mail do Cliente:</div>
+          <strong id="proposta-cliente-email" style="color:#38bdf8;">-</strong>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">Produto / Serviço:</div>
+          <strong id="proposta-produto-nome" style="color:var(--text);">-</strong>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--text-muted);">Valor Proposto:</div>
+          <strong id="proposta-valor-estimado" style="color:#34d399;">-</strong>
+        </div>
+      </div>
+
+      <div id="proposta-aviso-sem-email" style="display:none; padding:10px 12px; border-radius:8px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; font-size:12px; margin-bottom:14px;">
+        ⚠️ Cliente sem e-mail cadastrado — complete o cadastro antes de enviar a proposta.
+      </div>
+
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Condições de Pagamento</div>
+        <textarea class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); height:60px; resize:none;" id="proposta-condicoes" placeholder="Ex: À vista via PIX com 5% de desconto ou em até 12x no cartão de crédito.">À vista via PIX ou em até 12x no cartão de crédito.</textarea>
+      </div>
+
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Validade da Proposta</div>
+        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="proposta-validade" value="Válida por 15 dias corridos" />
+      </div>
+
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+        ✦ A proposta será renderizada em documento HTML institucional, indexada automaticamente como item interno da base de conhecimento (RAG) e disparada por e-mail ao cliente.
+      </div>
+    </div>
+    <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <button class="btn-secondary" onclick="fecharModalCriarProposta()">Cancelar</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-secondary" id="btn-previa-proposta" disabled onclick="previsualizarProposta()">👁 Pré-visualizar</button>
+        <button class="btn-green" id="btn-gerar-enviar-proposta" disabled onclick="gerarEEnviarProposta()">✉ Gerar e Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PREVIA HTML PROPOSTA (PARTE 27) -->
+<div class="modal-overlay" id="modal-previa-proposta" style="display:none; align-items:center; justify-content:center; z-index:10000;">
+  <div class="modal-content" style="background:#fff; color:#333; border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:850px; height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:14px; color:var(--text);">Prévia da Proposta Comercial</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalPreviaProposta()">✕</button>
+    </div>
+    <div style="flex:1; overflow:hidden;">
+      <iframe id="container-previa-html" style="width:100%; height:100%; border:none;"></iframe>
+    </div>
+    <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:12px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="document.getElementById('container-previa-html').contentWindow.print()">🖨 Imprimir</button>
+      <button class="btn-green" onclick="fecharModalPreviaProposta()">Concluir</button>
     </div>
   </div>
 </div>

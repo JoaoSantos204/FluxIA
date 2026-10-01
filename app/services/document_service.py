@@ -125,3 +125,81 @@ def ler_imagem(caminho: Path) -> str:
     except Exception as e:
         logger.error(f"[DocumentService] Erro ao extrair texto da imagem {caminho.name}: {e}")
         raise ValueError(f"Não foi possível processar a imagem com IA: {e}")
+
+
+def salvar_e_indexar_documento_texto(
+    empresa_id: int,
+    nome_arquivo: str,
+    conteudo_texto: str,
+    tipo_arquivo: str = ".txt",
+    nivel_acesso: str = "interno",
+    origem: str = "sistema"
+) -> int:
+    """
+    Cria um documento sintético (ex: contrato assinado, proposta comercial),
+    salva no disco e banco de dados, e gera chunks e embeddings automaticamente
+    para o RAG interno da empresa.
+    """
+    import hashlib
+    import json
+    from datetime import datetime
+    from pathlib import Path
+    from uuid import uuid4
+    from app.database.database import conectar, _cursor, _placeholder
+    from app.services.chunk_service import dividir_texto
+    from app.services.embedding_service import gerar_embedding
+
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    upload_dir = base_dir / "uploads"
+    upload_dir.mkdir(exist_ok=True)
+
+    nome_seguro = f"{uuid4()}{tipo_arquivo}"
+    caminho_arquivo = upload_dir / nome_seguro
+    with open(caminho_arquivo, "w", encoding="utf-8") as f:
+        f.write(conteudo_texto)
+
+    hash_conteudo = hashlib.sha256(conteudo_texto.encode("utf-8")).hexdigest()
+    data_upload = datetime.now().isoformat()
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        # Evita conflito de nome para a mesma empresa adicionando timestamp se necessário
+        cursor.execute(f"SELECT id FROM documentos WHERE nome_arquivo = {ph} AND empresa_id = {ph}", (nome_arquivo, empresa_id))
+        if cursor.fetchone():
+            nome_arquivo = f"{Path(nome_arquivo).stem}_{int(datetime.now().timestamp())}{tipo_arquivo}"
+
+        cursor.execute(f"""
+            INSERT INTO documentos (
+                empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo,
+                conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+        """, (empresa_id, nome_arquivo, tipo_arquivo, str(caminho_arquivo), conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem))
+
+        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
+            doc_id = cursor.lastrowid
+        else:
+            cursor.execute(f"SELECT id FROM documentos WHERE hash_conteudo = {ph} AND empresa_id = {ph} ORDER BY id DESC LIMIT 1", (hash_conteudo, empresa_id))
+            row = cursor.fetchone()
+            doc_id = row["id"] if row else None
+
+        # Chunking e Embeddings automáticos
+        chunks = dividir_texto(conteudo_texto)
+        for num, chunk in enumerate(chunks, 1):
+            emb = gerar_embedding(chunk)
+            cursor.execute(f"""
+                INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding)
+                VALUES ({ph}, {ph}, {ph}, {ph})
+            """, (doc_id, num, chunk, json.dumps(emb)))
+
+        conexao.commit()
+        logger.info(f"[DocumentService] Documento sintético '{nome_arquivo}' (ID {doc_id}) indexado com {len(chunks)} chunks.")
+        return doc_id
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[DocumentService] Erro ao indexar documento sintético '{nome_arquivo}': {e}")
+        raise
+    finally:
+        conexao.close()

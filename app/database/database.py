@@ -157,6 +157,7 @@ def _criar_banco_sqlite(cursor):
             empresa_id INTEGER NOT NULL,
             nome TEXT NOT NULL,
             descricao TEXT,
+            preco REAL DEFAULT 0.0,
             ativo BOOLEAN DEFAULT 1,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
         )
@@ -178,6 +179,32 @@ def _criar_banco_sqlite(cursor):
         )
     """)
 
+    # 9.5 Pipelines & Etapas (CRM Configurável)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pipelines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            produto_id INTEGER,
+            padrao BOOLEAN DEFAULT 0,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS etapas_pipeline (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pipeline_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            ordem INTEGER NOT NULL DEFAULT 1,
+            cor TEXT DEFAULT '#3b82f6',
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (pipeline_id) REFERENCES pipelines(id) ON DELETE CASCADE
+        )
+    """)
+
     # 10. Negócios (CRM Pipeline)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS negocios (
@@ -185,15 +212,17 @@ def _criar_banco_sqlite(cursor):
             empresa_id INTEGER NOT NULL,
             cliente_id INTEGER NOT NULL,
             produto_id INTEGER,
+            etapa_id INTEGER,
             valor_estimado REAL DEFAULT 0,
-            estagio TEXT DEFAULT 'novo' CHECK (estagio IN ('novo','qualificado','proposta','negociacao','fechado','perdido')),
+            estagio TEXT DEFAULT 'novo',
             proposta_enviada BOOLEAN DEFAULT 0,
             ultima_interacao_em DATETIME DEFAULT CURRENT_TIMESTAMP,
             ultimo_followup_em DATETIME,
             criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
             FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
-            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL,
+            FOREIGN KEY (etapa_id) REFERENCES etapas_pipeline(id) ON DELETE SET NULL
         )
     """)
 
@@ -207,6 +236,29 @@ def _criar_banco_sqlite(cursor):
             data_assinatura DATETIME,
             criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 11.5 Propostas Comerciais
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS propostas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            empresa_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            produto_id INTEGER,
+            valor REAL DEFAULT 0,
+            condicoes_pagamento TEXT,
+            validade_dias INTEGER DEFAULT 15,
+            status_envio TEXT DEFAULT 'pendente',
+            email_destinatario TEXT,
+            documento_id INTEGER,
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE,
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE SET NULL,
+            FOREIGN KEY (documento_id) REFERENCES documentos(id) ON DELETE SET NULL
         )
     """)
 
@@ -296,6 +348,16 @@ def _criar_banco_sqlite(cursor):
     if "nivel_acesso" not in colunas_docs:
         cursor.execute("ALTER TABLE documentos ADD COLUMN nivel_acesso TEXT DEFAULT 'publico'")
 
+    if "origem" not in colunas_docs:
+        cursor.execute("ALTER TABLE documentos ADD COLUMN origem TEXT DEFAULT 'upload'")
+
+    cursor.execute("PRAGMA table_info(negocios)")
+    colunas_neg = [c["name"] for c in cursor.fetchall()]
+    if "etapa_id" not in colunas_neg:
+        cursor.execute("ALTER TABLE negocios ADD COLUMN etapa_id INTEGER REFERENCES etapas_pipeline(id)")
+    if "proposta_enviada" not in colunas_neg:
+        cursor.execute("ALTER TABLE negocios ADD COLUMN proposta_enviada BOOLEAN DEFAULT 0")
+
     cursor.execute("PRAGMA table_info(usuarios)")
     colunas_usuarios = [c["name"] for c in cursor.fetchall()]
     if "perfil" not in colunas_usuarios:
@@ -353,6 +415,8 @@ def _criar_banco_sqlite(cursor):
             VALUES (1, 'Plano Pro FluxIA', 'Licença mensal da plataforma CRM com agentes inteligentes e RAG corporativo', 1),
                    (1, 'Consultoria em IA', 'Implantação especializada e treinamento da equipe para automação de vendas', 1)
         """)
+
+    _garantir_pipelines_padrao(cursor, usar_postgres=False)
 
 
 # ---------------------------------------------------------------------------
@@ -458,6 +522,7 @@ def _criar_banco_postgres(cursor):
             empresa_id INTEGER NOT NULL,
             nome TEXT NOT NULL,
             descricao TEXT,
+            preco NUMERIC(12,2) DEFAULT 0.0,
             ativo BOOLEAN DEFAULT TRUE,
             FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
         )
@@ -479,6 +544,29 @@ def _criar_banco_postgres(cursor):
         )
     """)
 
+    # 9.5 Pipelines & Etapas (CRM Configurável)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pipelines (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            nome VARCHAR(255) NOT NULL,
+            produto_id INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
+            padrao BOOLEAN DEFAULT FALSE,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS etapas_pipeline (
+            id SERIAL PRIMARY KEY,
+            pipeline_id INTEGER NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+            nome VARCHAR(100) NOT NULL,
+            ordem INTEGER NOT NULL DEFAULT 1,
+            cor VARCHAR(50) DEFAULT '#3b82f6',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # 10. Negócios (CRM Pipeline)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS negocios (
@@ -486,8 +574,9 @@ def _criar_banco_postgres(cursor):
             empresa_id INTEGER NOT NULL,
             cliente_id INTEGER NOT NULL,
             produto_id INTEGER,
+            etapa_id INTEGER REFERENCES etapas_pipeline(id) ON DELETE SET NULL,
             valor_estimado NUMERIC(12,2) DEFAULT 0,
-            estagio TEXT DEFAULT 'novo' CHECK (estagio IN ('novo','qualificado','proposta','negociacao','fechado','perdido')),
+            estagio TEXT DEFAULT 'novo',
             proposta_enviada BOOLEAN DEFAULT FALSE,
             ultima_interacao_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             ultimo_followup_em TIMESTAMP,
@@ -508,6 +597,24 @@ def _criar_banco_postgres(cursor):
             data_assinatura TIMESTAMP,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE
+        )
+    """)
+
+    # 11.5 Propostas Comerciais
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS propostas (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+            produto_id INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
+            valor NUMERIC(12,2) DEFAULT 0,
+            condicoes_pagamento TEXT,
+            validade_dias INTEGER DEFAULT 15,
+            status_envio VARCHAR(50) DEFAULT 'pendente',
+            email_destinatario VARCHAR(255),
+            documento_id INTEGER REFERENCES documentos(id) ON DELETE SET NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -630,8 +737,23 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='empresa_id') THEN
                 ALTER TABLE conversas_telegram ADD COLUMN empresa_id INTEGER DEFAULT 1;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='documentos' AND column_name='origem') THEN
+                ALTER TABLE documentos ADD COLUMN origem VARCHAR(50) DEFAULT 'upload';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='negocios' AND column_name='etapa_id') THEN
+                ALTER TABLE negocios ADD COLUMN etapa_id INTEGER REFERENCES etapas_pipeline(id) ON DELETE SET NULL;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='negocios' AND column_name='proposta_enviada') THEN
+                ALTER TABLE negocios ADD COLUMN proposta_enviada BOOLEAN DEFAULT FALSE;
+            END IF;
         END $$;
     """)
+
+    # Relaxa CHECK constraint legado de estagio no Postgres caso exista
+    try:
+        cursor.execute("ALTER TABLE negocios DROP CONSTRAINT IF EXISTS negocios_estagio_check;")
+    except Exception:
+        pass
 
     # Dados iniciais
     cursor.execute("""
@@ -663,3 +785,57 @@ def _criar_banco_postgres(cursor):
             SELECT 1 FROM produtos WHERE empresa_id = 1 AND nome = 'Consultoria em IA'
         )
     """)
+
+    _garantir_pipelines_padrao(cursor, usar_postgres=True)
+
+
+def _garantir_pipelines_padrao(cursor, usar_postgres=False):
+    """Garante a existência de pipeline padrão com as 6 etapas para cada empresa cadastrada."""
+    ph = "%s" if usar_postgres else "?"
+    cursor.execute("SELECT id, nome FROM empresas")
+    empresas = cursor.fetchall()
+
+    etapas_padrao_info = [
+        ("Novo", 1, "#3b82f6"),
+        ("Qualificado", 2, "#6366f1"),
+        ("Proposta", 3, "#a855f7"),
+        ("Negociação", 4, "#f59e0b"),
+        ("Fechado", 5, "#22c55e"),
+        ("Perdido", 6, "#ef4444")
+    ]
+
+    for emp in empresas:
+        emp_id = emp["id"]
+        cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND padrao = {ph}", (emp_id, True))
+        pip = cursor.fetchone()
+
+        if not pip:
+            cursor.execute(f"""
+                INSERT INTO pipelines (empresa_id, nome, produto_id, padrao)
+                VALUES ({ph}, 'Funil de Vendas Padrão', NULL, {ph})
+            """, (emp_id, True))
+            cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND padrao = {ph} ORDER BY id DESC LIMIT 1", (emp_id, True))
+            pip = cursor.fetchone()
+
+        if pip:
+            pipeline_id = pip["id"]
+            for nome_etapa, ordem, cor in etapas_padrao_info:
+                cursor.execute(f"SELECT id FROM etapas_pipeline WHERE pipeline_id = {ph} AND nome = {ph}", (pipeline_id, nome_etapa))
+                if not cursor.fetchone():
+                    cursor.execute(f"""
+                        INSERT INTO etapas_pipeline (pipeline_id, nome, ordem, cor)
+                        VALUES ({ph}, {ph}, {ph}, {ph})
+                    """, (pipeline_id, nome_etapa, ordem, cor))
+
+            # Migra negócios sem etapa_id vinculando ao ID correspondente no pipeline padrão
+            cursor.execute(f"SELECT id, nome, LOWER(nome) as nome_lower FROM etapas_pipeline WHERE pipeline_id = {ph}", (pipeline_id,))
+            etapas_map = {row["nome_lower"]: row["id"] for row in cursor.fetchall()}
+            etapas_map["negociacao"] = etapas_map.get("negociação") or etapas_map.get("negociacao")
+
+            cursor.execute(f"SELECT id, estagio FROM negocios WHERE empresa_id = {ph} AND etapa_id IS NULL", (emp_id,))
+            negocios = cursor.fetchall()
+            for neg in negocios:
+                estagio_txt = (neg.get("estagio") or "novo").strip().lower()
+                target_id = etapas_map.get(estagio_txt) or etapas_map.get("novo")
+                if target_id:
+                    cursor.execute(f"UPDATE negocios SET etapa_id = {ph} WHERE id = {ph}", (target_id, neg["id"]))

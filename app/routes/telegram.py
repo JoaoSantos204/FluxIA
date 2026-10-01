@@ -96,9 +96,8 @@ def buscar_contexto_relevante(pergunta: str, empresa_id: int = 1, top_k: int = 3
         return "", []
 
 
-def configurar_comandos_bot_telegram():
-    """Registra comandos oficiais do Telegram (/start, /ajuda, /suporte)."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+def configurar_comandos_bot_telegram(token: str | None = None):
+    """Registra comandos oficiais do Telegram (/start, /ajuda, /suporte) para um token específico de empresa."""
     if not token:
         return
     url = f"https://api.telegram.org/bot{token}/setMyCommands"
@@ -114,7 +113,10 @@ def configurar_comandos_bot_telegram():
 
 
 def obter_token_bot_empresa(empresa_id: int | None = None, chat_id: str | None = None) -> str | None:
-    """Recupera o token do bot da respectiva empresa, com fallback inteligente para o bot padrão."""
+    """
+    Recupera o token do bot da respectiva empresa, estritamente próprio.
+    SEM fallback para bot global compartilhado. Retorna None se não configurado.
+    """
     token = None
     if empresa_id:
         try:
@@ -136,16 +138,15 @@ def obter_token_bot_empresa(empresa_id: int | None = None, chat_id: str | None =
         except Exception:
             pass
 
-    if not token:
-        token = os.getenv("TELEGRAM_BOT_TOKEN")
-    return token
+    token = (token or "").strip()
+    return token if token else None
 
 
 def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = None):
-    """Envia uma mensagem de resposta via API do Telegram com fallback para texto puro e suporte a multi-tenant."""
+    """Envia uma mensagem de resposta via API do Telegram com validação explícita de bot próprio."""
     token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
     if not token:
-        logger.warning(f"[Telegram] Token do bot não configurado para empresa={empresa_id}, chat={chat_id}. Mensagem: {texto}")
+        logger.warning(f"[Telegram] Bot do Telegram não configurado para a empresa {empresa_id}. Mensagem para chat {chat_id} não enviada.")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -167,7 +168,10 @@ def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = 
 def buscar_nome_telegram_api(chat_id: str, empresa_id: int | None = None) -> str | None:
     """Consulta os dados do chat na API do Telegram para obter o nome real do usuário."""
     token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
-    if not token or not chat_id:
+    if not token:
+        logger.warning(f"[Telegram] Bot do Telegram não configurado para a empresa {empresa_id}. getChat ignorado.")
+        return None
+    if not chat_id:
         return None
     try:
         url = f"https://api.telegram.org/bot{token}/getChat"
@@ -695,7 +699,7 @@ def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request
     if not token:
         raise HTTPException(
             status_code=400,
-            detail=f"Token do Telegram não configurado para a empresa {empresa_id} nem no servidor."
+            detail=f"Bot do Telegram não configurado para a empresa {empresa_id}. Por favor, cadastre e salve o token do bot da sua empresa nas configurações antes de registrar o webhook."
         )
 
     # Prioridade de URL: 1. Informada no body | 2. RENDER_EXTERNAL_URL | 3. Base URL da requisição
