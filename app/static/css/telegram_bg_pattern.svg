@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <g fill="none" stroke="rgba(255, 255, 255, 0.20)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Row 1 (y: 20 - 70) -->
+    <!-- Telegram Paper Plane -->
+    <path d="M30 46 L70 28 L50 68 L40 55 L30 46 Z M66 31 L41 54" />
+    <!-- Heart -->
+    <path d="M125 42 C120 34 110 34 105 42 C100 34 90 34 85 42 C80 50 95 64 105 70 C115 64 130 50 125 42 Z" />
+    <!-- 4-point Sparkle Star -->
+    <path d="M185 30 Q185 45 170 45 Q185 45 185 60 Q185 45 200 45 Q185 45 185 30 Z" />
+    <!-- Speech bubble with tail -->
+    <path d="M245 42 C245 34 255 28 268 28 C281 28 291 34 291 42 C291 48 285 53 275 55 L272 63 L268 56 C255 55 245 49 245 42 Z" />
+    <!-- Cat face / ears -->
+    <path d="M340 56 C335 56 331 52 331 46 L333 34 L344 42 C349 40 355 40 360 42 L371 34 L373 46 C373 52 369 56 364 56 Z M342 46 L343 47 M362 46 L361 47" />
+
+    <!-- Row 2 (y: 100 - 150) -->
+    <!-- Coffee mug with steam -->
+    <path d="M35 125 H57 A4 4 0 0 1 61 129 V139 A10 10 0 0 1 51 149 H45 A10 10 0 0 1 35 139 V125 Z M61 129 H66 A4 4 0 0 1 70 133 V137 A4 4 0 0 1 66 141 H61 M31 151 H65 M42 119 C42 116 45 115 45 112 M51 119 C51 116 54 115 54 112" />
+    <!-- Musical Eighth Notes -->
+    <path d="M120 120 V144 A6 6 0 1 1 114 138 H120 V126 H138 V140 A6 6 0 1 1 132 134 H138 V120 Z" />
+    <!-- Planet Saturn with rings -->
+    <circle cx="215" cy="135" r="13" />
+    <path d="M192 142 C198 135 214 130 230 132 C236 133 241 135 244 138 M238 128 C232 135 216 140 200 138 C194 137 189 135 186 132" />
+    <!-- Clock with hands -->
+    <circle cx="300" cy="135" r="14" />
+    <path d="M300 126 V135 L307 139" />
+    <!-- Small Diamond / Gem -->
+    <path d="M360 128 L372 128 L380 138 L366 150 L352 138 Z M352 138 L380 138 M366 150 L363 138 L366 128 L369 138 Z" />
+
+    <!-- Row 3 (y: 180 - 230) -->
+    <!-- Photo Camera -->
+    <rect x="25" y="210" width="34" height="24" rx="4" />
+    <circle cx="42" cy="222" r="7" />
+    <circle cx="53" cy="215" r="1.5" fill="rgba(255,255,255,0.20)" />
+    <path d="M34 210 L37 206 H47 L50 210" />
+    <!-- Headphones -->
+    <path d="M102 225 A16 16 0 0 1 134 225 V234 A3 3 0 0 1 131 237 H128 A3 3 0 0 1 125 234 V228 A3 3 0 0 1 128 225 H131 M105 225 H108 A3 3 0 0 1 111 228 V234 A3 3 0 0 1 108 237 H105 A3 3 0 0 1 102 234 V225" />
+    <!-- Pencil -->
+    <path d="M195 235 L215 215 L222 222 L202 242 L194 243 Z M212 218 L219 225" />
+    <!-- Lightbulb -->
+    <path d="M285 212 A11 11 0 1 1 301 212 C299 215 298 217 298 220 H288 C288 217 287 215 285 212 Z M289 223 H297 M290 226 H296" />
+    <!-- Cactus in pot -->
+    <path d="M360 215 V235 M360 220 H354 V227 H360 M360 223 H366 V230 H360 M352 235 H368 L366 245 H354 Z" />
+
+    <!-- Row 4 (y: 270 - 320) -->
+    <!-- Telegram Paper plane (alternate angle) -->
+    <path d="M30 310 L70 295 L48 335 L44 321 L30 310 Z M66 298 L43 320" />
+    <!-- Smiley Face -->
+    <circle cx="120" cy="310" r="14" />
+    <circle cx="115" cy="306" r="1.5" fill="rgba(255,255,255,0.20)" />
+    <circle cx="125" cy="306" r="1.5" fill="rgba(255,255,255,0.20)" />
+    <path d="M114 314 A7 7 0 0 0 126 314" />
+    <!-- Gamepad controller -->
+    <rect x="185" y="302" width="34" height="20" rx="6" />
+    <path d="M192 312 H200 M196 308 V316 M211 310 H211.5 M214 314 H214.5" />
+    <!-- Mail envelope -->
+    <rect x="275" y="302" width="30" height="20" rx="3" />
+    <path d="M275 304 L290 315 L305 304" />
+    <!-- Rocket ship -->
+    <path d="M360 300 C364 290 375 285 378 285 C378 288 373 299 363 303 L361 307 L356 302 Z M359 304 L352 309 M364 299 L369 292" />
+
+    <!-- Row 5 (y: 350 - 390) -->
+    <!-- Sunglasses -->
+    <path d="M30 375 A7 7 0 0 0 44 375 V370 H30 Z M52 375 A7 7 0 0 0 66 375 V370 H52 Z M44 372 H52 M28 370 H30 M66 370 H68" />
+    <!-- Starburst -->
+    <path d="M125 365 L127 372 L134 373 L129 378 L130 385 L124 382 L118 385 L119 378 L114 373 L121 372 Z" />
+    <!-- Chat bubble rounded -->
+    <path d="M190 365 C182 365 175 370 175 377 C175 381 178 385 183 387 L181 394 L188 390 C189 390 190 390 190 390 C198 390 205 385 205 377 C205 370 198 365 190 365 Z" />
+    <!-- Compass / Navigation arrow -->
+    <circle cx="275" cy="375" r="13" />
+    <path d="M272 378 L278 369 L275 375 L269 375 Z" />
+    <!-- Thumbs up -->
+    <path d="M350 378 V387 H345 V378 Z M350 380 H358 A3 3 0 0 1 361 383 A2 2 0 0 1 359 385 A2 2 0 0 1 358 387 H350 M353 380 L355 372 A2 2 0 0 0 353 370 H351 L350 376" />
+
+    <!-- Delicate filler particles (dots, crosses, circles) -->
+    <circle cx="75" cy="85" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="155" cy="90" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="235" cy="85" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="315" cy="80" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="85" cy="180" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="165" cy="175" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="255" cy="170" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="335" cy="180" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="80" cy="270" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="160" cy="265" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="245" cy="265" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="330" cy="260" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="85" cy="355" r="2" fill="rgba(255,255,255,0.16)" />
+    <circle cx="230" cy="345" r="1.5" fill="rgba(255,255,255,0.16)" />
+    <circle cx="315" cy="350" r="2" fill="rgba(255,255,255,0.16)" />
+    <!-- Crosses -->
+    <path d="M12 90 L18 96 M18 90 L12 96" />
+    <path d="M388 95 L394 101 M394 95 L388 101" />
+    <path d="M10 260 L16 266 M16 260 L10 266" />
+    <path d="M385 270 L391 276 M391 270 L385 276" />
+  </g>
+</svg>

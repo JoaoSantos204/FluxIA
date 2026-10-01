@@ -906,14 +906,46 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: #e5ddd5;
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-color: #8da6b8;
+  background-image: 
+    radial-gradient(circle at 50% 25%, rgba(160, 192, 212, 0.45) 0%, rgba(118, 151, 175, 0.25) 100%),
+    url("telegram_bg_pattern.svg");
+  background-repeat: repeat;
+  background-size: auto, 380px 380px;
+  background-attachment: local;
+}
+
+#lead-chat-messages {
+  background-color: #8da6b8;
+  background-image: 
+    radial-gradient(circle at 50% 25%, rgba(160, 192, 212, 0.45) 0%, rgba(118, 151, 175, 0.25) 100%),
+    url("telegram_bg_pattern.svg");
+  background-repeat: repeat;
+  background-size: auto, 380px 380px;
+  background-attachment: local;
+}
+
+#lead-chat-messages > div:only-child {
+  margin: auto;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(16, 35, 47, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  padding: 36px 28px !important;
+  max-width: 440px;
+}
+
+#rag-chat-messages {
+  background: #f8fafc;
+  background-image: none;
 }
 
 .msg {
   display: flex;
   flex-direction: column;
-  max-width: 65%;
+  max-width: 70%;
 }
 
 .msg.in {
@@ -934,7 +966,48 @@ body {
   font-size: 13px;
   line-height: 1.5;
   position: relative;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  word-break: break-word;
+  box-shadow: 0 1px 3px rgba(16, 35, 47, 0.16);
+}
+
+/* Telegram incoming message (Lead/Client) */
+.msg-bubble.msg-user {
+  align-self: flex-start;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-radius: 14px 14px 14px 3px !important;
+  max-width: 72%;
+}
+
+.msg-bubble.msg-user .msg-text {
+  color: #0f172a;
+}
+
+.msg-bubble.msg-user .msg-time {
+  color: #7b8e9d !important;
+  font-size: 10px;
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* Telegram outgoing message (Bot/Operator) */
+.msg-bubble.msg-bot {
+  align-self: flex-end;
+  background: #eeffde !important;
+  color: #0f172a !important;
+  border-radius: 14px 14px 3px 14px !important;
+  max-width: 72%;
+}
+
+.msg-bubble.msg-bot .msg-text {
+  color: #0f172a;
+}
+
+.msg-bubble.msg-bot .msg-time {
+  color: #4fae2e !important;
+  font-size: 10px;
+  margin-top: 4px;
+  text-align: right;
 }
 
 .msg.in .msg-bubble {
@@ -944,7 +1017,7 @@ body {
 }
 
 .msg.out .msg-bubble {
-  background: var(--green-light);
+  background: #eeffde;
   border-bottom-right-radius: 4px;
   color: #1a1f2e;
 }
