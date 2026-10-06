@@ -103,6 +103,21 @@ class GerarPropostaRequest(BaseModel):
     validade_dias: int = 15
     enviar_email: bool = True
 
+class PropostaDirectCreate(BaseModel):
+    empresa_id: int = 1
+    cliente_id: Optional[int] = None
+    cliente_nome: str
+    cliente_email: Optional[str] = None
+    cliente_telefone: Optional[str] = None
+    produto_id: Optional[int] = None
+    produto_nome: Optional[str] = None
+    valor: float = 0.0
+    condicoes_pagamento: Optional[str] = "À vista via PIX ou em 12x no cartão de crédito."
+    validade_dias: Optional[int] = 15
+    descricao_itens: Optional[str] = None
+    enviar_email: bool = False
+    usuario_id: Optional[int] = None
+
 
 # ============================================================================
 # HELPERS DE E-MAIL E TEMPLATE (PARTE 27)
@@ -1340,6 +1355,322 @@ def listar_todas_propostas(empresa_id: int = Query(1)):
         return {"total": len(propostas), "propostas": [dict(p) for p in propostas]}
     finally:
         conexao.close()
+
+
+@router.post("/propostas", status_code=status.HTTP_201_CREATED)
+def criar_proposta_direta(dados: PropostaDirectCreate):
+    """
+    Cria uma proposta comercial completa diretamente com campos preenchíveis:
+    1. Localiza ou cadastra o cliente automaticamente.
+    2. Localiza ou cadastra o produto se necessário.
+    3. Cria ou associa a oportunidade (negócio) no CRM em estágio 'Proposta'.
+    4. Gera o documento HTML institucional estilizado.
+    5. Salva e indexa o documento na pasta uploads/ e na tabela 'documentos' (RAG).
+    6. Registra a proposta na tabela 'propostas' associada ao 'documento_id'.
+    7. Dispara e-mail se solicitado e SMTP configurado.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        # 1. Obter nome da empresa
+        cursor.execute(f"SELECT nome FROM empresas WHERE id = {ph}", (dados.empresa_id,))
+        emp_row = cursor.fetchone()
+        empresa_nome = emp_row["nome"] if emp_row else "FluxIA"
+
+        # 2. Localizar ou criar cliente
+        cliente_id = dados.cliente_id
+        cliente_nome = dados.cliente_nome.strip()
+        cliente_email = (dados.cliente_email or "").strip()
+        cliente_telefone = (dados.cliente_telefone or "").strip()
+
+        if cliente_id:
+            cursor.execute(f"SELECT id, nome, email, telefone FROM clientes WHERE id = {ph} AND empresa_id = {ph}", (cliente_id, dados.empresa_id))
+            cli_row = cursor.fetchone()
+            if cli_row:
+                if not cliente_nome:
+                    cliente_nome = cli_row["nome"]
+                up_campos = []
+                up_vals = []
+                if cliente_email and not cli_row.get("email"):
+                    up_campos.append(f"email = {ph}")
+                    up_vals.append(cliente_email)
+                if cliente_telefone and not cli_row.get("telefone"):
+                    up_campos.append(f"telefone = {ph}")
+                    up_vals.append(cliente_telefone)
+                if up_campos:
+                    up_vals.append(cliente_id)
+                    cursor.execute(f"UPDATE clientes SET {', '.join(up_campos)} WHERE id = {ph}", tuple(up_vals))
+            else:
+                cliente_id = None
+
+        if not cliente_id:
+            if cliente_email:
+                cursor.execute(f"SELECT id FROM clientes WHERE empresa_id = {ph} AND email = {ph} LIMIT 1", (dados.empresa_id, cliente_email))
+                cli_existente = cursor.fetchone()
+                if cli_existente:
+                    cliente_id = cli_existente["id"]
+            if not cliente_id:
+                if USAR_POSTGRES:
+                    cursor.execute(f"""
+                        INSERT INTO clientes (empresa_id, nome, email, telefone, origem)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, 'proposta')
+                        RETURNING id
+                    """, (dados.empresa_id, cliente_nome, cliente_email or None, cliente_telefone or None))
+                    cliente_id = cursor.fetchone()["id"]
+                else:
+                    cursor.execute(f"""
+                        INSERT INTO clientes (empresa_id, nome, email, telefone, origem)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, 'proposta')
+                    """, (dados.empresa_id, cliente_nome, cliente_email or None, cliente_telefone or None))
+                    cliente_id = cursor.lastrowid
+
+        # 3. Localizar ou criar produto
+        produto_id = dados.produto_id
+        produto_nome = (dados.produto_nome or "Solução Especializada").strip()
+        produto_desc = (dados.descricao_itens or "").strip()
+
+        if produto_id:
+            cursor.execute(f"SELECT id, nome, descricao FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, dados.empresa_id))
+            prod_row = cursor.fetchone()
+            if prod_row:
+                produto_nome = prod_row["nome"]
+                if not produto_desc:
+                    produto_desc = prod_row.get("descricao") or ""
+            else:
+                produto_id = None
+
+        if not produto_id and produto_nome:
+            cursor.execute(f"SELECT id, descricao FROM produtos WHERE empresa_id = {ph} AND nome = {ph} LIMIT 1", (dados.empresa_id, produto_nome))
+            p_exist = cursor.fetchone()
+            if p_exist:
+                produto_id = p_exist["id"]
+                if not produto_desc:
+                    produto_desc = p_exist.get("descricao") or ""
+            else:
+                if USAR_POSTGRES:
+                    cursor.execute(f"""
+                        INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
+                        RETURNING id
+                    """, (dados.empresa_id, produto_nome, produto_desc or None, float(dados.valor)))
+                    produto_id = cursor.fetchone()["id"]
+                else:
+                    cursor.execute(f"""
+                        INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
+                    """, (dados.empresa_id, produto_nome, produto_desc or None, float(dados.valor)))
+                    produto_id = cursor.lastrowid
+
+        # 4. Localizar ou criar negócio no CRM
+        cursor.execute(f"""
+            SELECT id FROM negocios
+            WHERE cliente_id = {ph} AND empresa_id = {ph} AND estagio != 'perdido'
+            ORDER BY id DESC LIMIT 1
+        """, (cliente_id, dados.empresa_id))
+        neg_row = cursor.fetchone()
+        if neg_row:
+            negocio_id = neg_row["id"]
+            cursor.execute(f"""
+                UPDATE negocios 
+                SET valor_estimado = {ph}, produto_id = COALESCE({ph}, produto_id),
+                    estagio = 'Proposta', proposta_enviada = TRUE, ultima_interacao_em = CURRENT_TIMESTAMP
+                WHERE id = {ph}
+            """, (float(dados.valor), produto_id, negocio_id))
+        else:
+            cursor.execute(f"""
+                SELECT ep.id 
+                FROM etapas_pipeline ep
+                JOIN pipelines p ON ep.pipeline_id = p.id
+                WHERE p.empresa_id = {ph} AND LOWER(ep.nome) LIKE {ph}
+                ORDER BY ep.ordem ASC
+                LIMIT 1
+            """, (dados.empresa_id, '%proposta%'))
+            et_row = cursor.fetchone()
+            etapa_id = et_row["id"] if et_row else None
+            if not etapa_id:
+                cursor.execute(f"""
+                    SELECT ep.id 
+                    FROM etapas_pipeline ep
+                    JOIN pipelines p ON ep.pipeline_id = p.id
+                    WHERE p.empresa_id = {ph}
+                    ORDER BY p.padrao DESC, ep.ordem ASC
+                    LIMIT 1
+                """, (dados.empresa_id,))
+                et_def = cursor.fetchone()
+                etapa_id = et_def["id"] if et_def else None
+
+            if USAR_POSTGRES:
+                cursor.execute(f"""
+                    INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
+                    RETURNING id
+                """, (dados.empresa_id, cliente_id, produto_id, etapa_id, float(dados.valor)))
+                negocio_id = cursor.fetchone()["id"]
+            else:
+                cursor.execute(f"""
+                    INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
+                """, (dados.empresa_id, cliente_id, produto_id, etapa_id, float(dados.valor)))
+                negocio_id = cursor.lastrowid
+
+        # 5. Inserir registro na tabela 'propostas'
+        if USAR_POSTGRES:
+            cursor.execute(f"""
+                INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
+                RETURNING id
+            """, (negocio_id, dados.empresa_id, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
+            proposta_id = cursor.fetchone()["id"]
+        else:
+            cursor.execute(f"""
+                INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
+            """, (negocio_id, dados.empresa_id, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
+            proposta_id = cursor.lastrowid
+
+        conexao.commit()
+
+        # 6. Gerar documento HTML da proposta
+        html_proposta = gerar_template_proposta_html(
+            cliente_nome=cliente_nome,
+            cliente_email=cliente_email,
+            cliente_telefone=cliente_telefone,
+            produto_nome=produto_nome,
+            produto_descricao=produto_desc,
+            valor=float(dados.valor),
+            condicoes=dados.condicoes_pagamento or "À vista via PIX ou em 12x",
+            validade_dias=dados.validade_dias or 15,
+            empresa_nome=empresa_nome,
+            proposta_id=proposta_id
+        )
+
+        # 7. Salvar e indexar como documento interno no RAG / Base de Conhecimento
+        doc_id = None
+        try:
+            texto_rag = f"""PROPOSTA COMERCIAL #{proposta_id}
+Cliente: {cliente_nome}
+Email: {cliente_email or 'Não informado'}
+Telefone: {cliente_telefone or 'Não informado'}
+Produto / Solução: {produto_nome}
+Descrição / Escopo: {produto_desc or 'Conforme detalhamento comercial'}
+Valor Proposto: R$ {float(dados.valor):,.2f}
+Condições de Pagamento: {dados.condicoes_pagamento}
+Validade: {dados.validade_dias} dias
+Empresa Emissora: {empresa_nome}
+Status: Proposta Oficial Gerada"""
+
+            nome_arquivo_doc = f"Proposta_{proposta_id}_{re.sub(r'[^a-zA-Z0-9]', '_', cliente_nome)}.html"
+            doc_id = salvar_e_indexar_documento_texto(
+                empresa_id=dados.empresa_id,
+                nome_arquivo=nome_arquivo_doc,
+                conteudo_texto=texto_rag,
+                tipo_arquivo=".html",
+                nivel_acesso="interno",
+                origem="sistema"
+            )
+            cursor.execute(f"UPDATE propostas SET documento_id = {ph} WHERE id = {ph}", (doc_id, proposta_id))
+            conexao.commit()
+        except Exception as e:
+            logger.error(f"[Propostas] Falha ao indexar proposta no RAG: {e}")
+
+        # 8. Envio opcional por e-mail se solicitado
+        email_sucesso = False
+        msg_extra = "Proposta gerada com sucesso e integrada à base de conhecimento!"
+        if dados.enviar_email and cliente_email:
+            assunto = f"Proposta Comercial #{proposta_id} - {empresa_nome}"
+            email_sucesso, msg_mail = disparar_email_proposta(
+                destinatario=cliente_email,
+                assunto=assunto,
+                html_corpo=html_proposta,
+                empresa_nome=empresa_nome
+            )
+            novo_status = "enviado" if email_sucesso else "falha_envio"
+            cursor.execute(f"UPDATE propostas SET status_envio = {ph} WHERE id = {ph}", (novo_status, proposta_id))
+            conexao.commit()
+            msg_extra += f" {msg_mail}"
+
+        return {
+            "sucesso": True,
+            "proposta_id": proposta_id,
+            "documento_id": doc_id,
+            "cliente_id": cliente_id,
+            "negocio_id": negocio_id,
+            "email_enviado": email_sucesso,
+            "mensagem": msg_extra
+        }
+    finally:
+        conexao.close()
+
+
+@router.post("/propostas/previa")
+def previa_proposta_direta(dados: PropostaDirectCreate):
+    """Gera o HTML de prévia da proposta comercial a partir dos dados preenchidos no formulário."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    empresa_nome = "FluxIA"
+    try:
+        cursor.execute(f"SELECT nome FROM empresas WHERE id = {ph}", (dados.empresa_id,))
+        row = cursor.fetchone()
+        if row:
+            empresa_nome = row["nome"]
+    finally:
+        conexao.close()
+
+    html = gerar_template_proposta_html(
+        cliente_nome=dados.cliente_nome or "Cliente Exemplo",
+        cliente_email=dados.cliente_email or "",
+        cliente_telefone=dados.cliente_telefone or "",
+        produto_nome=dados.produto_nome or "Solução Especializada",
+        produto_descricao=dados.descricao_itens or "",
+        valor=float(dados.valor or 0),
+        condicoes=dados.condicoes_pagamento or "À vista via PIX ou em 12x",
+        validade_dias=dados.validade_dias or 15,
+        empresa_nome=empresa_nome,
+        proposta_id=0
+    )
+    return {"html": html}
+
+
+@router.get("/propostas/{proposta_id}/html")
+def obter_html_proposta(proposta_id: int):
+    """Retorna o documento HTML completo de uma proposta comercial existente para visualização no portal."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT p.id, p.valor, p.condicoes_pagamento, p.validade_dias, p.documento_id,
+                   cli.nome AS cliente_nome, cli.email AS cliente_email, cli.telefone AS cliente_telefone,
+                   prod.nome AS produto_nome, prod.descricao AS produto_descricao,
+                   emp.nome AS empresa_nome
+            FROM propostas p
+            JOIN clientes cli ON p.cliente_id = cli.id
+            LEFT JOIN produtos prod ON p.produto_id = prod.id
+            LEFT JOIN empresas emp ON p.empresa_id = emp.id
+            WHERE p.id = {ph}
+        """, (proposta_id,))
+        p = cursor.fetchone()
+        if not p:
+            raise HTTPException(status_code=404, detail="Proposta não encontrada.")
+
+        html = gerar_template_proposta_html(
+            cliente_nome=p["cliente_nome"],
+            cliente_email=p.get("cliente_email") or "",
+            cliente_telefone=p.get("cliente_telefone") or "",
+            produto_nome=p.get("produto_nome") or "Solução Especializada",
+            produto_descricao=p.get("produto_descricao") or "",
+            valor=float(p["valor"] or 0),
+            condicoes=p.get("condicoes_pagamento") or "À vista",
+            validade_dias=p.get("validade_dias") or 15,
+            empresa_nome=p.get("empresa_nome") or "FluxIA",
+            proposta_id=p["id"]
+        )
+        return {"id": proposta_id, "html": html, "documento_id": p.get("documento_id")}
+    finally:
+        conexao.close()
+
 
 
 # ============================================================================

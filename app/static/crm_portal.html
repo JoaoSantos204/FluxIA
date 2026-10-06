@@ -326,9 +326,9 @@
           <div class="page-title">Visão Geral</div>
           <div class="page-sub" id="data-atual-label">Monitoramento em Tempo Real</div>
         </div>
-        <button class="btn-green" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1])">
+        <button class="btn-green" onclick="abrirModalCliente()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Novo Lead
+          + Novo Lead / Cliente
         </button>
       </div>
 
@@ -1228,6 +1228,23 @@ function alternarTema() {
   aplicarTema(novoTema);
 }
 
+function mostrarToast(mensagem, tipo = 'success') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast ${tipo}`;
+  toast.innerHTML = `<span>${tipo === 'success' ? '✓' : '⚠️'}</span> <span>${escapeHtml(mensagem)}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 4000);
+}
+
 function escapeHtml(texto) {
   if (texto === null || texto === undefined) return '';
   const div = document.createElement('div');
@@ -2093,6 +2110,7 @@ async function salvarClienteCRM() {
       throw new Error(err.detail || 'Erro ao salvar cliente');
     }
     fecharModalCliente();
+    mostrarToast(id ? 'Cliente atualizado com sucesso!' : 'Novo cliente cadastrado com sucesso!', 'success');
     carregarClientesCRM();
   } catch (e) {
     alert('Erro: ' + e.message);
@@ -2191,6 +2209,7 @@ async function salvarProdutoCRM() {
       throw new Error(err.detail || 'Erro ao salvar produto');
     }
     fecharModalProduto();
+    mostrarToast(id ? 'Produto atualizado com sucesso!' : 'Novo produto cadastrado com sucesso!', 'success');
     carregarProdutosCRM();
   } catch (e) {
     alert('Erro: ' + e.message);
@@ -2449,6 +2468,7 @@ async function salvarNovoNegocio() {
       throw new Error(err.detail || 'Erro ao criar negócio');
     }
     fecharModalNovoNegocio();
+    mostrarToast('Oportunidade criada com sucesso no funil!', 'success');
     await carregarPipelinesKanban();
     carregarDashboardMetricas();
   } catch (e) {
@@ -2737,172 +2757,218 @@ function renderizarTabelaPropostas(propostas) {
     <tr>
       <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
       <td style="font-weight:600; color:var(--text);">${escapeHtml(p.cliente_nome || 'Lead')}</td>
-      <td style="color:var(--text-muted); font-size:11px;">Negócio #${p.negocio_id}</td>
-      <td>${escapeHtml(p.produto_nome || 'Produto')}</td>
+      <td style="color:var(--text-muted); font-size:11px;">${p.negocio_id ? 'Negócio #' + p.negocio_id : '-'}</td>
+      <td>${escapeHtml(p.produto_nome || 'Produto / Solução')}</td>
       <td style="font-weight:700; color:#34d399;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor || 0)}</td>
-      <td style="color:var(--text-muted); font-size:11px;">${escapeHtml(p.validade || '15 dias')}</td>
+      <td style="color:var(--text-muted); font-size:11px;">${p.validade_dias ? p.validade_dias + ' dias' : '15 dias'}</td>
       <td style="color:var(--text-muted); font-size:11px;">${formatarData(p.criado_em)}</td>
       <td>
-        <span class="badge-status ${p.email_enviado ? 'badge-active' : 'badge-default'}">
-          ${p.email_enviado ? '✓ Enviado' : 'Gerada (Local)'}
+        <span class="badge-status ${p.status_envio === 'enviado' ? 'badge-active' : 'badge-default'}">
+          ${p.status_envio === 'enviado' ? '✓ Enviado' : 'Gerada (RAG)'}
         </span>
       </td>
       <td style="text-align:right;">
-        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">Ver HTML</button>
+        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">👁 Ver Documento</button>
       </td>
     </tr>
   `).join('');
 }
 
+let clientesParaPropostaCache = [];
+let produtosParaPropostaCache = [];
+
 async function abrirModalCriarProposta() {
   const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch(`/negocios?empresa_id=${empresaId}`);
-    const data = await res.json();
-    negociosAbertosCache = (data.negocios || []).filter(n => (n.estagio || '').toLowerCase() !== 'perdido');
+    const [resCli, resProd] = await Promise.all([
+      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+    ]);
 
-    const selNeg = document.getElementById('proposta-negocio-id');
-    if (negociosAbertosCache.length === 0) {
-      selNeg.innerHTML = '<option value="">Nenhum negócio ativo disponível</option>';
-    } else {
-      selNeg.innerHTML = '<option value="">Selecione um negócio...</option>' + negociosAbertosCache.map(n => `
-        <option value="${n.id}">
-          #${n.id} — ${escapeHtml(n.cliente_nome || 'Lead')} (${escapeHtml(n.produto_nome || 'Produto')} - ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0)})
+    clientesParaPropostaCache = resCli.clientes || [];
+    produtosParaPropostaCache = resProd.produtos || [];
+
+    const selCli = document.getElementById('proposta-cliente-select');
+    if (selCli) {
+      selCli.innerHTML = '<option value="">-- Ou digite os dados abaixo --</option>' + clientesParaPropostaCache.map(c => `
+        <option value="${c.id}" data-nome="${escapeHtml(c.nome || '')}" data-email="${escapeHtml(c.email || '')}" data-tel="${escapeHtml(c.telefone || '')}">
+          ${escapeHtml(c.nome || 'Cliente')} ${c.email ? '(' + escapeHtml(c.email) + ')' : ''}
         </option>
       `).join('');
     }
 
-    limparCamposModalProposta();
-    document.getElementById('modal-criar-proposta').style.display = 'flex';
+    const selProd = document.getElementById('proposta-produto-select');
+    if (selProd) {
+      selProd.innerHTML = '<option value="">-- Ou especifique personalizado abaixo --</option>' + produtosParaPropostaCache.map(p => `
+        <option value="${p.id}" data-nome="${escapeHtml(p.nome || '')}" data-preco="${p.preco || 0}" data-desc="${escapeHtml(p.descricao || '')}">
+          ${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}
+        </option>
+      `).join('');
+    }
+
+    document.getElementById('proposta-cliente-nome').value = '';
+    document.getElementById('proposta-cliente-email').value = '';
+    document.getElementById('proposta-cliente-telefone').value = '';
+    document.getElementById('proposta-produto-nome').value = '';
+    document.getElementById('proposta-valor').value = '';
+    document.getElementById('proposta-validade-dias').value = '15';
+    document.getElementById('proposta-condicoes').value = 'À vista via PIX ou em até 12x no cartão de crédito.';
+    document.getElementById('proposta-descricao').value = '';
+    const chkEmail = document.getElementById('proposta-enviar-email-chk');
+    if (chkEmail) chkEmail.checked = false;
+
+    const modal = document.getElementById('modal-criar-proposta');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
   } catch (e) {
-    alert('Erro ao carregar oportunidades para gerar proposta: ' + e.message);
+    alert('Erro ao preparar tela de criação de proposta: ' + e.message);
   }
 }
 
 function fecharModalCriarProposta() {
-  document.getElementById('modal-criar-proposta').style.display = 'none';
-}
-
-function limparCamposModalProposta() {
-  document.getElementById('proposta-cliente-nome').textContent = '-';
-  document.getElementById('proposta-cliente-email').textContent = '-';
-  document.getElementById('proposta-produto-nome').textContent = '-';
-  document.getElementById('proposta-valor-estimado').textContent = '-';
-  document.getElementById('proposta-aviso-sem-email').style.display = 'none';
-  document.getElementById('btn-gerar-enviar-proposta').disabled = true;
-  document.getElementById('btn-previa-proposta').disabled = true;
-}
-
-async function aoSelecionarNegocioProposta(negocioId) {
-  if (!negocioId) {
-    limparCamposModalProposta();
-    return;
+  const modal = document.getElementById('modal-criar-proposta');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
   }
+}
 
-  const n = negociosAbertosCache.find(x => x.id === parseInt(negocioId));
-  if (!n) return;
+function aoSelecionarClienteDropdown(clienteId) {
+  if (!clienteId) return;
+  const c = clientesParaPropostaCache.find(x => x.id === parseInt(clienteId));
+  if (c) {
+    document.getElementById('proposta-cliente-nome').value = c.nome || '';
+    document.getElementById('proposta-cliente-email').value = c.email || '';
+    document.getElementById('proposta-cliente-telefone').value = c.telefone || '';
+  }
+}
 
+function aoSelecionarProdutoDropdown(selectEl) {
+  const opt = selectEl.options[selectEl.selectedIndex];
+  if (!opt || !selectEl.value) return;
+  const p = produtosParaPropostaCache.find(x => x.id === parseInt(selectEl.value));
+  if (p) {
+    document.getElementById('proposta-produto-nome').value = p.nome || '';
+    if (p.preco) document.getElementById('proposta-valor').value = p.preco;
+    if (p.descricao) document.getElementById('proposta-descricao').value = p.descricao;
+  }
+}
+
+function obterDadosFormularioProposta() {
   const empresaId = obterEmpresaAtivaId();
+  const clienteIdVal = document.getElementById('proposta-cliente-select').value;
+  const clienteNome = document.getElementById('proposta-cliente-nome').value.trim();
+  const clienteEmail = document.getElementById('proposta-cliente-email').value.trim();
+  const clienteTelefone = document.getElementById('proposta-cliente-telefone').value.trim();
 
-  // Busca dados completos do cliente para confirmar e-mail
-  let emailCliente = '';
-  try {
-    const resCli = await fetch(`/clientes?empresa_id=${empresaId}`);
-    const dataCli = await resCli.json();
-    const cli = (dataCli.clientes || []).find(c => c.id === n.cliente_id);
-    if (cli) emailCliente = (cli.email || '').trim();
-  } catch (e) {}
+  const produtoIdVal = document.getElementById('proposta-produto-select').value;
+  const produtoNome = document.getElementById('proposta-produto-nome').value.trim();
+  const valor = parseFloat(document.getElementById('proposta-valor').value) || 0;
+  const validadeDias = parseInt(document.getElementById('proposta-validade-dias').value) || 15;
+  const condicoes = document.getElementById('proposta-condicoes').value.trim();
+  const descricao = document.getElementById('proposta-descricao').value.trim();
+  const enviarEmail = document.getElementById('proposta-enviar-email-chk') ? document.getElementById('proposta-enviar-email-chk').checked : false;
 
-  document.getElementById('proposta-cliente-nome').textContent = n.cliente_nome || 'Cliente';
-  document.getElementById('proposta-cliente-email').textContent = emailCliente || '(Não cadastrado)';
-  document.getElementById('proposta-produto-nome').textContent = n.produto_nome || 'Produto não especificado';
-  document.getElementById('proposta-valor-estimado').textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n.valor_estimado || 0);
-
-  const avisoSemEmail = document.getElementById('proposta-aviso-sem-email');
-  const btnEnviar = document.getElementById('btn-gerar-enviar-proposta');
-  const btnPrevia = document.getElementById('btn-previa-proposta');
-
-  if (!emailCliente) {
-    avisoSemEmail.style.display = 'block';
-    btnEnviar.disabled = true;
-    btnEnviar.style.opacity = '0.4';
-    btnEnviar.style.cursor = 'not-allowed';
-    btnPrevia.disabled = false;
-  } else {
-    avisoSemEmail.style.display = 'none';
-    btnEnviar.disabled = false;
-    btnEnviar.style.opacity = '1';
-    btnEnviar.style.cursor = 'pointer';
-    btnPrevia.disabled = false;
-  }
+  return {
+    empresa_id: empresaId,
+    cliente_id: clienteIdVal ? parseInt(clienteIdVal) : null,
+    cliente_nome: clienteNome,
+    cliente_email: clienteEmail || null,
+    cliente_telefone: clienteTelefone || null,
+    produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
+    produto_nome: produtoNome || 'Solução Especializada',
+    valor,
+    validade_dias: validadeDias,
+    condicoes_pagamento: condicoes || 'À vista via PIX',
+    descricao_itens: descricao || null,
+    enviar_email: enviarEmail
+  };
 }
 
-async function previsualizarProposta() {
-  const negocioId = document.getElementById('proposta-negocio-id').value;
-  if (!negocioId) {
-    alert('Selecione um negócio para pré-visualizar a proposta.');
+async function previsualizarPropostaDireta() {
+  const payload = obterDadosFormularioProposta();
+  if (!payload.cliente_nome) {
+    alert('Informe o nome do cliente para gerar a pré-visualização.');
     return;
   }
 
-  const condicoes = document.getElementById('proposta-condicoes').value.trim();
-  const validade = document.getElementById('proposta-validade').value.trim();
-
   try {
-    const res = await fetch(`/negocios/${negocioId}/previa-proposta`, {
+    const res = await fetch('/propostas/previa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ condicoes_pagamento: condicoes, validade })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Erro ao gerar prévia da proposta');
+      throw new Error(err.detail || 'Falha ao gerar prévia');
     }
     const data = await res.json();
     exibirModalPreviaHTML(data.html);
   } catch (e) {
-    alert('Erro: ' + e.message);
+    alert('Erro ao gerar prévia da proposta: ' + e.message);
   }
 }
 
-async function gerarEEnviarProposta() {
-  const negocioId = document.getElementById('proposta-negocio-id').value;
-  if (!negocioId) {
-    alert('Selecione um negócio.');
+async function salvarEGerarPropostaDireta() {
+  const payload = obterDadosFormularioProposta();
+  if (!payload.cliente_nome) {
+    alert('Informe o nome do cliente / destinatário.');
+    return;
+  }
+  if (!payload.valor || payload.valor <= 0) {
+    alert('Informe o valor total da proposta.');
     return;
   }
 
-  const email = document.getElementById('proposta-cliente-email').textContent.trim();
-  if (!email || email.includes('Não cadastrado')) {
-    alert('Cliente sem e-mail cadastrado — complete o cadastro antes de enviar a proposta.');
-    return;
+  const btnGerar = document.getElementById('btn-gerar-enviar-proposta');
+  if (btnGerar) {
+    btnGerar.disabled = true;
+    btnGerar.textContent = 'Gerando documento e indexando...';
   }
-
-  const condicoes = document.getElementById('proposta-condicoes').value.trim();
-  const validade = document.getElementById('proposta-validade').value.trim();
-
-  const btnEnviar = document.getElementById('btn-gerar-enviar-proposta');
-  btnEnviar.disabled = true;
-  btnEnviar.textContent = 'Enviando...';
 
   try {
-    const res = await fetch(`/negocios/${negocioId}/gerar-proposta`, {
+    const res = await fetch('/propostas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ condicoes_pagamento: condicoes, validade })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || 'Erro ao gerar e enviar proposta');
+      throw new Error(data.detail || 'Erro ao gerar proposta comercial');
     }
-    alert(data.mensagem || 'Proposta gerada com sucesso e indexada na base de conhecimento!');
+
     fecharModalCriarProposta();
-    carregarPropostasCRM();
-    carregarPipelinesKanban();
+    mostrarToast(data.mensagem || 'Proposta gerada com sucesso e integrada à Base de Conhecimento!', 'success');
+
+    await Promise.all([
+      carregarPropostasCRM(),
+      carregarDocumentos(),
+      carregarPipelinesKanban(),
+      carregarDashboardMetricas(),
+      carregarClientesCRM()
+    ]);
   } catch (e) {
     alert('Erro: ' + e.message);
   } finally {
-    btnEnviar.disabled = false;
-    btnEnviar.textContent = 'Gerar e Enviar';
+    if (btnGerar) {
+      btnGerar.disabled = false;
+      btnGerar.textContent = '📄 Gerar Proposta & Criar Documento';
+    }
+  }
+}
+
+async function visualizarHTMLProposta(propostaId) {
+  try {
+    const res = await fetch(`/propostas/${propostaId}/html`);
+    if (!res.ok) {
+      throw new Error('Não foi possível carregar o documento da proposta.');
+    }
+    const data = await res.json();
+    exibirModalPreviaHTML(data.html);
+  } catch (e) {
+    alert('Erro ao visualizar proposta: ' + e.message);
   }
 }
 
@@ -2912,11 +2978,18 @@ function exibirModalPreviaHTML(htmlConteudo) {
   if (container) {
     container.srcdoc = htmlConteudo;
   }
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
 }
 
 function fecharModalPreviaProposta() {
-  document.getElementById('modal-previa-proposta').style.display = 'none';
+  const modal = document.getElementById('modal-previa-proposta');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
 }
 
 function visualizarHTMLProposta(propostaId) {
@@ -4491,7 +4564,10 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div class="modal-body" style="padding:20px;">
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Cliente / Lead *</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted);">Cliente / Lead *</div>
+          <a href="javascript:void(0)" onclick="abrirModalCliente()" style="font-size:11px; color:var(--green); text-decoration:none; font-weight:600;">+ Novo Cliente</a>
+        </div>
         <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-cliente-id">
           <option value="">Carregando clientes...</option>
         </select>
@@ -4577,63 +4653,118 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <!-- MODAL CRIAR PROPOSTA (PARTE 27) -->
+<!-- MODAL GERAR PROPOSTA COMERCIAL & DOCUMENTO -->
 <div class="modal-overlay" id="modal-criar-proposta" style="display:none; align-items:center; justify-content:center; z-index:9999;">
-  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:600px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:680px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
     <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Gerar Proposta Comercial</div>
+      <div>
+        <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:16px;">Criar Proposta Comercial & Documento</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Preencha os campos abaixo. Ao salvar, a proposta vira um documento na Base de Conhecimento e é indexada para IA.</div>
+      </div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalCriarProposta()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px; overflow-y:auto; flex:1;">
-      <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Selecione o Negócio / Oportunidade *</div>
-        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="proposta-negocio-id" onchange="aoSelecionarNegocioProposta(this.value)">
-          <option value="">Carregando oportunidades...</option>
-        </select>
-      </div>
-
-      <!-- Resumo do Negócio Selecionado -->
-      <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div>
-          <div style="font-size:11px; color:var(--text-muted);">Cliente:</div>
-          <strong id="proposta-cliente-nome" style="color:var(--text);">-</strong>
+      
+      <!-- SEÇÃO CLIENTE -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px;">
+            <span>👤</span> Dados do Cliente / Destinatário
+          </div>
+          <span style="font-size:11px; color:var(--text-muted);">Selecione existente ou digite novo</span>
         </div>
-        <div>
-          <div style="font-size:11px; color:var(--text-muted);">E-mail do Cliente:</div>
-          <strong id="proposta-cliente-email" style="color:#38bdf8;">-</strong>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Selecionar Cliente Existente</div>
+            <select class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-cliente-select" onchange="aoSelecionarClienteDropdown(this.value)">
+              <option value="">-- Ou digite os dados abaixo --</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Nome do Cliente / Razão Social *</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-cliente-nome" placeholder="Ex: Acionista Indústria S.A." required />
+          </div>
         </div>
-        <div>
-          <div style="font-size:11px; color:var(--text-muted);">Produto / Serviço:</div>
-          <strong id="proposta-produto-nome" style="color:var(--text);">-</strong>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">E-mail do Cliente</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-cliente-email" type="email" placeholder="cliente@empresa.com" />
+          </div>
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Telefone / WhatsApp</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-cliente-telefone" placeholder="(11) 99999-9999" />
+          </div>
         </div>
-        <div>
-          <div style="font-size:11px; color:var(--text-muted);">Valor Proposto:</div>
-          <strong id="proposta-valor-estimado" style="color:#34d399;">-</strong>
+      </div>
+
+      <!-- SEÇÃO PRODUTO & VALOR -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
+        <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+          <span>📦</span> Produto / Solução & Investimento
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Selecionar Produto do Catálogo</div>
+            <select class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-produto-select" onchange="aoSelecionarProdutoDropdown(this)">
+              <option value="">-- Ou especifique personalizado abaixo --</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Título da Solução Proposta *</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-produto-nome" placeholder="Ex: Implantação de IA para Atendimento" required />
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Valor Total da Proposta (R$) *</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border); font-weight:700; color:#10b981;" id="proposta-valor" type="number" step="0.01" placeholder="0.00" required />
+          </div>
+          <div class="config-field">
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Validade da Proposta (Dias)</div>
+            <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-validade-dias" type="number" value="15" min="1" max="180" />
+          </div>
         </div>
       </div>
 
-      <div id="proposta-aviso-sem-email" style="display:none; padding:10px 12px; border-radius:8px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; font-size:12px; margin-bottom:14px;">
-        ⚠️ Cliente sem e-mail cadastrado — complete o cadastro antes de enviar a proposta.
+      <!-- SEÇÃO CONDIÇÕES & ESCOPO -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
+        <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+          <span>📝</span> Escopo & Condições Comerciais
+        </div>
+
+        <div class="config-field" style="margin-bottom:10px;">
+          <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Condições de Pagamento</div>
+          <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-condicoes" value="À vista via PIX ou em até 12x no cartão de crédito." />
+        </div>
+
+        <div class="config-field">
+          <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Descrição / Itens / Escopo da Proposta</div>
+          <textarea class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border); height:70px; resize:vertical; font-size:12px;" id="proposta-descricao" placeholder="Detalhes da solução, cronograma estimado, entregáveis inclusos..."></textarea>
+        </div>
       </div>
 
-      <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Condições de Pagamento</div>
-        <textarea class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); height:60px; resize:none;" id="proposta-condicoes" placeholder="Ex: À vista via PIX com 5% de desconto ou em até 12x no cartão de crédito.">À vista via PIX ou em até 12x no cartão de crédito.</textarea>
+      <!-- OPÇÃO ENVIO EMAIL -->
+      <div style="display:flex; align-items:center; gap:10px; margin-top:6px; padding:6px 4px;">
+        <input type="checkbox" id="proposta-enviar-email-chk" style="cursor:pointer; width:16px; height:16px;" />
+        <label for="proposta-enviar-email-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
+          Disparar cópia automática por e-mail para o cliente após gerar a proposta
+        </label>
       </div>
 
-      <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Validade da Proposta</div>
-        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="proposta-validade" value="Válida por 15 dias corridos" />
+      <div style="font-size:11px; color:var(--text-muted); margin-top:8px; line-height:1.4;">
+        ✦ O documento gerado será salvo no repositório corporativo, cadastrado na tela de <strong>Documentos</strong>, indexado semanticamente no <strong>RAG</strong> e registrado no <strong>Funil de Vendas</strong>.
       </div>
 
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
-        ✦ A proposta será renderizada em documento HTML institucional, indexada automaticamente como item interno da base de conhecimento (RAG) e disparada por e-mail ao cliente.
-      </div>
     </div>
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
       <button class="btn-secondary" onclick="fecharModalCriarProposta()">Cancelar</button>
       <div style="display:flex; gap:10px;">
-        <button class="btn-secondary" id="btn-previa-proposta" disabled onclick="previsualizarProposta()">👁 Pré-visualizar</button>
-        <button class="btn-green" id="btn-gerar-enviar-proposta" disabled onclick="gerarEEnviarProposta()">✉ Gerar e Enviar</button>
+        <button class="btn-secondary" id="btn-previa-proposta" onclick="previsualizarPropostaDireta()">👁 Pré-visualizar</button>
+        <button class="btn-green" id="btn-gerar-enviar-proposta" onclick="salvarEGerarPropostaDireta()">📄 Gerar Proposta & Criar Documento</button>
       </div>
     </div>
   </div>
@@ -4655,6 +4786,9 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   </div>
 </div>
+
+<!-- TOAST NOTIFICATION CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
 
 </body>
 </html>
