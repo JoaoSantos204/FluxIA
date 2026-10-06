@@ -6,6 +6,23 @@
   <title>FluxIA - Telegram CRM & Portal Operacional</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
   <script>
+    // Inicialização imediata do tema para evitar FOUC (flash de tema incorreto)
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('fluxia_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'dark') {
+          if (document.body) {
+            document.body.classList.add('dark-mode');
+          } else {
+            document.addEventListener('DOMContentLoaded', function() {
+              document.body.classList.add('dark-mode');
+            });
+          }
+        }
+      } catch (e) {}
+    })();
+
     // Bloqueio imediato no head antes da renderização do HTML
     (function() {
       try {
@@ -103,9 +120,9 @@
     .crm-table th {
       text-align: left;
       padding: 12px 14px;
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--table-head-bg);
       color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1.5px solid var(--border);
       font-weight: 600;
       font-size: 11px;
       text-transform: uppercase;
@@ -118,7 +135,7 @@
       vertical-align: middle;
     }
     .crm-table tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--table-row-hover);
     }
     .badge-status {
       display: inline-flex;
@@ -291,6 +308,10 @@
         <span style="font-size:12px; color:var(--text-muted);" id="db-status-pill">API Online · PostgreSQL</span>
       </div>
       <div class="topbar-actions">
+        <button id="btn-toggle-theme" class="btn-theme-toggle" onclick="alternarTema()" title="Alternar modo claro / escuro" type="button">
+          <span id="theme-toggle-icon" class="theme-toggle-icon">🌙</span>
+          <span id="theme-toggle-label" class="theme-toggle-label">Modo Escuro</span>
+        </button>
         <a href="/admin" id="topbar-btn-admin" class="btn-nav-switch" style="border-color:#7F77DD; color:#534AB7; display:none;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>Portal Administrar Ambientes</span>
@@ -1159,6 +1180,53 @@ let usuarioAtual = null;
 let listaEmpresasCadastradas = [];
 let equipeCarregada = [];
 let fusoHorarioEmpresa = 'America/Sao_Paulo';
+
+// ==========================================
+// CONTROLE DE TEMA (MODO CLARO E ESCURO)
+// ==========================================
+function obterTemaAtual() {
+  try {
+    return localStorage.getItem('fluxia_theme') || 'light';
+  } catch (e) {
+    return 'light';
+  }
+}
+
+function aplicarTema(tema) {
+  const t = (tema === 'dark') ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  if (document.body) {
+    if (t === 'dark') {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }
+  try {
+    localStorage.setItem('fluxia_theme', t);
+  } catch (e) {}
+
+  const iconEl = document.getElementById('theme-toggle-icon');
+  const labelEl = document.getElementById('theme-toggle-label');
+  const btnEl = document.getElementById('btn-toggle-theme');
+
+  if (iconEl) {
+    iconEl.textContent = t === 'dark' ? '☀️' : '🌙';
+  }
+  if (labelEl) {
+    labelEl.textContent = t === 'dark' ? 'Modo Claro' : 'Modo Escuro';
+  }
+  if (btnEl) {
+    btnEl.setAttribute('title', t === 'dark' ? 'Alternar para Modo Claro' : 'Alternar para Modo Escuro');
+    btnEl.setAttribute('aria-label', t === 'dark' ? 'Alternar para Modo Claro' : 'Alternar para Modo Escuro');
+  }
+}
+
+function alternarTema() {
+  const atual = obterTemaAtual();
+  const novoTema = (atual === 'dark') ? 'light' : 'dark';
+  aplicarTema(novoTema);
+}
 
 function escapeHtml(texto) {
   if (texto === null || texto === undefined) return '';
@@ -4233,6 +4301,7 @@ function trocarEmpresaAtiva(novaEmpresaId) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  aplicarTema(obterTemaAtual());
   const user = verificarAutenticacao();
   if (!user) return;
   aplicarDadosUsuario();
@@ -4572,7 +4641,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <!-- MODAL PREVIA HTML PROPOSTA (PARTE 27) -->
 <div class="modal-overlay" id="modal-previa-proposta" style="display:none; align-items:center; justify-content:center; z-index:10000;">
-  <div class="modal-content" style="background:#fff; color:#333; border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:850px; height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:850px; height:88vh; display:flex; flex-direction:column; overflow:hidden;">
     <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:12px 20px; display:flex; justify-content:space-between; align-items:center;">
       <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:14px; color:var(--text);">Prévia da Proposta Comercial</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalPreviaProposta()">✕</button>

@@ -6,6 +6,23 @@
   <title>FluxIA - Gestão de Ambientes & Usuários</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
   <script>
+    // Inicialização imediata do tema para evitar FOUC (flash de tema incorreto)
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('fluxia_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'dark') {
+          if (document.body) {
+            document.body.classList.add('dark-mode');
+          } else {
+            document.addEventListener('DOMContentLoaded', function() {
+              document.body.classList.add('dark-mode');
+            });
+          }
+        }
+      } catch (e) {}
+    })();
+
     // Bloqueio imediato no head para proteger o portal admin
     (function() {
       try {
@@ -122,6 +139,10 @@
         <span style="font-size:12px; color:var(--text-muted);" id="current-db-status">PostgreSQL Conectado</span>
       </div>
       <div class="topbar-actions">
+        <button id="btn-toggle-theme" class="btn-theme-toggle" onclick="alternarTema()" title="Alternar modo claro / escuro" type="button">
+          <span id="theme-toggle-icon" class="theme-toggle-icon">🌙</span>
+          <span id="theme-toggle-label" class="theme-toggle-label">Modo Escuro</span>
+        </button>
         <button class="btn-secondary" onclick="abrirModalApiKey()" style="padding:6px 12px; font-size:12px;">
           🔑 Chave Admin
         </button>
@@ -300,7 +321,7 @@
             <button class="btn-secondary" onclick="salvarApiKeyStorage()" style="width:100%; justify-content:center;">
               Salvar Chave no Navegador
             </button>
-            <div style="margin-top:20px; padding:12px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12px; line-height:1.6; color:#475569;">
+            <div style="margin-top:20px; padding:12px; border-radius:8px; background:var(--surface-hover); border:1px solid var(--border); font-size:12px; line-height:1.6; color:var(--text-muted);">
               <strong>ℹ️ Dica de TCC:</strong><br>
               A chave padrão configurada na API é <code>fluxia-admin-secret-key-2026</code> ou o valor definido na variável <code>ADMIN_API_KEY</code> do seu Render/.env.
             </div>
@@ -405,6 +426,53 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
+// ==========================================
+// CONTROLE DE TEMA (MODO CLARO E ESCURO)
+// ==========================================
+function obterTemaAtual() {
+  try {
+    return localStorage.getItem('fluxia_theme') || 'light';
+  } catch (e) {
+    return 'light';
+  }
+}
+
+function aplicarTema(tema) {
+  const t = (tema === 'dark') ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  if (document.body) {
+    if (t === 'dark') {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }
+  try {
+    localStorage.setItem('fluxia_theme', t);
+  } catch (e) {}
+
+  const iconEl = document.getElementById('theme-toggle-icon');
+  const labelEl = document.getElementById('theme-toggle-label');
+  const btnEl = document.getElementById('btn-toggle-theme');
+
+  if (iconEl) {
+    iconEl.textContent = t === 'dark' ? '☀️' : '🌙';
+  }
+  if (labelEl) {
+    labelEl.textContent = t === 'dark' ? 'Modo Claro' : 'Modo Escuro';
+  }
+  if (btnEl) {
+    btnEl.setAttribute('title', t === 'dark' ? 'Alternar para Modo Claro' : 'Alternar para Modo Escuro');
+    btnEl.setAttribute('aria-label', t === 'dark' ? 'Alternar para Modo Claro' : 'Alternar para Modo Escuro');
+  }
+}
+
+function alternarTema() {
+  const atual = obterTemaAtual();
+  const novoTema = (atual === 'dark') ? 'light' : 'dark';
+  aplicarTema(novoTema);
+}
+
 let listaEmpresas = [];
 let listaUsuarios = [];
 
@@ -867,6 +935,7 @@ function fazerLogout() {
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
+  aplicarTema(obterTemaAtual());
   const admin = verificarAutenticacaoAdmin();
   if (!admin) return;
 
