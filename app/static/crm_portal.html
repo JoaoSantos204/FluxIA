@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Telegram CRM & Portal Operacional</title>
-  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css?v=20261006_5">
   <script>
     // Inicialização imediata do tema para evitar FOUC (flash de tema incorreto)
     (function() {
@@ -326,10 +326,16 @@
           <div class="page-title">Visão Geral</div>
           <div class="page-sub" id="data-atual-label">Monitoramento em Tempo Real</div>
         </div>
-        <button class="btn-green" onclick="abrirModalCliente()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          + Novo Lead / Cliente
-        </button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn-green" onclick="abrirModalCliente()" title="Cadastrar novo cliente ou lead">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            + Novo Lead / Cliente
+          </button>
+          <button class="btn-secondary" onclick="navegarParaCriarProposta()" title="Emitir nova proposta comercial" style="font-weight:600; font-size:12px; display:inline-flex; align-items:center; gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            + Nova Proposta
+          </button>
+        </div>
       </div>
 
       <div class="metrics-grid">
@@ -609,7 +615,7 @@
           <div class="page-sub">Geração automatizada de propostas em HTML a partir de negócios, com indexação no RAG e envio por e-mail</div>
         </div>
         <div style="display:flex; gap:10px;">
-          <button class="btn-green" onclick="abrirModalCriarProposta()">
+          <button class="btn-green" onclick="navegarParaCriarProposta()" title="Abrir tela de emissão de proposta comercial">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Nova Proposta
           </button>
@@ -636,6 +642,163 @@
             <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- TELA DEDICADA: CRIAR PROPOSTA COMERCIAL & DOCUMENTO -->
+    <div class="screen" id="screen-criar-proposta">
+      <div class="dash-header" style="flex-wrap:wrap; gap:16px;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <button class="btn-secondary" onclick="switchTab('propostas')" style="padding:4px 10px; font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+              <span>←</span> Voltar para Propostas
+            </button>
+            <span style="color:var(--text-muted); font-size:12px;">/</span>
+            <span style="color:var(--text-muted); font-size:12px; font-weight:500;">Emissão & Geração de Documento</span>
+          </div>
+          <div class="page-title">Emitir Proposta Comercial</div>
+          <div class="page-sub">Preencha os dados da proposta. Ao gerar, ela cria um documento timbrado, é registrada no Funil de Vendas e indexada na Base de Conhecimento (RAG) para consulta da IA.</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn-secondary" type="button" onclick="previsualizarPropostaTela()" style="display:inline-flex; align-items:center; gap:6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Pré-visualizar Documento
+          </button>
+          <button class="btn-green" type="button" id="btn-gerar-proposta-tela" onclick="salvarEGerarPropostaTela()" style="display:inline-flex; align-items:center; gap:6px; font-weight:600;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            Gerar Proposta & Criar Documento
+          </button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1.15fr 0.85fr; gap:20px; margin-top:20px; align-items:start;">
+        <!-- COLUNA FORMULÁRIO -->
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          
+          <!-- BLOCO 1: CLIENTE -->
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+              <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
+                <span style="font-size:16px;">👤</span> 1. Dados do Cliente / Destinatário
+              </div>
+              <span style="font-size:11px; color:var(--text-muted);">Selecione existente ou digite novo</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Cliente Cadastrado no CRM</div>
+                <select class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-cliente-select" onchange="aoSelecionarClienteTela(this.value)">
+                  <option value="">-- Ou digite um novo cliente abaixo --</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Nome do Cliente / Empresa *</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-cliente-nome" placeholder="Ex: Acionista Indústria S.A." required />
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">E-mail do Cliente</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-cliente-email" type="email" placeholder="cliente@empresa.com" />
+              </div>
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Telefone / WhatsApp</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-cliente-telefone" placeholder="(11) 99999-9999" />
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCO 2: PRODUTO / SOLUÇÃO & VALOR -->
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+              <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
+                <span style="font-size:16px;">📦</span> 2. Produto, Solução & Investimento
+              </div>
+              <span style="font-size:11px; color:var(--text-muted);">Defina o item e o valor</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Produto do Catálogo</div>
+                <select class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-produto-select" onchange="aoSelecionarProdutoTela(this)">
+                  <option value="">-- Ou especifique personalizado abaixo --</option>
+                </select>
+              </div>
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Título da Solução Comercial *</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-produto-nome" placeholder="Ex: Consultoria e Automação de Processos com IA" required />
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Valor Total da Proposta (R$) *</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border); font-weight:700; color:#10b981; font-size:15px;" id="tela-prop-valor" type="number" step="0.01" placeholder="0.00" required />
+              </div>
+              <div class="config-field">
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Validade da Proposta (Dias)</div>
+                <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-validade-dias" type="number" value="15" min="1" max="180" />
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCO 3: ESCOPO & CONDIÇÕES -->
+          <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+              <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
+                <span style="font-size:16px;">📝</span> 3. Condições Comerciais & Escopo
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:14px;">
+              <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Condições de Pagamento</div>
+              <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-condicoes" value="À vista via PIX ou em até 12x no cartão de crédito." />
+            </div>
+
+            <div class="config-field">
+              <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Descrição Detalhada dos Itens / Escopo do Projeto</div>
+              <textarea class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border); height:110px; resize:vertical; font-size:13px; line-height:1.5;" id="tela-prop-descricao" placeholder="Descreva os serviços inclusos, etapas de implantação, entregáveis, cronograma previsto..."></textarea>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; margin-top:16px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+              <input type="checkbox" id="tela-prop-enviar-email-chk" style="cursor:pointer; width:16px; height:16px;" />
+              <label for="tela-prop-enviar-email-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
+                Disparar cópia oficial por e-mail para o cliente imediatamente após gerar a proposta
+              </label>
+            </div>
+          </div>
+
+          <!-- BOTÕES DE AÇÃO INFERIORES -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0;">
+            <button class="btn-secondary" onclick="switchTab('propostas')">← Cancelar / Voltar</button>
+            <div style="display:flex; gap:10px;">
+              <button class="btn-secondary" onclick="previsualizarPropostaTela()">👁 Pré-visualizar</button>
+              <button class="btn-green" onclick="salvarEGerarPropostaTela()" style="font-weight:600; padding:10px 20px;">
+                📄 Gerar Proposta & Criar Documento
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- COLUNA PRÉVIA DO DOCUMENTO -->
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); position:sticky; top:20px; display:flex; flex-direction:column; height:calc(100vh - 120px); min-height:560px;">
+          <div style="padding:14px 18px; border-bottom:1px solid var(--border); background:var(--surface-hover); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:700; font-size:13px; color:var(--text);">📄 Prévia do Documento Oficial</div>
+              <div style="font-size:11px; color:var(--text-muted);">Visualização em tempo real do documento timbrado</div>
+            </div>
+            <button class="btn-secondary" onclick="previsualizarPropostaTela()" style="padding:4px 10px; font-size:11px;">🔄 Atualizar Prévia</button>
+          </div>
+          <div style="flex:1; background:#ffffff; position:relative;">
+            <iframe id="tela-prop-preview-iframe" style="width:100%; height:100%; border:none;" srcdoc="<div style='display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#94a3b8; font-family:sans-serif; text-align:center; padding:20px;'><svg width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#cbd5e1' stroke-width='1.5' style='margin-bottom:12px;'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14,2 14,8 20,8'/></svg><p style='font-size:14px; margin:0 0 6px 0; color:#475569; font-weight:600;'>Pré-visualização do Documento</p><p style='font-size:12px; margin:0;'>Preencha os campos ao lado e clique em <strong>Pré-visualizar Documento</strong> para conferir o layout oficial timbrado.</p></div>"></iframe>
+          </div>
+          <div style="padding:12px 18px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); background:var(--surface);">
+            ✦ O documento timbrado gerado é salvo em PDF/HTML, indexado para busca na IA (RAG) e fica acessível na aba <strong>Base de Conhecimento</strong>.
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1369,6 +1532,11 @@ function switchTab(tabId, navEl) {
   if (tabId === 'produtos') carregarProdutosCRM();
   if (tabId === 'fluxos') carregarPipelinesKanban();
   if (tabId === 'propostas') carregarPropostasCRM();
+  if (tabId === 'criar-proposta') {
+    const navProp = document.querySelector('.sidebar-nav .nav-item[onclick*="propostas"]');
+    if (navProp) navProp.classList.add('active');
+    carregarDadosFormularioPropostaTela();
+  }
   if (tabId === 'contratos') carregarContratosCRM();
   if (tabId === 'pipelines') carregarPipelinesAdmin();
   if (tabId === 'config') {
@@ -2069,17 +2237,29 @@ function renderizarTabelaClientes(clientes) {
 }
 
 function abrirModalCliente(cliente = null) {
+  const modal = document.getElementById('modal-cliente');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
   document.getElementById('modal-cliente-id').value = cliente ? cliente.id : '';
   document.getElementById('modal-cliente-nome').value = cliente ? cliente.nome || '' : '';
   document.getElementById('modal-cliente-email').value = cliente ? cliente.email || '' : '';
   document.getElementById('modal-cliente-telefone').value = cliente ? cliente.telefone || '' : '';
   document.getElementById('modal-cliente-origem').value = cliente ? cliente.origem || 'manual' : 'manual';
   document.getElementById('modal-cliente-titulo').textContent = cliente ? 'Editar Cliente' : 'Novo Cliente';
-  document.getElementById('modal-cliente').style.display = 'flex';
+  setTimeout(() => {
+    const inp = document.getElementById('modal-cliente-nome');
+    if (inp) inp.focus();
+  }, 50);
 }
 
 function fecharModalCliente() {
-  document.getElementById('modal-cliente').style.display = 'none';
+  const modal = document.getElementById('modal-cliente');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
 }
 
 async function salvarClienteCRM() {
@@ -2168,17 +2348,29 @@ function renderizarTabelaProdutos(produtos) {
 }
 
 function abrirModalProduto(produto = null) {
+  const modal = document.getElementById('modal-produto');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
   document.getElementById('modal-produto-id').value = produto ? produto.id : '';
   document.getElementById('modal-produto-nome').value = produto ? produto.nome || '' : '';
   document.getElementById('modal-produto-descricao').value = produto ? produto.descricao || '' : '';
   document.getElementById('modal-produto-preco').value = produto ? produto.preco || '' : '';
   document.getElementById('modal-produto-ativo').checked = produto ? Boolean(produto.ativo) : true;
   document.getElementById('modal-produto-titulo').textContent = produto ? 'Editar Produto' : 'Novo Produto';
-  document.getElementById('modal-produto').style.display = 'flex';
+  setTimeout(() => {
+    const inp = document.getElementById('modal-produto-nome');
+    if (inp) inp.focus();
+  }, 50);
 }
 
 function fecharModalProduto() {
-  document.getElementById('modal-produto').style.display = 'none';
+  const modal = document.getElementById('modal-produto');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
 }
 
 async function salvarProdutoCRM() {
@@ -2399,30 +2591,37 @@ async function atualizarEtapaNegocio(negocioId, novaEtapaId) {
 }
 
 async function abrirModalNovoNegocio() {
+  const modal = document.getElementById('modal-negocio');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
   const empresaId = obterEmpresaAtivaId();
   try {
     const [resCli, resProd] = await Promise.all([
-      fetch(`/clientes?empresa_id=${empresaId}`),
-      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`)
+      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
     ]);
-    const dataCli = await resCli.json();
-    const dataProd = await resProd.json();
 
     const selCli = document.getElementById('modal-negocio-cliente-id');
     const selProd = document.getElementById('modal-negocio-produto-id');
 
-    selCli.innerHTML = (dataCli.clientes || []).map(c => `
-      <option value="${c.id}">${escapeHtml(c.nome)} (${c.email || c.telefone || 'Sem contato'})</option>
-    `).join('') || '<option value="">Nenhum cliente cadastrado</option>';
+    if (selCli) {
+      selCli.innerHTML = (resCli.clientes || []).map(c => `
+        <option value="${c.id}">${escapeHtml(c.nome)} (${c.email || c.telefone || 'Sem contato'})</option>
+      `).join('') || '<option value="">Nenhum cliente cadastrado</option>';
+    }
 
-    selProd.innerHTML = '<option value="">Sem produto específico</option>' + (dataProd.produtos || []).map(p => `
-      <option value="${p.id}" data-preco="${p.preco || 0}">${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</option>
-    `).join('');
+    if (selProd) {
+      selProd.innerHTML = '<option value="">Sem produto específico</option>' + (resProd.produtos || []).map(p => `
+        <option value="${p.id}" data-preco="${p.preco || 0}">${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</option>
+      `).join('');
+    }
 
-    document.getElementById('modal-negocio-valor').value = '';
-    document.getElementById('modal-negocio').style.display = 'flex';
+    const valInput = document.getElementById('modal-negocio-valor');
+    if (valInput) valInput.value = '';
   } catch (e) {
-    alert('Erro ao preparar formulário de negócio: ' + e.message);
+    console.warn('Erro ao preparar formulário de negócio:', e);
   }
 }
 
@@ -2437,7 +2636,11 @@ function aoSelecionarProdutoNegocio(sel) {
 }
 
 function fecharModalNovoNegocio() {
-  document.getElementById('modal-negocio').style.display = 'none';
+  const modal = document.getElementById('modal-negocio');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
 }
 
 async function salvarNovoNegocio() {
@@ -2541,25 +2744,35 @@ async function carregarPipelinesAdmin() {
 }
 
 async function abrirModalNovoPipeline() {
+  const modal = document.getElementById('modal-pipeline');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
   const empresaId = obterEmpresaAtivaId();
   try {
     const res = await fetch(`/produtos?empresa_id=${empresaId}&ativo=true`);
     const data = await res.json();
     const selProd = document.getElementById('modal-pipeline-produto-id');
-    selProd.innerHTML = '<option value="">Geral (Todos os Produtos)</option>' + (data.produtos || []).map(p => `
-      <option value="${p.id}">${escapeHtml(p.nome)}</option>
-    `).join('');
+    if (selProd) {
+      selProd.innerHTML = '<option value="">Geral (Todos os Produtos)</option>' + (data.produtos || []).map(p => `
+        <option value="${p.id}">${escapeHtml(p.nome)}</option>
+      `).join('');
+    }
 
     document.getElementById('modal-pipeline-nome').value = '';
     document.getElementById('modal-pipeline-padrao').checked = false;
-    document.getElementById('modal-pipeline').style.display = 'flex';
   } catch (e) {
-    alert('Erro ao carregar produtos para o pipeline: ' + e.message);
+    console.warn('Erro ao carregar produtos para o pipeline:', e);
   }
 }
 
 function fecharModalNovoPipeline() {
-  document.getElementById('modal-pipeline').style.display = 'none';
+  const modal = document.getElementById('modal-pipeline');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
 }
 
 async function salvarNovoPipeline() {
@@ -2778,6 +2991,11 @@ let clientesParaPropostaCache = [];
 let produtosParaPropostaCache = [];
 
 async function abrirModalCriarProposta() {
+  const modal = document.getElementById('modal-criar-proposta');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
   const empresaId = obterEmpresaAtivaId();
   try {
     const [resCli, resProd] = await Promise.all([
@@ -2816,14 +3034,8 @@ async function abrirModalCriarProposta() {
     document.getElementById('proposta-descricao').value = '';
     const chkEmail = document.getElementById('proposta-enviar-email-chk');
     if (chkEmail) chkEmail.checked = false;
-
-    const modal = document.getElementById('modal-criar-proposta');
-    if (modal) {
-      modal.style.display = 'flex';
-      modal.classList.add('active');
-    }
   } catch (e) {
-    alert('Erro ao preparar tela de criação de proposta: ' + e.message);
+    console.warn('Erro ao preparar tela de criação de proposta:', e);
   }
 }
 
@@ -2832,6 +3044,190 @@ function fecharModalCriarProposta() {
   if (modal) {
     modal.style.display = 'none';
     modal.classList.remove('active');
+  }
+}
+
+// ===== TELA DEDICADA DE EMISSÃO DE PROPOSTA =====
+function navegarParaCriarProposta() {
+  switchTab('criar-proposta');
+}
+
+async function carregarDadosFormularioPropostaTela() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const [resCli, resProd] = await Promise.all([
+      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+    ]);
+
+    clientesParaPropostaCache = resCli.clientes || [];
+    produtosParaPropostaCache = resProd.produtos || [];
+
+    const selCli = document.getElementById('tela-prop-cliente-select');
+    if (selCli) {
+      selCli.innerHTML = '<option value="">-- Ou digite um novo cliente abaixo --</option>' + clientesParaPropostaCache.map(c => `
+        <option value="${c.id}" data-nome="${escapeHtml(c.nome || '')}" data-email="${escapeHtml(c.email || '')}" data-tel="${escapeHtml(c.telefone || '')}">
+          ${escapeHtml(c.nome || 'Cliente')} ${c.email ? '(' + escapeHtml(c.email) + ')' : ''}
+        </option>
+      `).join('');
+    }
+
+    const selProd = document.getElementById('tela-prop-produto-select');
+    if (selProd) {
+      selProd.innerHTML = '<option value="">-- Ou especifique personalizado abaixo --</option>' + produtosParaPropostaCache.map(p => `
+        <option value="${p.id}" data-nome="${escapeHtml(p.nome || '')}" data-preco="${p.preco || 0}" data-desc="${escapeHtml(p.descricao || '')}">
+          ${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}
+        </option>
+      `).join('');
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar dados da tela de proposta:', e);
+  }
+}
+
+function aoSelecionarClienteTela(clienteId) {
+  if (!clienteId) return;
+  const c = clientesParaPropostaCache.find(x => x.id === parseInt(clienteId));
+  if (c) {
+    const inpNome = document.getElementById('tela-prop-cliente-nome');
+    const inpEmail = document.getElementById('tela-prop-cliente-email');
+    const inpTel = document.getElementById('tela-prop-cliente-telefone');
+    if (inpNome) inpNome.value = c.nome || '';
+    if (inpEmail) inpEmail.value = c.email || '';
+    if (inpTel) inpTel.value = c.telefone || '';
+  }
+}
+
+function aoSelecionarProdutoTela(selectEl) {
+  const opt = selectEl.options[selectEl.selectedIndex];
+  if (!opt || !selectEl.value) return;
+  const p = produtosParaPropostaCache.find(x => x.id === parseInt(selectEl.value));
+  if (p) {
+    const inpNome = document.getElementById('tela-prop-produto-nome');
+    const inpValor = document.getElementById('tela-prop-valor');
+    const inpDesc = document.getElementById('tela-prop-descricao');
+    if (inpNome) inpNome.value = p.nome || '';
+    if (inpValor && p.preco) inpValor.value = p.preco;
+    if (inpDesc && p.descricao) inpDesc.value = p.descricao;
+  }
+}
+
+function obterDadosFormularioPropostaTela() {
+  const empresaId = obterEmpresaAtivaId();
+  const clienteIdVal = document.getElementById('tela-prop-cliente-select') ? document.getElementById('tela-prop-cliente-select').value : '';
+  const clienteNome = document.getElementById('tela-prop-cliente-nome') ? document.getElementById('tela-prop-cliente-nome').value.trim() : '';
+  const clienteEmail = document.getElementById('tela-prop-cliente-email') ? document.getElementById('tela-prop-cliente-email').value.trim() : '';
+  const clienteTelefone = document.getElementById('tela-prop-cliente-telefone') ? document.getElementById('tela-prop-cliente-telefone').value.trim() : '';
+
+  const produtoIdVal = document.getElementById('tela-prop-produto-select') ? document.getElementById('tela-prop-produto-select').value : '';
+  const produtoNome = document.getElementById('tela-prop-produto-nome') ? document.getElementById('tela-prop-produto-nome').value.trim() : '';
+  const valor = document.getElementById('tela-prop-valor') ? parseFloat(document.getElementById('tela-prop-valor').value) || 0 : 0;
+  const validadeDias = document.getElementById('tela-prop-validade-dias') ? parseInt(document.getElementById('tela-prop-validade-dias').value) || 15 : 15;
+  const condicoes = document.getElementById('tela-prop-condicoes') ? document.getElementById('tela-prop-condicoes').value.trim() : '';
+  const descricao = document.getElementById('tela-prop-descricao') ? document.getElementById('tela-prop-descricao').value.trim() : '';
+  const enviarEmail = document.getElementById('tela-prop-enviar-email-chk') ? document.getElementById('tela-prop-enviar-email-chk').checked : false;
+
+  return {
+    empresa_id: empresaId,
+    cliente_id: clienteIdVal ? parseInt(clienteIdVal) : null,
+    cliente_nome: clienteNome,
+    cliente_email: clienteEmail || null,
+    cliente_telefone: clienteTelefone || null,
+    produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
+    produto_nome: produtoNome || 'Solução Especializada',
+    valor,
+    validade_dias: validadeDias,
+    condicoes_pagamento: condicoes || 'À vista via PIX',
+    descricao_itens: descricao || null,
+    enviar_email: enviarEmail
+  };
+}
+
+async function previsualizarPropostaTela() {
+  const payload = obterDadosFormularioPropostaTela();
+  if (!payload.cliente_nome) {
+    mostrarToast('Informe o nome do cliente para gerar a pré-visualização.', 'error');
+    const inp = document.getElementById('tela-prop-cliente-nome');
+    if (inp) inp.focus();
+    return;
+  }
+
+  const iframe = document.getElementById('tela-prop-preview-iframe');
+  if (iframe) {
+    iframe.srcdoc = "<div style='display:flex; align-items:center; justify-content:center; height:100%; color:#64748b; font-family:sans-serif;'><p>⏳ Gerando prévia do documento...</p></div>";
+  }
+
+  try {
+    const res = await fetch('/propostas/previa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Falha ao gerar prévia');
+    }
+    const data = await res.json();
+    if (iframe) {
+      iframe.srcdoc = data.html;
+    }
+    mostrarToast('Prévia do documento atualizada com sucesso!', 'success');
+  } catch (e) {
+    mostrarToast('Erro ao gerar prévia: ' + e.message, 'error');
+  }
+}
+
+async function salvarEGerarPropostaTela() {
+  const payload = obterDadosFormularioPropostaTela();
+  if (!payload.cliente_nome) {
+    mostrarToast('Informe o nome do cliente / empresa.', 'error');
+    const inp = document.getElementById('tela-prop-cliente-nome');
+    if (inp) inp.focus();
+    return;
+  }
+  if (!payload.valor || payload.valor <= 0) {
+    mostrarToast('Informe o valor da proposta comercial.', 'error');
+    const inp = document.getElementById('tela-prop-valor');
+    if (inp) inp.focus();
+    return;
+  }
+
+  const btn = document.getElementById('btn-gerar-proposta-tela');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>⏳ Gerando e indexando no RAG...</span>`;
+  }
+
+  try {
+    const res = await fetch('/propostas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao gerar proposta comercial');
+
+    mostrarToast('Proposta gerada com sucesso e indexada na Base de Conhecimento!', 'success');
+
+    if (data.proposta_id) {
+      window.open(`/propostas/${data.proposta_id}/html`, '_blank');
+    }
+
+    switchTab('propostas');
+    await Promise.all([
+      carregarPropostasCRM(),
+      carregarDocumentos(),
+      carregarPipelinesKanban(),
+      carregarDashboardMetricas(),
+      carregarClientesCRM()
+    ]);
+  } catch (err) {
+    mostrarToast('Erro ao gerar proposta: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg> Gerar Proposta & Criar Documento`;
+    }
   }
 }
 

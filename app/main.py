@@ -74,28 +74,35 @@ app.include_router(crm_router)
 app.include_router(analytics_router)
 
 
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0"
+}
+
+
 @app.get("/login", response_class=FileResponse)
 def tela_login():
     """Tela de Autenticação do Usuário"""
-    return FileResponse(STATIC_DIR / "login.html")
+    return FileResponse(STATIC_DIR / "login.html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/cadastro", response_class=FileResponse)
 def tela_cadastro():
     """Tela de Auto-Cadastro de Empresa e Administrador (SaaS Onboarding)"""
-    return FileResponse(STATIC_DIR / "cadastro.html")
+    return FileResponse(STATIC_DIR / "cadastro.html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/", response_class=FileResponse)
 def portal_visualizacao():
     """Portal de Visualização e Operação (Telegram CRM + RAG)"""
-    return FileResponse(STATIC_DIR / "crm_portal.html")
+    return FileResponse(STATIC_DIR / "crm_portal.html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/admin", response_class=FileResponse)
 def portal_administracao():
     """Portal de Administração de Ambientes e Usuários"""
-    return FileResponse(STATIC_DIR / "admin_portal.html")
+    return FileResponse(STATIC_DIR / "admin_portal.html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/health")
