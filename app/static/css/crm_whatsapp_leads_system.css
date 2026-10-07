@@ -2933,6 +2933,23 @@ input:focus, select:focus, textarea:focus, .cf-input:focus, .cf-select:focus, .i
   color: var(--text);
 }
 
+/* Exceção explícita para telas de autenticação escuras (Login e Cadastro) */
+.login-input,
+.login-input:focus,
+.login-input:active,
+.signup-input,
+.signup-input:focus,
+.signup-input:active {
+  color: #ffffff !important;
+}
+
+.login-input:focus,
+.signup-input:focus {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border-color: #229ED9 !important;
+  box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.25) !important;
+}
+
 input::placeholder, textarea::placeholder {
   color: var(--text-muted);
   opacity: 0.75;

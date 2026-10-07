@@ -107,25 +107,37 @@
 
     .signup-input {
       width: 100%;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(15, 23, 42, 0.6) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
       border-radius: 10px;
       padding: 11px 14px;
       font-size: 13px;
-      color: white;
+      color: #ffffff !important;
       font-family: 'DM Sans', sans-serif;
       outline: none;
       transition: all 0.2s;
     }
 
-    .signup-input:focus {
-      border-color: var(--green);
-      background: rgba(15, 23, 42, 0.9);
-      box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+    .signup-input:focus,
+    .signup-input:active {
+      border-color: #229ED9 !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.25) !important;
     }
 
     .signup-input::placeholder {
-      color: #475569;
+      color: #64748b !important;
+    }
+
+    .signup-input:-webkit-autofill,
+    .signup-input:-webkit-autofill:hover, 
+    .signup-input:-webkit-autofill:focus, 
+    .signup-input:-webkit-autofill:active {
+      -webkit-text-fill-color: #ffffff !important;
+      -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+      box-shadow: 0 0 0 1000px #0f172a inset !important;
+      transition: background-color 5000s ease-in-out 0s;
     }
 
     .btn-submit {

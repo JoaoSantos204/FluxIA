@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Login</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body {
       background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08) 0%, transparent 40%),
@@ -102,27 +103,40 @@
       pointer-events: none;
     }
 
+    /* Campos de entrada com texto 100% visível em todos os estados */
     .login-input {
       width: 100%;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(15, 23, 42, 0.6) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
       border-radius: 10px;
       padding: 12px 14px 12px 42px;
       font-size: 14px;
-      color: white;
+      color: #ffffff !important;
       font-family: 'DM Sans', sans-serif;
       outline: none;
       transition: all 0.2s;
     }
 
-    .login-input:focus {
-      border-color: var(--green);
-      background: rgba(15, 23, 42, 0.9);
-      box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+    .login-input:focus,
+    .login-input:active {
+      border-color: #229ED9 !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.25) !important;
     }
 
     .login-input::placeholder {
-      color: #475569;
+      color: #64748b !important;
+    }
+
+    .login-input:-webkit-autofill,
+    .login-input:-webkit-autofill:hover, 
+    .login-input:-webkit-autofill:focus, 
+    .login-input:-webkit-autofill:active {
+      -webkit-text-fill-color: #ffffff !important;
+      -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+      box-shadow: 0 0 0 1000px #0f172a inset !important;
+      transition: background-color 5000s ease-in-out 0s;
     }
 
     .toggle-pass {
@@ -154,7 +168,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      margin-top: 24px;
+      margin-top: 22px;
       transition: all 0.2s;
       box-shadow: 0 4px 14px rgba(34, 158, 217, 0.3);
     }
@@ -169,6 +183,64 @@
     }
 
     .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Divisor OAuth */
+    .oauth-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 20px 0 16px;
+      color: #64748b;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .oauth-divider::before,
+    .oauth-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .oauth-divider span {
+      padding: 0 12px;
+    }
+
+    /* Botão de Login Google */
+    .btn-google {
+      width: 100%;
+      background: #ffffff;
+      color: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn-google:hover {
+      background: #f8fafc;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    }
+
+    .btn-google:active {
+      transform: translateY(0);
+    }
+
+    .btn-google:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
@@ -203,17 +275,6 @@
     }
 
     .login-footer a:hover { text-decoration: underline; }
-
-    .role-hint {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      font-size: 11px;
-      color: #94a3b8;
-      line-height: 1.5;
-    }
   </style>
 </head>
 <body>
@@ -262,7 +323,23 @@
     </button>
   </form>
 
+  <!-- AUTENTICAÇÃO VIA GOOGLE -->
+  <div class="oauth-divider">
+    <span>ou continue com</span>
+  </div>
 
+  <div id="google-btn-wrapper" style="width:100%;">
+    <button type="button" class="btn-google" id="btn-google-login" onclick="iniciarLoginGoogle()">
+      <svg width="18" height="18" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+      </svg>
+      <span>Continuar com o Google</span>
+    </button>
+    <div id="google-official-btn" style="display:none; justify-content:center; width:100%;"></div>
+  </div>
 
   <div class="login-footer">
     <div style="margin-bottom: 10px;">
@@ -303,7 +380,40 @@
   </div>
 </div>
 
+<!-- MODAL INSTRUÇÕES GOOGLE OAUTH -->
+<div class="modal-overlay" id="modal-google-setup">
+  <div class="modal-content" style="background:#1a1f2e; color:white; max-width:480px;">
+    <div class="modal-header" style="border-color:rgba(255,255,255,0.08);">
+      <div class="modal-title" style="color:white; display:flex; align-items:center; gap:8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+        Autenticação com o Google
+      </div>
+      <button class="btn-icon" style="background:rgba(255,255,255,0.05); color:white;" onclick="fecharModalGoogleSetup()">✕</button>
+    </div>
+    <div class="modal-body" style="font-size:13px; line-height:1.6; color:#cbd5e1;">
+      <p style="margin-bottom:12px;">
+        A integração de <strong>Login via Google (OAuth2 / OpenID Connect)</strong> já está integrada à plataforma!
+      </p>
+      <div style="background:rgba(34,158,217,0.1); border:1px solid rgba(34,158,217,0.25); border-radius:8px; padding:12px; margin-bottom:14px; font-size:12px; color:#7dd3fc;">
+        🚀 <strong>Para ativar em produção:</strong> adicione a variável de ambiente <code style="background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:4px; color:#fff;">GOOGLE_CLIENT_ID</code> com o Client ID gerado no Google Cloud Console.
+      </div>
+      <div style="font-size:12px; color:#94a3b8; line-height:1.5;">
+        <strong>Passos rápidos no Google Cloud:</strong><br>
+        1. Acesse o <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#38bdf8;">Google Cloud Console</a>.<br>
+        2. Crie uma credencial de <em>ID do cliente OAuth 2.0</em> (Aplicativo da Web).<br>
+        3. Em <em>Origens JavaScript autorizadas</em>, adicione o domínio do seu FluxIA.<br>
+        4. Configure <code style="color:#fff;">GOOGLE_CLIENT_ID</code> nas variáveis de ambiente.
+      </div>
+    </div>
+    <div class="modal-footer" style="background:#141824; border-color:rgba(255,255,255,0.08);">
+      <button class="btn-green" onclick="fecharModalGoogleSetup()">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <script>
+let googleClientIdConfigurado = '';
+
 function alternarVisibilidadeSenha() {
   const input = document.getElementById('login-senha');
   const eye = document.getElementById('eye-icon');
@@ -324,6 +434,25 @@ function exibirErro(msg) {
 
 function limparErro() {
   document.getElementById('login-alert').classList.remove('active');
+}
+
+function redirecionarAposLogin(usuario) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectUrl = urlParams.get('redirect');
+
+  if (redirectUrl) {
+    if (redirectUrl.includes('/admin') && usuario.perfil !== 'master') {
+      window.location.href = '/';
+    } else {
+      window.location.href = redirectUrl;
+    }
+  } else {
+    if (usuario.perfil === 'master') {
+      window.location.href = '/admin';
+    } else {
+      window.location.href = '/';
+    }
+  }
 }
 
 async function executarLogin(e) {
@@ -355,32 +484,88 @@ async function executarLogin(e) {
       throw new Error(data.detail || 'Falha ao autenticar.');
     }
 
-    // Grava dados do usuário na sessão do navegador
     localStorage.setItem('fluxia_user', JSON.stringify(data.usuario));
-
-    // Verifica parâmetro de redirecionamento na URL (ex: ?redirect=/admin)
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirectUrl = urlParams.get('redirect');
-
-    if (redirectUrl) {
-      // Se tentou acessar admin e NÃO é master, redireciona para o portal operacional
-      if (redirectUrl.includes('/admin') && data.usuario.perfil !== 'master') {
-        window.location.href = '/';
-      } else {
-        window.location.href = redirectUrl;
-      }
-    } else {
-      // Super Admin (Master) vai para o portal de ambientes; Admins de empresas e funcionários vão para o operacional
-      if (data.usuario.perfil === 'master') {
-        window.location.href = '/admin';
-      } else {
-        window.location.href = '/';
-      }
-    }
+    redirecionarAposLogin(data.usuario);
   } catch (err) {
     exibirErro(err.message);
     btn.disabled = false;
     btn.innerHTML = `<span>Entrar na Plataforma</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
+  }
+}
+
+// ===== GOOGLE SIGN-IN =====
+async function inicializarGoogleAuth() {
+  try {
+    const res = await fetch('/auth/google/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    googleClientIdConfigurado = data.google_client_id || '';
+
+    if (googleClientIdConfigurado && window.google && window.google.accounts) {
+      window.google.accounts.id.initialize({
+        client_id: googleClientIdConfigurado,
+        callback: tratarRespostaGoogle,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      const officialContainer = document.getElementById('google-official-btn');
+      if (officialContainer) {
+        window.google.accounts.id.renderButton(officialContainer, {
+          theme: 'outline',
+          size: 'large',
+          width: '356',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'left'
+        });
+        officialContainer.style.display = 'flex';
+        document.getElementById('btn-google-login').style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.warn('Configuração do Google Sign-In:', err);
+  }
+}
+
+function iniciarLoginGoogle() {
+  if (googleClientIdConfigurado && window.google && window.google.accounts) {
+    window.google.accounts.id.prompt();
+  } else {
+    document.getElementById('modal-google-setup').classList.add('active');
+  }
+}
+
+function fecharModalGoogleSetup() {
+  document.getElementById('modal-google-setup').classList.remove('active');
+}
+
+async function tratarRespostaGoogle(response) {
+  limparErro();
+  const btn = document.getElementById('btn-google-login');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>Autenticando via Google...</span>`;
+  }
+
+  try {
+    const res = await fetch('/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Falha ao autenticar com a conta Google.');
+    }
+    localStorage.setItem('fluxia_user', JSON.stringify(data.usuario));
+    redirecionarAposLogin(data.usuario);
+  } catch (err) {
+    exibirErro(err.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg><span>Continuar com o Google</span>`;
+    }
   }
 }
 
@@ -428,22 +613,16 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const u = JSON.parse(userJson);
       if (u && u.id) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const redirect = urlParams.get('redirect');
-        if (redirect) {
-          if (redirect.includes('/admin') && u.perfil !== 'master') {
-            window.location.href = '/';
-          } else {
-            window.location.href = redirect;
-          }
-        } else {
-          window.location.href = u.perfil === 'master' ? '/admin' : '/';
-        }
+        redirecionarAposLogin(u);
+        return;
       }
     } catch (e) {
       localStorage.removeItem('fluxia_user');
     }
   }
+
+  // Inicializa integração com Google OAuth
+  inicializarGoogleAuth();
 });
 </script>
 

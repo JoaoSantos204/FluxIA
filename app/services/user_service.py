@@ -229,6 +229,54 @@ def autenticar_usuario(email: str, senha: str) -> dict:
         conexao.close()
 
 
+def autenticar_usuario_google(email: str, nome: str | None = None, picture: str | None = None) -> dict:
+    """
+    Autentica um usuário via conta Google.
+    Localiza o usuário pelo e-mail verificado e checa o status de ativação da conta.
+    """
+    email_limpo = email.strip().lower()
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            SELECT id, empresa_id, nome, email, perfil, status
+            FROM usuarios
+            WHERE LOWER(email) = {ph}
+        """, (email_limpo,))
+        linha = cursor.fetchone()
+
+        if not linha:
+            return {
+                "sucesso": False,
+                "erro": f"O e-mail '{email_limpo}' da sua conta Google não está cadastrado no FluxIA. Solicite acesso ao seu administrador ou crie sua conta na página de cadastro.",
+                "codigo": "USUARIO_NAO_ENCONTRADO",
+                "email": email_limpo
+            }
+
+        if linha["status"] != "ativo":
+            return {
+                "sucesso": False,
+                "erro": "Esta conta foi desativada. Contate o administrador.",
+                "codigo": "CONTA_DESATIVADA"
+            }
+
+        return {
+            "sucesso": True,
+            "usuario": {
+                "id": linha["id"],
+                "empresa_id": linha["empresa_id"],
+                "nome": linha["nome"],
+                "email": linha["email"],
+                "perfil": linha["perfil"] or "cliente",
+                "avatar_url": picture or ""
+            }
+        }
+    finally:
+        conexao.close()
+
+
 def redefinir_senha_usuario(email: str, nova_senha: str) -> bool:
     """
     Redefine a senha de um usuário pelo e-mail.
