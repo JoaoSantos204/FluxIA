@@ -3803,6 +3803,7 @@ async function salvarChaveGeminiEmpresa() {
 
 async function salvarConfiguracaoBotTelegram() {
   const tokenInput = document.getElementById('config-telegram-bot-token');
+  const tokenStatus = document.getElementById('telegram-bot-token-status');
   const token = tokenInput ? tokenInput.value.trim() : '';
   if (!token) {
     alert('Por favor, informe o token do bot gerado pelo @BotFather.');
@@ -3812,6 +3813,10 @@ async function salvarConfiguracaoBotTelegram() {
   const empresaId = obterEmpresaAtivaId();
   const uid = usuarioAtual ? usuarioAtual.id : null;
   const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  if (tokenStatus) {
+    tokenStatus.innerHTML = `<span style="color:#60a5fa;">⏳ Validando e conectando bot com o Telegram...</span>`;
+  }
 
   try {
     const res = await fetch('/empresa/telegram-bot', {
@@ -3832,7 +3837,10 @@ async function salvarConfiguracaoBotTelegram() {
     alert(data.mensagem || 'Bot do Telegram conectado com sucesso!');
     carregarConfiguracoesEmpresa();
   } catch (err) {
-    alert('Erro ao conectar bot do Telegram: ' + err.message);
+    if (tokenStatus) {
+      tokenStatus.innerHTML = `<span style="color:#ef4444; font-weight:600;">⚠️ ${escapeHtml(err.message)}</span>`;
+    }
+    alert('Aviso sobre o Bot do Telegram:\n\n' + err.message);
   }
 }
 

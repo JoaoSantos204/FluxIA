@@ -361,6 +361,102 @@ def deletar_empresa(empresa_id: int) -> bool:
         conexao.close()
 
 
+def buscar_empresa_por_token_telegram(
+    telegram_bot_token: str,
+    excluir_empresa_id: int | None = None
+) -> dict | None:
+    """
+    Verifica se um token do Telegram já está cadastrado em outra empresa.
+    Retorna os dados da empresa conflitante (empresa_id, empresa_nome, telegram_bot_username) se encontrar, ou None.
+    """
+    if not telegram_bot_token or not str(telegram_bot_token).strip():
+        return None
+
+    token_limpo = str(telegram_bot_token).strip()
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        sql = f"""
+            SELECT c.empresa_id, e.nome AS empresa_nome, c.telegram_bot_username
+            FROM configuracoes_empresa c
+            LEFT JOIN empresas e ON e.id = c.empresa_id
+            WHERE c.telegram_bot_token IS NOT NULL
+              AND TRIM(c.telegram_bot_token) = {ph}
+        """
+        params = [token_limpo]
+
+        if excluir_empresa_id is not None:
+            sql += f" AND c.empresa_id != {ph}"
+            params.append(excluir_empresa_id)
+
+        sql += " LIMIT 1"
+        cursor.execute(sql, tuple(params))
+        linha = cursor.fetchone()
+
+        if linha:
+            return {
+                "empresa_id": linha["empresa_id"],
+                "empresa_nome": linha["empresa_nome"] or f"Empresa #{linha['empresa_id']}",
+                "telegram_bot_username": linha["telegram_bot_username"] or ""
+            }
+        return None
+    except Exception as e:
+        logger.error(f"[CompanyService] Erro ao buscar empresa por token telegram: {e}")
+        return None
+    finally:
+        conexao.close()
+
+
+def buscar_empresa_por_bot_username_telegram(
+    bot_username: str,
+    excluir_empresa_id: int | None = None
+) -> dict | None:
+    """
+    Verifica se um username de bot do Telegram já está cadastrado em outra empresa.
+    Retorna os dados da empresa conflitante (empresa_id, empresa_nome, telegram_bot_username) se encontrar, ou None.
+    """
+    if not bot_username or not str(bot_username).strip():
+        return None
+
+    username_limpo = str(bot_username).strip().lstrip("@").lower()
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        sql = f"""
+            SELECT c.empresa_id, e.nome AS empresa_nome, c.telegram_bot_username
+            FROM configuracoes_empresa c
+            LEFT JOIN empresas e ON e.id = c.empresa_id
+            WHERE c.telegram_bot_username IS NOT NULL
+              AND LOWER(REPLACE(c.telegram_bot_username, '@', '')) = {ph}
+        """
+        params = [username_limpo]
+
+        if excluir_empresa_id is not None:
+            sql += f" AND c.empresa_id != {ph}"
+            params.append(excluir_empresa_id)
+
+        sql += " LIMIT 1"
+        cursor.execute(sql, tuple(params))
+        linha = cursor.fetchone()
+
+        if linha:
+            return {
+                "empresa_id": linha["empresa_id"],
+                "empresa_nome": linha["empresa_nome"] or f"Empresa #{linha['empresa_id']}",
+                "telegram_bot_username": linha["telegram_bot_username"] or ""
+            }
+        return None
+    except Exception as e:
+        logger.error(f"[CompanyService] Erro ao buscar empresa por username telegram: {e}")
+        return None
+    finally:
+        conexao.close()
+
+
 def atualizar_telegram_bot_empresa(
     empresa_id: int,
     telegram_bot_token: str | None,
@@ -369,7 +465,28 @@ def atualizar_telegram_bot_empresa(
 ) -> dict:
     """
     Atualiza as configurações do bot do Telegram da empresa (Token do BotFather, username e status).
+    Garante unicidade do token e username entre diferentes empresas.
     """
+    if telegram_bot_token and str(telegram_bot_token).strip():
+        token_limpo = str(telegram_bot_token).strip()
+        conflito_token = buscar_empresa_por_token_telegram(token_limpo, excluir_empresa_id=empresa_id)
+        if conflito_token:
+            nome_empresa = conflito_token.get("empresa_nome") or f"Empresa #{conflito_token.get('empresa_id')}"
+            raise ValueError(
+                f"Este token do Telegram já está em uso pela empresa '{nome_empresa}' (ID #{conflito_token.get('empresa_id')}). "
+                f"Cada empresa deve possuir seu próprio bot exclusivo."
+            )
+
+    if telegram_bot_username and str(telegram_bot_username).strip():
+        user_limpo = str(telegram_bot_username).strip().lstrip("@")
+        conflito_user = buscar_empresa_por_bot_username_telegram(user_limpo, excluir_empresa_id=empresa_id)
+        if conflito_user:
+            nome_empresa = conflito_user.get("empresa_nome") or f"Empresa #{conflito_user.get('empresa_id')}"
+            raise ValueError(
+                f"O bot @{user_limpo} já está vinculado à empresa '{nome_empresa}' (ID #{conflito_user.get('empresa_id')}). "
+                f"Cada empresa deve possuir seu próprio bot exclusivo."
+            )
+
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()

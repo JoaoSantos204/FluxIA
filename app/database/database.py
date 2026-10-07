@@ -392,6 +392,21 @@ def _criar_banco_sqlite(cursor):
         cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN provedor_ia_padrao TEXT DEFAULT 'google'")
     if "fuso_horario" not in colunas_cfg:
         cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN fuso_horario TEXT DEFAULT 'America/Sao_Paulo'")
+    if "telegram_bot_token" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN telegram_bot_token TEXT")
+    if "telegram_bot_username" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN telegram_bot_username TEXT")
+    if "telegram_webhook_ativo" not in colunas_cfg:
+        cursor.execute("ALTER TABLE configuracoes_empresa ADD COLUMN telegram_webhook_ativo BOOLEAN DEFAULT 0")
+
+    try:
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_config_empresa_telegram_token 
+            ON configuracoes_empresa (telegram_bot_token) 
+            WHERE telegram_bot_token IS NOT NULL AND telegram_bot_token != ''
+        """)
+    except Exception:
+        pass
 
     # Dados iniciais
     cursor.execute("SELECT COUNT(*) AS total FROM empresas")
@@ -752,6 +767,16 @@ def _criar_banco_postgres(cursor):
     # Relaxa CHECK constraint legado de estagio no Postgres caso exista
     try:
         cursor.execute("ALTER TABLE negocios DROP CONSTRAINT IF EXISTS negocios_estagio_check;")
+    except Exception:
+        pass
+
+    # Garante índice único para telegram_bot_token por empresa
+    try:
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_config_empresa_telegram_token 
+            ON configuracoes_empresa (telegram_bot_token) 
+            WHERE telegram_bot_token IS NOT NULL AND telegram_bot_token != '';
+        """)
     except Exception:
         pass
 

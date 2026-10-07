@@ -14,6 +14,8 @@ from app.services.company_service import (
     atualizar_configuracao_ia,
     atualizar_fuso_horario,
     atualizar_telegram_bot_empresa,
+    buscar_empresa_por_token_telegram,
+    buscar_empresa_por_bot_username_telegram,
     listar_empresas,
     cadastrar_empresa,
     deletar_empresa
@@ -236,6 +238,15 @@ def salvar_telegram_bot_empresa(
 
     token = (dados.telegram_bot_token or "").strip()
     if not token:
+        # Busca token antigo para desconectar webhook no Telegram se existente
+        try:
+            cfg_antiga = obter_configuracao_empresa(dados.empresa_id)
+            token_antigo = cfg_antiga.get("telegram_bot_token")
+            if token_antigo:
+                requests.post(f"https://api.telegram.org/bot{token_antigo}/deleteWebhook", timeout=5)
+        except Exception as e:
+            logger.warning(f"[TelegramBot] Aviso ao remover webhook no Telegram para empresa {dados.empresa_id}: {e}")
+
         # Remoção do bot dedicado (retorna para o bot compartilhado/padrão)
         resultado = atualizar_telegram_bot_empresa(
             empresa_id=dados.empresa_id,
@@ -245,11 +256,27 @@ def salvar_telegram_bot_empresa(
         )
         return {
             "sucesso": True,
-            "mensagem": "Bot dedicado removido. A empresa utilizará o bot padrão global se configurado.",
+            "mensagem": "Bot dedicado desconectado com sucesso. A empresa não possui mais bot próprio ativo.",
             "configuracao": resultado
         }
 
-    # Validação do Token junto à API oficial do Telegram
+    # 1. Validação prévia de Unicidade: impede reutilização de token cadastrado em outra empresa
+    conflito_token = buscar_empresa_por_token_telegram(token, excluir_empresa_id=dados.empresa_id)
+    if conflito_token:
+        nome_outra = conflito_token.get("empresa_nome") or f"Empresa #{conflito_token.get('empresa_id')}"
+        id_outra = conflito_token.get("empresa_id")
+        user_outra = conflito_token.get("telegram_bot_username")
+        detalhe_user = f" (@{user_outra})" if user_outra else ""
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Este token do Telegram{detalhe_user} já está cadastrado na empresa '{nome_outra}' (ID #{id_outra}). "
+                f"O sistema não aceita tokens duplicados. Cada empresa deve possuir seu próprio bot exclusivo. "
+                f"Para utilizá-lo nesta empresa, primeiro desconecte o bot na empresa original."
+            )
+        )
+
+    # 2. Validação do Token junto à API oficial do Telegram
     try:
         resp = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
         res_json = resp.json()
@@ -267,6 +294,21 @@ def salvar_telegram_bot_empresa(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro de conexão com o Telegram: {e}"
         )
+
+    # 3. Validação de Unicidade por Username: garante que o mesmo @username de bot não seja vinculado a empresas distintas
+    if bot_username:
+        conflito_user = buscar_empresa_por_bot_username_telegram(bot_username, excluir_empresa_id=dados.empresa_id)
+        if conflito_user:
+            nome_outra = conflito_user.get("empresa_nome") or f"Empresa #{conflito_user.get('empresa_id')}"
+            id_outra = conflito_user.get("empresa_id")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"O bot @{bot_username} já está cadastrado para a empresa '{nome_outra}' (ID #{id_outra}). "
+                    f"Cada empresa deve possuir seu próprio bot exclusivo. "
+                    f"Para utilizá-lo nesta empresa, primeiro desconecte o bot na empresa original."
+                )
+            )
 
     # Determina a URL base pública para o webhook
     base_url = (
@@ -311,13 +353,19 @@ def salvar_telegram_bot_empresa(
     except Exception as e:
         logger.warning(f"[TelegramBot] Falha ao registrar comandos padrão do bot: {e}")
 
-    # Atualiza banco de dados
-    resultado = atualizar_telegram_bot_empresa(
-        empresa_id=dados.empresa_id,
-        telegram_bot_token=token,
-        telegram_bot_username=bot_username,
-        telegram_webhook_ativo=webhook_ativo
-    )
+    # Atualiza banco de dados com tratamento de erro
+    try:
+        resultado = atualizar_telegram_bot_empresa(
+            empresa_id=dados.empresa_id,
+            telegram_bot_token=token,
+            telegram_bot_username=bot_username,
+            telegram_webhook_ativo=webhook_ativo
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
 
     return {
         "sucesso": True,
