@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Login</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer onload="configurarTokenClient()"></script>
   <style>
     body {
       background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08) 0%, transparent 40%),
@@ -493,34 +493,63 @@ async function executarLogin(e) {
   }
 }
 
-// ===== GOOGLE SIGN-IN =====
+// ===== GOOGLE SIGN-IN (GIS + OAUTH2 POPUP) =====
+let googleClientIdConfigurado = '';
+let tokenClient = null;
+
+function restaurarBotaoGoogle() {
+  const btn = document.getElementById('btn-google-login');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg><span>Continuar com o Google</span>`;
+  }
+}
+
+function configurarTokenClient() {
+  if (window.google && window.google.accounts && window.google.accounts.oauth2 && googleClientIdConfigurado) {
+    try {
+      tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: googleClientIdConfigurado,
+        scope: 'openid email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            await autenticarComPayloadGoogle({ access_token: tokenResponse.access_token });
+          } else if (tokenResponse && tokenResponse.error) {
+            restaurarBotaoGoogle();
+            if (tokenResponse.error !== 'access_denied') {
+              console.error('Google OAuth error:', tokenResponse);
+              exibirErro('Google Sign-In: ' + (tokenResponse.error_description || tokenResponse.error));
+            }
+          }
+        },
+        error_callback: (err) => {
+          console.warn('Erro no tokenClient GIS, tentando popup OAuth direto:', err);
+          abrirJanelaOAuthGoogle();
+        }
+      });
+    } catch (e) {
+      console.warn('Falha ao instanciar initTokenClient:', e);
+    }
+  }
+}
+
 async function inicializarGoogleAuth() {
   try {
     const res = await fetch('/auth/google/config');
     if (!res.ok) return;
     const data = await res.json();
-    googleClientIdConfigurado = data.google_client_id || '';
+    googleClientIdConfigurado = (data.google_client_id || '').trim();
 
-    if (googleClientIdConfigurado && window.google && window.google.accounts) {
-      window.google.accounts.id.initialize({
-        client_id: googleClientIdConfigurado,
-        callback: tratarRespostaGoogle,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
+    if (googleClientIdConfigurado) {
+      configurarTokenClient();
 
-      const officialContainer = document.getElementById('google-official-btn');
-      if (officialContainer) {
-        window.google.accounts.id.renderButton(officialContainer, {
-          theme: 'outline',
-          size: 'large',
-          width: '356',
-          text: 'continue_with',
-          shape: 'rectangular',
-          logo_alignment: 'left'
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientIdConfigurado,
+          callback: (resGsi) => autenticarComPayloadGoogle({ credential: resGsi.credential }),
+          auto_select: false,
+          cancel_on_tap_outside: true
         });
-        officialContainer.style.display = 'flex';
-        document.getElementById('btn-google-login').style.display = 'none';
       }
     }
   } catch (err) {
@@ -529,10 +558,84 @@ async function inicializarGoogleAuth() {
 }
 
 function iniciarLoginGoogle() {
-  if (googleClientIdConfigurado && window.google && window.google.accounts) {
-    window.google.accounts.id.prompt();
-  } else {
+  limparErro();
+
+  if (!googleClientIdConfigurado) {
+    const btn = document.getElementById('btn-google-login');
+    if (btn) {
+      btn.innerHTML = `<span>Conectando ao Google...</span>`;
+    }
+
+    fetch('/auth/google/config')
+      .then(r => r.json())
+      .then(data => {
+        restaurarBotaoGoogle();
+        googleClientIdConfigurado = (data.google_client_id || '').trim();
+        if (googleClientIdConfigurado) {
+          configurarTokenClient();
+          executarAberturaGoogle();
+        } else {
+          document.getElementById('modal-google-setup').classList.add('active');
+        }
+      })
+      .catch(() => {
+        restaurarBotaoGoogle();
+        document.getElementById('modal-google-setup').classList.add('active');
+      });
+    return;
+  }
+
+  executarAberturaGoogle();
+}
+
+function executarAberturaGoogle() {
+  const btn = document.getElementById('btn-google-login');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>Abrindo Google...</span>`;
+  }
+
+  if (!tokenClient && window.google && window.google.accounts && window.google.accounts.oauth2) {
+    configurarTokenClient();
+  }
+
+  if (tokenClient) {
+    try {
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
+      setTimeout(restaurarBotaoGoogle, 4000);
+      return;
+    } catch (e) {
+      console.warn('tokenClient.requestAccessToken falhou, tentando fallback direto:', e);
+    }
+  }
+
+  abrirJanelaOAuthGoogle();
+  setTimeout(restaurarBotaoGoogle, 4000);
+}
+
+function abrirJanelaOAuthGoogle() {
+  if (!googleClientIdConfigurado) {
+    restaurarBotaoGoogle();
     document.getElementById('modal-google-setup').classList.add('active');
+    return;
+  }
+
+  const redirectUri = window.location.origin + '/login';
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id: googleClientIdConfigurado,
+    redirect_uri: redirectUri,
+    response_type: 'token',
+    scope: 'openid email profile',
+    prompt: 'select_account'
+  }).toString();
+
+  const w = 500, h = 600;
+  const left = Math.max(0, (window.innerWidth - w) / 2 + window.screenX);
+  const top = Math.max(0, (window.innerHeight - h) / 2 + window.screenY);
+  
+  const popup = window.open(authUrl, 'GoogleLoginPopup', `width=${w},height=${h},top=${top},left=${left}`);
+  if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+    window.location.href = authUrl;
   }
 }
 
@@ -540,7 +643,7 @@ function fecharModalGoogleSetup() {
   document.getElementById('modal-google-setup').classList.remove('active');
 }
 
-async function tratarRespostaGoogle(response) {
+async function autenticarComPayloadGoogle(payload) {
   limparErro();
   const btn = document.getElementById('btn-google-login');
   if (btn) {
@@ -552,7 +655,7 @@ async function tratarRespostaGoogle(response) {
     const res = await fetch('/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: response.credential })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) {
@@ -562,12 +665,41 @@ async function tratarRespostaGoogle(response) {
     redirecionarAposLogin(data.usuario);
   } catch (err) {
     exibirErro(err.message);
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg><span>Continuar com o Google</span>`;
+    restaurarBotaoGoogle();
+  }
+}
+
+// Captura retorno do Google OAuth se vier por hash (#access_token=...)
+function verificarRetornoHashOAuth() {
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const token = params.get('access_token');
+    if (token) {
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ tipo: 'GOOGLE_OAUTH_TOKEN', access_token: token }, window.location.origin);
+          window.close();
+          return;
+        } catch (e) {}
+      }
+      history.replaceState(null, null, window.location.pathname + window.location.search);
+      autenticarComPayloadGoogle({ access_token: token });
     }
   }
 }
+
+// Executa verificação de hash imediatamente caso a página tenha sido aberta pelo redirect
+verificarRetornoHashOAuth();
+
+// Listener para receber token de popups filhos
+window.addEventListener('message', (event) => {
+  if (event.origin === window.location.origin && event.data && event.data.tipo === 'GOOGLE_OAUTH_TOKEN') {
+    if (event.data.access_token) {
+      autenticarComPayloadGoogle({ access_token: event.data.access_token });
+    }
+  }
+});
 
 function abrirModalRecuperar(e) {
   if (e) e.preventDefault();
@@ -608,6 +740,8 @@ async function enviarRedefinicaoSenha() {
 
 // Se já estiver logado, redireciona direto
 document.addEventListener('DOMContentLoaded', () => {
+  verificarRetornoHashOAuth();
+
   const userJson = localStorage.getItem('fluxia_user');
   if (userJson) {
     try {

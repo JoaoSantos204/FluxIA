@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import requests
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
@@ -21,7 +22,8 @@ class LoginRequest(BaseModel):
 
 
 class GoogleLoginRequest(BaseModel):
-    credential: str = Field(..., description="ID Token JWT emitido pelo Google Identity Services")
+    credential: Optional[str] = Field(default=None, description="ID Token JWT emitido pelo Google Identity Services")
+    access_token: Optional[str] = Field(default=None, description="Access Token OAuth2 emitido pelo Google")
 
 
 class RedefinirSenhaRequest(BaseModel):
@@ -46,36 +48,70 @@ def obter_config_google():
 def login_google(dados: GoogleLoginRequest):
     """
     Autentica o usuário via Google Sign-In (OpenID Connect / OAuth2).
-    Valida o ID token JWT diretamente com a API do Google (tokeninfo) e inicia a sessão.
+    Suporta tanto ID Token JWT quanto Access Token OAuth2.
     """
-    token = (dados.credential or "").strip()
-    if not token:
+    google_email = None
+    email_verified = False
+    nome_google = ""
+    picture_google = ""
+
+    if dados.access_token and dados.access_token.strip():
+        token = dados.access_token.strip()
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10
+            )
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Access Token do Google inválido ou expirado."
+                )
+            token_info = resp.json()
+            google_email = (token_info.get("email") or "").strip().lower()
+            email_verified = token_info.get("email_verified", True)
+            nome_google = token_info.get("name", "")
+            picture_google = token_info.get("picture", "")
+        except requests.RequestException as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Falha de conexão com os servidores do Google: {e}"
+            )
+    elif dados.credential and dados.credential.strip():
+        token = dados.credential.strip()
+        try:
+            resp = requests.get(
+                f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
+                timeout=10
+            )
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token de autenticação do Google inválido ou expirado."
+                )
+            token_info = resp.json()
+            google_email = (token_info.get("email") or "").strip().lower()
+            email_verified = token_info.get("email_verified")
+            nome_google = token_info.get("name", "")
+            picture_google = token_info.get("picture", "")
+
+            expected_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+            if expected_client_id and token_info.get("aud") != expected_client_id:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token do Google não pertence ao Client ID configurado nesta aplicação."
+                )
+        except requests.RequestException as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Falha de conexão com os servidores de autenticação do Google: {e}"
+            )
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token de credencial do Google ausente."
+            detail="Nenhuma credencial ou token do Google foi fornecido."
         )
-
-    try:
-        resp = requests.get(
-            f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
-            timeout=10
-        )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token de autenticação do Google inválido ou expirado."
-            )
-        token_info = resp.json()
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Falha de conexão com os servidores de autenticação do Google: {e}"
-        )
-
-    google_email = (token_info.get("email") or "").strip().lower()
-    email_verified = token_info.get("email_verified")
-    nome_google = token_info.get("name", "")
-    picture_google = token_info.get("picture", "")
 
     if not google_email:
         raise HTTPException(
@@ -87,14 +123,6 @@ def login_google(dados: GoogleLoginRequest):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O e-mail retornado pela conta Google não foi verificado."
-        )
-
-    # Validação opcional de audience (aud) caso GOOGLE_CLIENT_ID esteja definido no servidor
-    expected_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
-    if expected_client_id and token_info.get("aud") != expected_client_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token do Google não pertence ao Client ID configurado nesta aplicação."
         )
 
     resultado = autenticar_usuario_google(
