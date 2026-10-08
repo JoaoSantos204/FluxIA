@@ -43,6 +43,68 @@
     })();
   </script>
   <style>
+    /* AJUSTE GLOBAL DE SCROLL EM TODAS AS TELAS */
+    .main {
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .screen {
+      flex: 1 !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .screen.active {
+      display: flex !important;
+      flex-direction: column !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+    }
+
+    /* Espaçamento inferior generoso para rolagem completa em telas de listagem */
+    #screen-clientes, #screen-produtos, #screen-propostas, #screen-pipelines, #screen-contratos, #screen-equipe, #screen-documentos, #screen-config, #screen-observabilidade, #screen-resumos {
+      padding-bottom: 50px !important;
+    }
+
+    .table-scroll-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      width: 100%;
+    }
+
+    /* FORMAS DE PAGAMENTO CLICÁVEIS */
+    .btn-payment-opt {
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-payment-opt:hover {
+      background: var(--surface-hover);
+      border-color: var(--text-muted);
+    }
+    .btn-payment-opt.active {
+      background: var(--green) !important;
+      color: #ffffff !important;
+      border-color: var(--green) !important;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+    }
+
     /* AJUSTE TELA EQUIPE: Garante que os botões Editar e Excluir fiquem 100% visíveis sem corte */
     #equipe-table-container {
       overflow: visible !important;
@@ -533,27 +595,29 @@
         </div>
       </div>
 
-      <div style="margin: 16px 0; display:flex; gap:10px; align-items:center;">
-        <input class="login-input" id="busca-clientes-input" placeholder="Buscar por nome, e-mail ou telefone..." style="max-width:380px; padding:10px 14px; background:var(--surface); border:1px solid var(--border);" oninput="filtrarClientesCRM(this.value)" />
-      </div>
+      <div style="padding: 0 24px 30px 24px; display:flex; flex-direction:column; flex:1;">
+        <div style="margin: 16px 0; display:flex; gap:10px; align-items:center;">
+          <input class="login-input" id="busca-clientes-input" placeholder="Buscar por nome, e-mail ou telefone..." style="max-width:380px; padding:10px 14px; background:var(--surface); border:1px solid var(--border);" oninput="filtrarClientesCRM(this.value)" />
+        </div>
 
-      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm);">
-        <table class="crm-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Nome</th>
-              <th>E-mail</th>
-              <th>Telefone</th>
-              <th>Origem</th>
-              <th>Cadastro</th>
-              <th style="text-align:right;">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tabela-clientes-corpo">
-            <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando clientes...</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Origem</th>
+                <th>Cadastro</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-clientes-corpo">
+              <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando clientes...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -573,22 +637,25 @@
         </div>
       </div>
 
-      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); margin-top:16px;">
-        <table class="crm-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Produto / Serviço</th>
-              <th>Descrição</th>
-              <th>Preço Base</th>
-              <th>Status</th>
-              <th style="text-align:right;">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tabela-produtos-corpo">
-            <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>
-          </tbody>
-        </table>
+      <div style="padding: 0 24px 30px 24px; display:flex; flex-direction:column; flex:1;">
+        <div class="table-scroll-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Produto / Serviço</th>
+                <th>Funil (Pipeline)</th>
+                <th>Descrição</th>
+                <th>Preço Base</th>
+                <th>Status</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-produtos-corpo">
+              <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -636,25 +703,27 @@
         </div>
       </div>
 
-      <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); margin-top:16px;">
-        <table class="crm-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Cliente</th>
-              <th>Negócio</th>
-              <th>Produto</th>
-              <th>Valor</th>
-              <th>Validade</th>
-              <th>Data Emissão</th>
-              <th>Envio E-mail</th>
-              <th style="text-align:right;">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tabela-propostas-corpo">
-            <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
-          </tbody>
-        </table>
+      <div style="padding: 0 24px 30px 24px; display:flex; flex-direction:column; flex:1;">
+        <div class="table-scroll-container">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th>Negócio</th>
+                <th>Produto</th>
+                <th>Valor</th>
+                <th>Validade</th>
+                <th>Data Emissão</th>
+                <th>Envio E-mail</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-propostas-corpo">
+              <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -765,8 +834,35 @@
             </div>
 
             <div class="config-field" style="margin-bottom:14px;">
-              <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Condições de Pagamento</div>
-              <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-condicoes" value="À vista via PIX ou em até 12x no cartão de crédito." />
+              <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Forma de Pagamento *</div>
+              
+              <!-- Opções Clicáveis -->
+              <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;" id="tela-prop-payment-options">
+                <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoTela('pix')">⚡ PIX</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('transferencia')">🏦 Transferência</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('debito')">💳 Débito</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_vista')">💳 Crédito à Vista</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_parcelado')">📅 Crédito Parcelado</button>
+              </div>
+
+              <!-- Campo Dinâmico de Parcelas (exibido apenas se Crédito Parcelado) -->
+              <div id="tela-prop-parcelas-wrap" style="display:none; align-items:center; gap:10px; margin-bottom:10px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text);">Número de Parcelas:</label>
+                <select class="login-input" id="tela-prop-parcelas-select" style="padding:6px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border); width:auto; font-weight:600;" onchange="atualizarTextoCondicoesTela()">
+                  <option value="2">2x sem juros</option>
+                  <option value="3">3x sem juros</option>
+                  <option value="4">4x sem juros</option>
+                  <option value="5">5x sem juros</option>
+                  <option value="6">6x sem juros</option>
+                  <option value="10">10x sem juros</option>
+                  <option value="12" selected>12x sem juros</option>
+                  <option value="18">18x sem juros</option>
+                  <option value="24">24x sem juros</option>
+                </select>
+              </div>
+
+              <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Texto no Documento / Observações</div>
+              <input class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-condicoes" value="À vista via PIX." />
             </div>
 
             <div class="config-field">
@@ -855,7 +951,7 @@
         </div>
       </div>
 
-      <div id="lista-pipelines-admin" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
+      <div id="lista-pipelines-admin" style="padding: 0 24px 30px 24px; margin-top:20px; display:flex; flex-direction:column; gap:16px;">
         <div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">
           Carregando pipelines configurados...
         </div>
@@ -2401,14 +2497,14 @@ async function carregarProdutosCRM() {
   if (!corpo) return;
 
   try {
-    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>`;
     const res = await apiFetch(`/produtos?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar produtos');
     const data = await res.json();
     produtosCache = data.produtos || [];
     renderizarTabelaProdutos(produtosCache);
   } catch (err) {
-    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
   }
 }
 
@@ -2417,7 +2513,7 @@ function renderizarTabelaProdutos(produtos) {
   if (!corpo) return;
 
   if (produtos.length === 0) {
-    corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhum produto cadastrado.</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhum produto cadastrado.</td></tr>`;
     return;
   }
 
@@ -2427,6 +2523,11 @@ function renderizarTabelaProdutos(produtos) {
     <tr>
       <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
       <td style="font-weight:600; color:var(--text);">${escapeHtml(p.nome)}</td>
+      <td>
+        <span style="font-size:11px; padding:3px 8px; border-radius:6px; background:rgba(34,158,217,0.12); color:#229ed9; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+          📊 ${escapeHtml(p.pipeline_nome || 'Funil Padrão')}
+        </span>
+      </td>
       <td style="color:var(--text-muted); font-size:12px; max-width:280px;">${escapeHtml(p.descricao || 'Sem descrição')}</td>
       <td style="font-weight:700; color:#34d399;">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</td>
       <td>
@@ -2450,7 +2551,7 @@ function abrirModalProdutoPorId(produtoId) {
   abrirModalProduto(produto || null);
 }
 
-function abrirModalProduto(produto = null) {
+async function abrirModalProduto(produto = null) {
   const modal = document.getElementById('modal-produto');
   if (modal) {
     modal.style.display = 'flex';
@@ -2462,6 +2563,31 @@ function abrirModalProduto(produto = null) {
   document.getElementById('modal-produto-preco').value = produto ? produto.preco || '' : '';
   document.getElementById('modal-produto-ativo').checked = produto ? Boolean(produto.ativo) : true;
   document.getElementById('modal-produto-titulo').textContent = produto ? 'Editar Produto' : 'Novo Produto';
+
+  const selectPipe = document.getElementById('modal-produto-pipeline-id');
+  if (selectPipe) {
+    const empresaId = obterEmpresaAtivaId();
+    if (!pipelinesCache || pipelinesCache.length === 0) {
+      try {
+        const res = await apiFetch(`/pipelines?empresa_id=${empresaId}`);
+        if (res.ok) {
+          const data = await res.json();
+          pipelinesCache = data.pipelines || [];
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar pipelines para produto:', e);
+      }
+    }
+    selectPipe.innerHTML = '<option value="">-- Padrão (Primeiro Funil da Empresa) --</option>' + (pipelinesCache || []).map(p => `
+      <option value="${p.id}" ${produto && produto.pipeline_id === p.id ? 'selected' : ''}>
+        ${escapeHtml(p.nome)} ${p.is_default ? '(Padrão)' : ''}
+      </option>
+    `).join('');
+    if (produto && produto.pipeline_id) {
+      selectPipe.value = produto.pipeline_id;
+    }
+  }
+
   setTimeout(() => {
     const inp = document.getElementById('modal-produto-nome');
     if (inp) inp.focus();
@@ -2482,6 +2608,8 @@ async function salvarProdutoCRM() {
   const descricao = document.getElementById('modal-produto-descricao').value.trim();
   const preco = parseFloat(document.getElementById('modal-produto-preco').value) || 0;
   const ativo = document.getElementById('modal-produto-ativo').checked;
+  const pipelineIdVal = document.getElementById('modal-produto-pipeline-id') ? document.getElementById('modal-produto-pipeline-id').value : '';
+  const pipeline_id = pipelineIdVal ? parseInt(pipelineIdVal) : null;
   const empresaId = obterEmpresaAtivaId();
 
   if (!nome) {
@@ -2490,7 +2618,7 @@ async function salvarProdutoCRM() {
   }
 
   try {
-    const payload = { empresa_id: empresaId, nome, descricao: descricao || null, preco, ativo };
+    const payload = { empresa_id: empresaId, nome, descricao: descricao || null, preco, ativo, pipeline_id };
     const url = id ? `/produtos/${id}?empresa_id=${empresaId}` : `/produtos?empresa_id=${empresaId}`;
     const method = id ? 'PUT' : 'POST';
 
@@ -3284,6 +3412,82 @@ function renderizarTabelaPropostas(propostas) {
 let clientesParaPropostaCache = [];
 let produtosParaPropostaCache = [];
 
+let formaPagamentoTelaAtual = 'pix';
+function selecionarFormaPagamentoTela(tipo) {
+  formaPagamentoTelaAtual = tipo;
+  const container = document.getElementById('tela-prop-payment-options');
+  if (container) {
+    const btns = container.querySelectorAll('.btn-payment-opt');
+    btns.forEach(b => b.classList.remove('active'));
+    const clicked = Array.from(btns).find(b => {
+      const fn = b.getAttribute('onclick') || '';
+      return fn.includes(`'${tipo}'`);
+    });
+    if (clicked) clicked.classList.add('active');
+  }
+
+  const wrapParcelas = document.getElementById('tela-prop-parcelas-wrap');
+  if (wrapParcelas) {
+    wrapParcelas.style.display = tipo === 'credito_parcelado' ? 'flex' : 'none';
+  }
+
+  atualizarTextoCondicoesTela();
+}
+
+function atualizarTextoCondicoesTela() {
+  const inp = document.getElementById('tela-prop-condicoes');
+  if (!inp) return;
+  const selParcelas = document.getElementById('tela-prop-parcelas-select');
+  const numParcelas = selParcelas ? selParcelas.value : '12';
+
+  const mapa = {
+    'pix': 'À vista via PIX.',
+    'transferencia': 'À vista via Transferência Bancária / TED.',
+    'debito': 'À vista no Cartão de Débito.',
+    'credito_vista': 'Cartão de Crédito em 1x (à vista).',
+    'credito_parcelado': `Cartão de Crédito parcelado em até ${numParcelas}x.`
+  };
+  inp.value = mapa[formaPagamentoTelaAtual] || 'À vista via PIX.';
+}
+
+let formaPagamentoModalAtual = 'pix';
+function selecionarFormaPagamentoModal(tipo) {
+  formaPagamentoModalAtual = tipo;
+  const container = document.getElementById('modal-prop-payment-options');
+  if (container) {
+    const btns = container.querySelectorAll('.btn-payment-opt');
+    btns.forEach(b => b.classList.remove('active'));
+    const clicked = Array.from(btns).find(b => {
+      const fn = b.getAttribute('onclick') || '';
+      return fn.includes(`'${tipo}'`);
+    });
+    if (clicked) clicked.classList.add('active');
+  }
+
+  const wrapParcelas = document.getElementById('modal-prop-parcelas-wrap');
+  if (wrapParcelas) {
+    wrapParcelas.style.display = tipo === 'credito_parcelado' ? 'flex' : 'none';
+  }
+
+  atualizarTextoCondicoesModal();
+}
+
+function atualizarTextoCondicoesModal() {
+  const inp = document.getElementById('proposta-condicoes');
+  if (!inp) return;
+  const selParcelas = document.getElementById('modal-prop-parcelas-select');
+  const numParcelas = selParcelas ? selParcelas.value : '12';
+
+  const mapa = {
+    'pix': 'À vista via PIX.',
+    'transferencia': 'À vista via Transferência Bancária / TED.',
+    'debito': 'À vista no Cartão de Débito.',
+    'credito_vista': 'Cartão de Crédito em 1x (à vista).',
+    'credito_parcelado': `Cartão de Crédito parcelado em até ${numParcelas}x.`
+  };
+  inp.value = mapa[formaPagamentoModalAtual] || 'À vista via PIX.';
+}
+
 async function abrirModalCriarProposta() {
   const modal = document.getElementById('modal-criar-proposta');
   if (modal) {
@@ -3324,7 +3528,7 @@ async function abrirModalCriarProposta() {
     document.getElementById('proposta-produto-nome').value = '';
     document.getElementById('proposta-valor').value = '';
     document.getElementById('proposta-validade-dias').value = '15';
-    document.getElementById('proposta-condicoes').value = 'À vista via PIX ou em até 12x no cartão de crédito.';
+    selecionarFormaPagamentoModal('pix');
     document.getElementById('proposta-descricao').value = '';
     const chkEmail = document.getElementById('proposta-enviar-email-chk');
     if (chkEmail) chkEmail.checked = false;
@@ -3374,6 +3578,7 @@ async function carregarDadosFormularioPropostaTela() {
         </option>
       `).join('');
     }
+    selecionarFormaPagamentoTela('pix');
   } catch (e) {
     console.warn('Erro ao carregar dados da tela de proposta:', e);
   }
@@ -5577,6 +5782,13 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Preço Base (R$)</div>
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-preco" type="number" step="0.01" placeholder="Ex: 2500.00" />
       </div>
+      <div class="config-field" style="margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Funil de Vendas (Pipeline) Associado</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-pipeline-id">
+          <option value="">-- Padrão (Primeiro Funil da Empresa) --</option>
+        </select>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Negócios deste produto serão direcionados a este funil automaticamente.</div>
+      </div>
       <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
         <input type="checkbox" id="modal-produto-ativo" checked style="cursor:pointer;" />
         <label for="modal-produto-ativo" style="font-size:13px; color:var(--text); cursor:pointer;">Produto Ativo no Catálogo</label>
@@ -5778,9 +5990,34 @@ document.addEventListener('DOMContentLoaded', () => {
           <span>📝</span> Escopo & Condições Comerciais
         </div>
 
-        <div class="config-field" style="margin-bottom:10px;">
-          <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Condições de Pagamento</div>
-          <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-condicoes" value="À vista via PIX ou em até 12x no cartão de crédito." />
+        <div class="config-field" style="margin-bottom:12px;">
+          <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Forma de Pagamento *</div>
+          
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;" id="modal-prop-payment-options">
+            <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoModal('pix')">⚡ PIX</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('transferencia')">🏦 Transferência</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('debito')">💳 Débito</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_vista')">💳 Crédito à Vista</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_parcelado')">📅 Crédito Parcelado</button>
+          </div>
+
+          <div id="modal-prop-parcelas-wrap" style="display:none; align-items:center; gap:8px; margin-bottom:8px; padding:8px 10px; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+            <label style="font-size:11px; font-weight:600; color:var(--text);">Número de Parcelas:</label>
+            <select class="login-input" id="modal-prop-parcelas-select" style="padding:4px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); width:auto; font-size:12px; font-weight:600;" onchange="atualizarTextoCondicoesModal()">
+              <option value="2">2x sem juros</option>
+              <option value="3">3x sem juros</option>
+              <option value="4">4x sem juros</option>
+              <option value="5">5x sem juros</option>
+              <option value="6">6x sem juros</option>
+              <option value="10">10x sem juros</option>
+              <option value="12" selected>12x sem juros</option>
+              <option value="18">18x sem juros</option>
+              <option value="24">24x sem juros</option>
+            </select>
+          </div>
+
+          <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Texto no Documento / Observações</div>
+          <input class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-condicoes" value="À vista via PIX." />
         </div>
 
         <div class="config-field">

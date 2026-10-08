@@ -386,6 +386,9 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='propostas' AND column_name='descricao_itens') THEN
                 ALTER TABLE propostas ADD COLUMN descricao_itens TEXT;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='produtos' AND column_name='pipeline_id') THEN
+                ALTER TABLE produtos ADD COLUMN pipeline_id INTEGER REFERENCES pipelines(id) ON DELETE SET NULL;
+            END IF;
         END $$;
     """)
 
@@ -553,11 +556,8 @@ def _migrar_pipelines_duplicados(cursor):
         ON pipelines (produto_id)
         WHERE produto_id IS NOT NULL;
     """)
-    cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_pipelines_geral_unique
-        ON pipelines (empresa_id)
-        WHERE produto_id IS NULL;
-    """)
+    # Permite múltiplos pipelines por empresa (cada pipeline pode ser associado a produtos)
+    cursor.execute("DROP INDEX IF EXISTS idx_pipelines_geral_unique;")
 
 
 def _garantir_pipelines_padrao(cursor):

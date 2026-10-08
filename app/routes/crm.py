@@ -31,6 +31,7 @@ class ProdutoCreate(BaseModel):
     descricao: Optional[str] = None
     preco: Optional[float] = 0.0
     ativo: bool = True
+    pipeline_id: Optional[int] = None
     usuario_id: Optional[int] = None
 
 class ProdutoUpdate(BaseModel):
@@ -38,6 +39,7 @@ class ProdutoUpdate(BaseModel):
     descricao: Optional[str] = None
     preco: Optional[float] = None
     ativo: Optional[bool] = None
+    pipeline_id: Optional[int] = None
     usuario_id: Optional[int] = None
 
 class ClienteCreate(BaseModel):
@@ -274,13 +276,20 @@ def listar_produtos(request: Request = None, empresa_id: Optional[int] = Query(N
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        where = f"WHERE empresa_id = {ph}"
+        where = f"WHERE p.empresa_id = {ph}"
         params = [target_empresa]
         if apenas_ativos:
-            where += f" AND ativo = {ph}"
+            where += f" AND p.ativo = {ph}"
             params.append(True)
 
-        cursor.execute(f"SELECT id, empresa_id, nome, descricao, preco, ativo FROM produtos {where} ORDER BY id ASC", tuple(params))
+        cursor.execute(f"""
+            SELECT p.id, p.empresa_id, p.nome, p.descricao, p.preco, p.ativo, p.pipeline_id,
+                   pipe.nome AS pipeline_nome
+            FROM produtos p
+            LEFT JOIN pipelines pipe ON p.pipeline_id = pipe.id
+            {where}
+            ORDER BY p.id ASC
+        """, tuple(params))
         produtos = cursor.fetchall()
         return {"total": len(produtos), "produtos": [dict(p) for p in produtos]}
     finally:
@@ -308,13 +317,22 @@ def criar_produto(dados: ProdutoCreate, request: Request = None):
         if cursor.fetchone():
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um produto com este nome.")
 
+        pipeline_id = dados.pipeline_id
+        if pipeline_id:
+            cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, target_empresa))
+            if not cursor.fetchone():
+                pipeline_id = None
+
         cursor.execute(f"""
-            INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
-            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo, pipeline_id)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
             RETURNING id
-        """, (target_empresa, nome_limpo, dados.descricao, float(dados.preco or 0.0), dados.ativo))
+        """, (target_empresa, nome_limpo, dados.descricao, float(dados.preco or 0.0), dados.ativo, pipeline_id))
 
         prod_id = cursor.fetchone()["id"]
+        if pipeline_id:
+            cursor.execute(f"UPDATE pipelines SET produto_id = {ph} WHERE id = {ph} AND empresa_id = {ph}", (prod_id, pipeline_id, target_empresa))
+
         conexao.commit()
         return {"id": prod_id, "mensagem": f"Produto '{nome_limpo}' cadastrado com sucesso!"}
     finally:
@@ -360,6 +378,16 @@ def atualizar_produto(produto_id: int, dados: ProdutoUpdate, request: Request = 
         if dados.ativo is not None:
             campos.append(f"ativo = {ph}")
             valores.append(dados.ativo)
+        if dados.pipeline_id is not None:
+            pipe_id = dados.pipeline_id if dados.pipeline_id > 0 else None
+            if pipe_id:
+                cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipe_id, target_empresa))
+                if not cursor.fetchone():
+                    pipe_id = None
+            campos.append(f"pipeline_id = {ph}")
+            valores.append(pipe_id)
+            if pipe_id:
+                cursor.execute(f"UPDATE pipelines SET produto_id = {ph} WHERE id = {ph} AND empresa_id = {ph}", (produto_id, pipe_id, target_empresa))
 
         if not campos:
             return {"mensagem": "Nenhum campo para atualizar."}
@@ -729,15 +757,11 @@ def criar_pipeline(dados: PipelineCreate, request: Request = None, empresa_id: O
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        # Validação 1 pipeline por produto e apenas 1 pipeline geral por empresa
+        # Validação 1 pipeline por produto (se vinculado diretamente ao produto no pipeline)
         if dados.produto_id:
             cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id = {ph}", (target_empresa, dados.produto_id))
             if cursor.fetchone():
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este produto já possui um pipeline.")
-        else:
-            cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id IS NULL", (target_empresa,))
-            if cursor.fetchone():
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um pipeline Geral para esta empresa.")
 
         # Se for marcado como padrão, desmarca outros pipelines da mesma empresa
         if dados.padrao:
@@ -795,10 +819,6 @@ def atualizar_pipeline(pipeline_id: int, dados: PipelineUpdate, request: Request
                 cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id = {ph} AND id != {ph}", (target_empresa, novo_prod_id, pipeline_id))
                 if cursor.fetchone():
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este produto já possui um pipeline.")
-            else:
-                cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id IS NULL AND id != {ph}", (target_empresa, pipeline_id))
-                if cursor.fetchone():
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um pipeline Geral para esta empresa.")
 
         if dados.padrao:
             cursor.execute(f"UPDATE pipelines SET padrao = {ph} WHERE empresa_id = {ph}", (False, target_empresa))
@@ -1079,7 +1099,8 @@ def criar_negocio(dados: NegocioCreate, request: Request = None):
                     SELECT ep.id, ep.nome
                     FROM etapas_pipeline ep
                     JOIN pipelines p ON ep.pipeline_id = p.id
-                    WHERE p.empresa_id = {ph} AND p.produto_id = {ph}
+                    JOIN produtos prod ON (prod.pipeline_id = p.id OR p.produto_id = prod.id)
+                    WHERE p.empresa_id = {ph} AND prod.id = {ph}
                     ORDER BY ep.ordem ASC, ep.id ASC
                     LIMIT 1
                 """, (target_empresa, dados.produto_id))
@@ -1904,42 +1925,69 @@ def criar_proposta_direta(dados: PropostaDirectCreate, request: Request = None):
 
         # 4. Localizar ou criar negócio no CRM
         cursor.execute(f"""
-            SELECT id FROM negocios
-            WHERE cliente_id = {ph} AND empresa_id = {ph} AND estagio != 'perdido'
+            SELECT id, etapa_id FROM negocios
+            WHERE cliente_id = {ph} AND empresa_id = {ph} AND produto_id = {ph} AND estagio NOT IN ('fechado', 'perdido')
             ORDER BY id DESC LIMIT 1
-        """, (cliente_id, target_empresa))
+        """, (cliente_id, target_empresa, produto_id))
         neg_row = cursor.fetchone()
-        if neg_row:
-            negocio_id = neg_row["id"]
+        if not neg_row:
             cursor.execute(f"""
-                UPDATE negocios 
-                SET valor_estimado = {ph}, produto_id = COALESCE({ph}, produto_id),
-                    estagio = 'Proposta', proposta_enviada = TRUE, ultima_interacao_em = CURRENT_TIMESTAMP
-                WHERE id = {ph}
-            """, (float(dados.valor), produto_id, negocio_id))
-        else:
+                SELECT id, etapa_id FROM negocios
+                WHERE cliente_id = {ph} AND empresa_id = {ph} AND produto_id IS NULL AND estagio NOT IN ('fechado', 'perdido')
+                ORDER BY id DESC LIMIT 1
+            """, (cliente_id, target_empresa))
+            neg_row = cursor.fetchone()
+
+        # Determina a melhor etapa no pipeline associado a este produto
+        etapa_id = None
+        if produto_id:
+            cursor.execute(f"""
+                SELECT ep.id 
+                FROM etapas_pipeline ep
+                JOIN pipelines p ON ep.pipeline_id = p.id
+                JOIN produtos prod ON (prod.pipeline_id = p.id OR p.produto_id = prod.id)
+                WHERE p.empresa_id = {ph} AND prod.id = {ph} AND LOWER(ep.nome) LIKE {ph}
+                ORDER BY ep.ordem ASC LIMIT 1
+            """, (target_empresa, produto_id, '%proposta%'))
+            et_p = cursor.fetchone()
+            if not et_p:
+                cursor.execute(f"""
+                    SELECT ep.id 
+                    FROM etapas_pipeline ep
+                    JOIN pipelines p ON ep.pipeline_id = p.id
+                    JOIN produtos prod ON (prod.pipeline_id = p.id OR p.produto_id = prod.id)
+                    WHERE p.empresa_id = {ph} AND prod.id = {ph}
+                    ORDER BY ep.ordem ASC LIMIT 1
+                """, (target_empresa, produto_id))
+                et_p = cursor.fetchone()
+            if et_p:
+                etapa_id = et_p["id"]
+
+        if not etapa_id:
             cursor.execute(f"""
                 SELECT ep.id 
                 FROM etapas_pipeline ep
                 JOIN pipelines p ON ep.pipeline_id = p.id
                 WHERE p.empresa_id = {ph} AND LOWER(ep.nome) LIKE {ph}
-                ORDER BY ep.ordem ASC
+                ORDER BY p.padrao DESC, ep.ordem ASC
                 LIMIT 1
             """, (target_empresa, '%proposta%'))
-            et_row = cursor.fetchone()
-            etapa_id = et_row["id"] if et_row else None
-            if not etapa_id:
-                cursor.execute(f"""
-                    SELECT ep.id 
-                    FROM etapas_pipeline ep
-                    JOIN pipelines p ON ep.pipeline_id = p.id
-                    WHERE p.empresa_id = {ph}
-                    ORDER BY p.padrao DESC, ep.ordem ASC
-                    LIMIT 1
-                """, (target_empresa,))
-                et_def = cursor.fetchone()
-                etapa_id = et_def["id"] if et_def else None
+            et_def = cursor.fetchone()
+            etapa_id = et_def["id"] if et_def else None
 
+        if neg_row:
+            negocio_id = neg_row["id"]
+            cursor.execute(f"""
+                UPDATE negocios 
+                SET valor_estimado = {ph},
+                    produto_id = {ph},
+                    etapa_id = COALESCE({ph}, etapa_id),
+                    estagio = 'Proposta',
+                    proposta_enviada = TRUE,
+                    ultima_interacao_em = CURRENT_TIMESTAMP
+                WHERE id = {ph} AND empresa_id = {ph}
+            """, (float(dados.valor), produto_id, etapa_id, negocio_id, target_empresa))
+        else:
             cursor.execute(f"""
                 INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
                 VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
