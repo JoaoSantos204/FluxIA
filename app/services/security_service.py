@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from fastapi import Security, HTTPException, status
 from fastapi.security import APIKeyHeader
 from app.database.database import conectar, _cursor, _placeholder
@@ -64,27 +65,49 @@ def validar_perfil_admin_ou_master(usuario_id: int) -> dict:
     return dict(usuario)
 
 
-def exigir_perfil(request, empresa_id: int | None, perfis: list[str]) -> dict:
+def exigir_perfil(request=None, arg2=None, arg3=None, empresa_id: Optional[int] = None, perfis: Optional[list] = None) -> dict:
     """
     Autorização Central do FluxIA:
-    1. Lê o cabeçalho X-User-Id da requisição.
+    Aceita exigir_perfil(request, empresa_id, perfis) ou exigir_perfil(request, perfis, empresa_id=...)
+    1. Lê o cabeçalho X-User-Id / X-Usuario-Id ou query param usuario_id da requisição.
     2. Carrega o usuário do PostgreSQL.
     3. Valida que o usuário está ativo.
-    4. Valida multi-tenant: pertence à empresa informada (usuário master é exceção global).
-    5. Valida perfil: se está na lista de perfis permitidos (ou se é master).
+    4. Valida perfil: se está na lista de perfis permitidos (ou se é master).
+    5. Valida multi-tenant:
+       - Master tem acesso a qualquer empresa.
+       - Usuários comuns (admin/funcionario) operam estritamente em sua empresa (usuario["empresa_id"]).
+         Se tentarem acessar explicitamente outra empresa via query param empresa_id diferente, lança 403.
     Retorna o dicionário do usuário autenticado ou lança 401/403.
     """
-    user_id_header = None
-    if request:
-        user_id_header = request.headers.get("X-User-Id") or request.headers.get("X-Usuario-Id")
+    if isinstance(arg2, (list, tuple, set)):
+        perfis = list(arg2)
+        if isinstance(arg3, (int, str)) and str(arg3).isdigit():
+            empresa_id = int(arg3)
+    elif isinstance(arg3, (list, tuple, set)):
+        perfis = list(arg3)
+        if isinstance(arg2, (int, str)) and str(arg2).isdigit():
+            empresa_id = int(arg2)
+    elif arg2 is not None and (isinstance(arg2, int) or str(arg2).isdigit()):
+        empresa_id = int(arg2)
 
-    if not user_id_header or not str(user_id_header).strip().isdigit():
+    if not perfis:
+        perfis = ["admin", "funcionario", "master"]
+    user_id_val = None
+    if request:
+        user_id_val = (
+            request.headers.get("X-User-Id")
+            or request.headers.get("X-Usuario-Id")
+            or request.query_params.get("usuario_id")
+            or request.query_params.get("user_id")
+        )
+
+    if not user_id_val or not str(user_id_val).strip().isdigit():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Autenticação necessária. Cabeçalho X-User-Id não informado ou inválido."
         )
 
-    usuario_id = int(str(user_id_header).strip())
+    usuario_id = int(str(user_id_val).strip())
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
@@ -117,13 +140,6 @@ def exigir_perfil(request, empresa_id: int | None, perfis: list[str]) -> dict:
     if perfil == "master":
         return dict(usuario)
 
-    # Verificação de tenant
-    if empresa_id is not None and usuario.get("empresa_id") != empresa_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso negado. Você não pertence a esta empresa."
-        )
-
     # Verificação de perfil na matriz permitida
     perfis_normalizados = [p.strip().lower() for p in perfis]
     if perfil not in perfis_normalizados:
@@ -131,6 +147,18 @@ def exigir_perfil(request, empresa_id: int | None, perfis: list[str]) -> dict:
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Acesso negado. Seu perfil '{perfil}' não tem permissão para realizar esta operação."
         )
+
+    # Verificação de tenant para não-master:
+    # Se o cliente enviou explicitamente empresa_id na URL e for diferente de sua própria empresa, bloqueia
+    if request:
+        param_empresa = request.query_params.get("empresa_id")
+        if param_empresa and param_empresa.strip().isdigit():
+            emp_solicitada = int(param_empresa.strip())
+            if emp_solicitada != usuario.get("empresa_id"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acesso negado. Você não pertence a esta empresa."
+                )
 
     return dict(usuario)
 

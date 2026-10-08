@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from pydantic import BaseModel, EmailStr, Field
 
 from app.database.database import conectar, _cursor, _placeholder
@@ -54,12 +54,13 @@ class StatusUpdateRequest(BaseModel):
 
 
 @router.get("/equipe")
-def listar_equipe(empresa_id: int, request: Request):
+def listar_equipe(request: Request, empresa_id: Optional[int] = Query(None)):
     """
     Lista todos os colaboradores da empresa específica para o administrador do tenant.
     """
-    exigir_perfil(request, empresa_id, ["admin", "master"])
-    usuarios = listar_usuarios(empresa_id=empresa_id)
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+    usuarios = listar_usuarios(empresa_id=target_empresa)
     return {
         "total": len(usuarios),
         "usuarios": usuarios
@@ -73,7 +74,8 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest, request: Request):
     Regra estrita: Administradores de empresa NÃO podem criar perfil 'master'.
     Clientes não são usuários de acesso à plataforma (apenas CRM).
     """
-    exigir_perfil(request, dados.empresa_id, ["admin", "master"])
+    operador = exigir_perfil(request, dados.empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (dados.empresa_id or 1)
 
     perfil_normalizado = dados.perfil.strip().lower()
     if perfil_normalizado == "master":
@@ -89,7 +91,7 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest, request: Request):
         )
 
     resultado = cadastrar_usuario(
-        empresa_id=dados.empresa_id,
+        empresa_id=target_empresa,
         nome=dados.nome.strip(),
         email=dados.email.strip().lower(),
         senha=dados.senha,
@@ -111,7 +113,7 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest, request: Request):
 
 
 @router.put("/equipe/{usuario_id}")
-def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, request: Request, empresa_id: int = 1):
+def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, request: Request, empresa_id: Optional[int] = Query(None)):
     """
     Edita um membro da equipe (nome, e-mail, perfil, status e senha opcional).
     Garante unicidade de e-mail, proteção de usuário master e impede auto-desativação/rebaixamento do último admin.
@@ -124,7 +126,8 @@ def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, 
             detail="Usuário não encontrado."
         )
 
-    if operador.get("perfil") != "master" and usuario["empresa_id"] != empresa_id:
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or usuario["empresa_id"])
+    if operador.get("perfil") != "master" and usuario["empresa_id"] != target_empresa:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para alterar usuários de outra empresa."
@@ -176,7 +179,7 @@ def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, 
             updates.append(f"senha_hash = {ph}")
             params.append(gerar_hash_senha(dados.senha.strip()))
 
-        params.extend([usuario_id, empresa_id])
+        params.extend([usuario_id, usuario["empresa_id"]])
         set_str = ", ".join(updates)
         cur.execute(f"UPDATE usuarios SET {set_str} WHERE id = {ph} AND empresa_id = {ph}", tuple(params))
         conn.commit()
@@ -194,7 +197,7 @@ def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, 
 
 
 @router.delete("/equipe/{usuario_id}")
-def remover_membro_equipe(usuario_id: int, empresa_id: int, request: Request):
+def remover_membro_equipe(usuario_id: int, request: Request, empresa_id: Optional[int] = Query(None)):
     """
     Remove um membro da equipe garantindo permissão de admin/master, mesma empresa,
     bloqueando auto-exclusão, proteção do perfil master e proteção do último administrador ativo.
@@ -214,7 +217,8 @@ def remover_membro_equipe(usuario_id: int, empresa_id: int, request: Request):
             detail="Usuário não encontrado."
         )
 
-    if operador.get("perfil") != "master" and usuario["empresa_id"] != empresa_id:
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or usuario["empresa_id"])
+    if operador.get("perfil") != "master" and usuario["empresa_id"] != target_empresa:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para remover usuários de outra empresa."
@@ -247,7 +251,7 @@ def remover_membro_equipe(usuario_id: int, empresa_id: int, request: Request):
     cur = _cursor(conn)
     ph = _placeholder()
     try:
-        cur.execute(f"DELETE FROM usuarios WHERE id = {ph} AND empresa_id = {ph}", (usuario_id, empresa_id))
+        cur.execute(f"DELETE FROM usuarios WHERE id = {ph} AND empresa_id = {ph}", (usuario_id, usuario["empresa_id"]))
         conn.commit()
     finally:
         conn.close()

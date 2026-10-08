@@ -1340,6 +1340,12 @@ let listaConversasTelegram = [];
 let conversaAtivaChatId = null;
 let modoAtendimentoAtual = 'bot';
 let usuarioAtual = null;
+try {
+  const _savedUser = localStorage.getItem('fluxia_user');
+  if (_savedUser) usuarioAtual = JSON.parse(_savedUser);
+} catch (e) {
+  usuarioAtual = null;
+}
 let listaEmpresasCadastradas = [];
 let equipeCarregada = [];
 let fusoHorarioEmpresa = 'America/Sao_Paulo';
@@ -1548,6 +1554,12 @@ function switchTab(tabId, navEl) {
 }
 
 function obterEmpresaAtivaId() {
+  if (!usuarioAtual) {
+    try {
+      const _saved = localStorage.getItem('fluxia_user');
+      if (_saved) usuarioAtual = JSON.parse(_saved);
+    } catch (e) {}
+  }
   if (usuarioAtual && usuarioAtual.perfil === 'master') {
     const salvo = localStorage.getItem('fluxia_active_empresa_id');
     return salvo ? parseInt(salvo) : (usuarioAtual.empresa_id || 1);
@@ -1559,6 +1571,12 @@ function obterEmpresaAtivaId() {
 async function apiFetch(url, opts = {}) {
   const options = { ...opts };
   options.headers = { ...(options.headers || {}) };
+  if (!usuarioAtual) {
+    try {
+      const _saved = localStorage.getItem('fluxia_user');
+      if (_saved) usuarioAtual = JSON.parse(_saved);
+    } catch (e) {}
+  }
   if (usuarioAtual && usuarioAtual.id) {
     options.headers['X-User-Id'] = String(usuarioAtual.id);
   }
@@ -2298,7 +2316,7 @@ async function salvarClienteCRM() {
 
   try {
     const payload = { empresa_id: empresaId, nome, email: email || null, telefone: telefone || null, origem };
-    const url = id ? `/clientes/${id}` : '/clientes';
+    const url = id ? `/clientes/${id}?empresa_id=${empresaId}` : `/clientes?empresa_id=${empresaId}`;
     const method = id ? 'PUT' : 'POST';
 
     const res = await apiFetch(url, {
@@ -2454,7 +2472,7 @@ async function salvarProdutoCRM() {
 
   try {
     const payload = { empresa_id: empresaId, nome, descricao: descricao || null, preco, ativo };
-    const url = id ? `/produtos/${id}` : '/produtos';
+    const url = id ? `/produtos/${id}?empresa_id=${empresaId}` : `/produtos?empresa_id=${empresaId}`;
     const method = id ? 'PUT' : 'POST';
 
     const res = await apiFetch(url, {
@@ -2477,8 +2495,9 @@ async function salvarProdutoCRM() {
 }
 
 async function alternarStatusProduto(produtoId) {
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await apiFetch(`/produtos/${produtoId}/toggle-ativo`, { method: 'PATCH' });
+    const res = await apiFetch(`/produtos/${produtoId}/toggle-ativo?empresa_id=${empresaId}`, { method: 'PATCH' });
     if (!res.ok) throw new Error('Falha ao alternar status');
     carregarProdutosCRM();
   } catch (e) {
@@ -2668,8 +2687,9 @@ async function dropNegocio(event, novaEtapaId) {
 }
 
 async function atualizarEtapaNegocio(negocioId, novaEtapaId) {
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await apiFetch(`/negocios/${negocioId}`, {
+    const res = await apiFetch(`/negocios/${negocioId}?empresa_id=${empresaId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ etapa_id: novaEtapaId })
@@ -2831,7 +2851,7 @@ async function salvarNovoNegocio() {
         valor_estimado: valor
       };
 
-      const res = await apiFetch(`/negocios/${nId}`, {
+      const res = await apiFetch(`/negocios/${nId}?empresa_id=${empresaId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2865,7 +2885,7 @@ async function salvarNovoNegocio() {
       produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
       valor_estimado: valor
     };
-    const res = await apiFetch('/negocios', {
+    const res = await apiFetch(`/negocios?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3194,7 +3214,7 @@ async function carregarPropostasCRM() {
 
   try {
     corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>`;
-    const res = await fetch(`/propostas?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/propostas?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar propostas');
     const data = await res.json();
     propostasCache = data.propostas || [];
@@ -3404,8 +3424,9 @@ async function previsualizarPropostaTela() {
     iframe.srcdoc = "<div style='display:flex; align-items:center; justify-content:center; height:100%; color:#64748b; font-family:sans-serif;'><p>⏳ Gerando prévia do documento...</p></div>";
   }
 
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch('/propostas/previa', {
+    const res = await apiFetch(`/propostas/previa?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3445,8 +3466,9 @@ async function salvarEGerarPropostaTela() {
     btn.innerHTML = `<span>⏳ Gerando e indexando no RAG...</span>`;
   }
 
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch('/propostas', {
+    const res = await apiFetch(`/propostas?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3537,8 +3559,9 @@ async function previsualizarPropostaDireta() {
     return;
   }
 
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch('/propostas/previa', {
+    const res = await apiFetch(`/propostas/previa?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3571,8 +3594,9 @@ async function salvarEGerarPropostaDireta() {
     btnGerar.textContent = 'Gerando documento e indexando...';
   }
 
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch('/propostas', {
+    const res = await apiFetch(`/propostas?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -3603,8 +3627,14 @@ async function salvarEGerarPropostaDireta() {
 }
 
 async function visualizarHTMLProposta(propostaId) {
+  const p = propostasCache.find(x => x.id === propostaId);
+  if (p && p.conteudo_html) {
+    exibirModalPreviaHTML(p.conteudo_html);
+    return;
+  }
   try {
-    const res = await fetch(`/propostas/${propostaId}/html`);
+    const empresaId = obterEmpresaAtivaId();
+    const res = await apiFetch(`/propostas/${propostaId}/html?empresa_id=${empresaId}`);
     if (!res.ok) {
       throw new Error('Não foi possível carregar o documento da proposta.');
     }
@@ -3635,15 +3665,6 @@ function fecharModalPreviaProposta() {
   }
 }
 
-function visualizarHTMLProposta(propostaId) {
-  const p = propostasCache.find(x => x.id === propostaId);
-  if (!p || !p.conteudo_html) {
-    alert('Conteúdo da proposta não encontrado.');
-    return;
-  }
-  exibirModalPreviaHTML(p.conteudo_html);
-}
-
 // ===== CONTRATOS CRM (PARTE 26) =====
 async function carregarContratosCRM() {
   const empresaId = obterEmpresaAtivaId();
@@ -3651,7 +3672,7 @@ async function carregarContratosCRM() {
   if (!container) return;
 
   try {
-    const res = await fetch(`/contratos?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/contratos?empresa_id=${empresaId}`);
     if (!res.ok) return;
     const data = await res.json();
     const contratos = data.contratos || [];
@@ -3694,8 +3715,9 @@ async function carregarContratosCRM() {
 
 async function assinarContratoCRM(contratoId) {
   if (!confirm('Deseja marcar este contrato como Assinado? Ele será automaticamente transformado em documento interno na Base de Conhecimento e indexado no Copiloto IA.')) return;
+  const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch(`/contratos/${contratoId}`, {
+    const res = await apiFetch(`/contratos/${contratoId}?empresa_id=${empresaId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'assinado' })

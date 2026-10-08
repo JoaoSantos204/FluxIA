@@ -573,7 +573,7 @@ def _garantir_pipelines_padrao(cursor):
 
     for emp in empresas:
         emp_id = emp["id"]
-        cursor.execute("SELECT id FROM pipelines WHERE empresa_id = %s AND padrao = %s", (emp_id, True))
+        cursor.execute("SELECT id FROM pipelines WHERE empresa_id = %s AND (padrao = %s OR produto_id IS NULL)", (emp_id, True))
         pip = cursor.fetchone()
 
         if not pip:
@@ -583,6 +583,8 @@ def _garantir_pipelines_padrao(cursor):
                 RETURNING id
             """, (emp_id, True))
             pip = cursor.fetchone()
+        else:
+            cursor.execute("UPDATE pipelines SET padrao = TRUE WHERE id = %s", (pip["id"],))
 
         if pip:
             pipeline_id = pip["id"]
