@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Telegram CRM & Portal Operacional</title>
-  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css?v=20261006_5">
+  <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css?v=20261008_crm_fix">
   <script>
     // Inicialização imediata do tema para evitar FOUC (flash de tema incorreto)
     (function() {
@@ -50,17 +50,62 @@
     }
 
     .screen {
-      flex: 1 !important;
-      min-height: 0 !important;
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
     }
 
     .screen.active {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* PRESERVAÇÃO TOTAL DO LAYOUT DAS TELAS DE CHAT (TELEGRAM E COPILOTO IA) */
+    #screen-chat,
+    #screen-chatrag {
+      flex-direction: row !important;
+      overflow: hidden !important;
+      padding: 0 !important;
+      height: 100% !important;
+      min-height: 0 !important;
+    }
+
+    #screen-chat.active,
+    #screen-chatrag.active {
+      display: flex !important;
+      flex-direction: row !important;
+      overflow: hidden !important;
+      padding: 0 !important;
+      height: 100% !important;
+      min-height: 0 !important;
+    }
+
+    #screen-chat .chat-sidebar,
+    #screen-chatrag .rag-sidebar {
+      height: 100% !important;
+      flex-shrink: 0 !important;
+      overflow: hidden !important;
       display: flex !important;
       flex-direction: column !important;
-      min-height: 0 !important;
+    }
+
+    #screen-chat .chat-window,
+    #screen-chatrag .chat-window {
+      flex: 1 !important;
+      height: 100% !important;
+      min-width: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+
+    #screen-chat .lead-panel {
+      height: 100% !important;
+      flex-shrink: 0 !important;
       overflow-y: auto !important;
     }
 

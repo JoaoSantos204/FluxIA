@@ -426,6 +426,24 @@ body {
   overflow-y: auto;
 }
 
+/* Telas com layout em linha / horizontal (Conversas Telegram e Chat IA Copiloto) */
+#screen-chat,
+#screen-chatrag {
+  flex-direction: row;
+  overflow: hidden;
+  padding: 0;
+  height: 100%;
+}
+
+#screen-chat.active,
+#screen-chatrag.active {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  padding: 0;
+  height: 100%;
+}
+
 /* ===== DASHBOARD ===== */
 .dash-header {
   padding: 20px 24px 0;
