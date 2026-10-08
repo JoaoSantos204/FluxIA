@@ -383,6 +383,9 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='negocios' AND column_name='proposta_enviada') THEN
                 ALTER TABLE negocios ADD COLUMN proposta_enviada BOOLEAN DEFAULT FALSE;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='propostas' AND column_name='descricao_itens') THEN
+                ALTER TABLE propostas ADD COLUMN descricao_itens TEXT;
+            END IF;
         END $$;
     """)
 

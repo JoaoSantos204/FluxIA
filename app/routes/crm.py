@@ -2,14 +2,20 @@ import os
 import re
 import json
 import logging
+import hashlib
 from typing import Optional, List
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, status, Query, Body, Header, Request
+from pathlib import Path
+from uuid import uuid4
+from fastapi import APIRouter, HTTPException, status, Query, Body, Header, Request, UploadFile, File, Form
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.database.database import conectar, _cursor, _placeholder
 from app.services.security_service import validar_perfil_admin_ou_master, exigir_perfil
-from app.services.document_service import salvar_e_indexar_documento_texto
+from app.services.document_service import salvar_e_indexar_documento_texto, ler_documento
+from app.services.chunk_service import dividir_texto
+from app.services.embedding_service import gerar_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +123,14 @@ class PropostaDirectCreate(BaseModel):
     descricao_itens: Optional[str] = None
     enviar_email: bool = False
     usuario_id: Optional[int] = None
+
+class PropostaUpdate(BaseModel):
+    valor: Optional[float] = None
+    validade_dias: Optional[int] = None
+    condicoes_pagamento: Optional[str] = None
+    descricao_itens: Optional[str] = None
+    produto_id: Optional[int] = None
+    produto_nome: Optional[str] = None
 
 
 # ============================================================================
@@ -1423,6 +1437,150 @@ Condições: Contrato fechado com aceite formal do cliente."""
         conexao.close()
 
 
+@router.post("/contratos/importar", status_code=status.HTTP_201_CREATED)
+async def importar_contrato(
+    arquivo: UploadFile = File(...),
+    cliente_id: Optional[int] = Form(None),
+    negocio_id: Optional[int] = Form(None),
+    valor: Optional[float] = Form(0.0),
+    empresa_id: Optional[int] = Form(None),
+    request: Request = None
+):
+    """
+    Importação de arquivo de contrato.
+    Aberta para qualquer perfil (funcionario, admin, master).
+    Suporta PDF, DOCX, TXT e imagens.
+    Gera o contrato, marca como assinado e indexa automaticamente no RAG.
+    """
+    operador = exigir_perfil(request, empresa_id, ["funcionario", "admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    extensao = Path(arquivo.filename).suffix.lower()
+    extensoes_permitidas = {".pdf", ".txt", ".docx", ".png", ".jpg", ".jpeg"}
+    if extensao not in extensoes_permitidas:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Formato '{extensao}' não suportado. Use PDF, DOCX, TXT ou Imagem."
+        )
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        n_id = negocio_id
+        cli_id = cliente_id
+
+        if not n_id:
+            if not cli_id:
+                cursor.execute(f"SELECT id FROM clientes WHERE empresa_id = {ph} ORDER BY id ASC LIMIT 1", (target_empresa,))
+                row_cli = cursor.fetchone()
+                if row_cli:
+                    cli_id = row_cli["id"]
+                else:
+                    cursor.execute(f"INSERT INTO clientes (empresa_id, nome, origem) VALUES ({ph}, 'Cliente Contrato Importado', 'contrato') RETURNING id", (target_empresa,))
+                    cli_id = cursor.fetchone()["id"]
+
+            cursor.execute(f"""
+                INSERT INTO negocios (empresa_id, cliente_id, estagio, valor_estimado)
+                VALUES ({ph}, {ph}, 'fechado', {ph})
+                RETURNING id
+            """, (target_empresa, cli_id, float(valor or 0)))
+            n_id = cursor.fetchone()["id"]
+
+        cursor.execute(f"""
+            INSERT INTO contratos (negocio_id, status, valor_contrato, data_assinatura)
+            VALUES ({ph}, 'assinado', {ph}, CURRENT_TIMESTAMP)
+            RETURNING id
+        """, (n_id, float(valor or 0)))
+        contrato_id = cursor.fetchone()["id"]
+        conexao.commit()
+
+        # Salva o arquivo em uploads e indexa no RAG
+        nome_salvo = f"contrato_{contrato_id}_{uuid4().hex[:8]}{extensao}"
+        caminho_arquivo = Path("uploads") / nome_salvo
+        caminho_arquivo.parent.mkdir(exist_ok=True)
+        conteudo_bytes = await arquivo.read()
+        with open(caminho_arquivo, "wb") as f:
+            f.write(conteudo_bytes)
+
+        try:
+            conteudo_texto = ler_documento(str(caminho_arquivo))
+        except Exception as e_ler:
+            logger.warning(f"Erro ao extrair texto do arquivo importado: {e_ler}")
+            conteudo_texto = f"Contrato Comercial #{contrato_id} importado: {arquivo.filename}"
+
+        if not conteudo_texto or not conteudo_texto.strip():
+            conteudo_texto = f"Contrato Comercial #{contrato_id} importado: {arquivo.filename}"
+
+        hash_conteudo = hashlib.md5(conteudo_texto.encode("utf-8")).hexdigest()
+
+        cursor.execute(f"""
+            INSERT INTO documentos (
+                empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo,
+                conteudo_texto, hash_conteudo, nivel_acesso, data_upload,
+                origem, ref_tipo, ref_id
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'interno', CURRENT_TIMESTAMP, 'upload', 'contrato', {ph})
+            RETURNING id
+        """, (target_empresa, arquivo.filename, extensao, str(caminho_arquivo), conteudo_texto, hash_conteudo, contrato_id))
+        doc_id = cursor.fetchone()["id"]
+        conexao.commit()
+
+        # Quebra em chunks e gera embeddings
+        try:
+            chunks = dividir_texto(conteudo_texto)
+            for num, chunk in enumerate(chunks, 1):
+                emb = gerar_embedding(chunk)
+                cursor.execute(f"""
+                    INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding)
+                    VALUES ({ph}, {ph}, {ph}, {ph})
+                """, (doc_id, num, chunk, json.dumps(emb) if emb else None))
+            conexao.commit()
+        except Exception as e:
+            logger.error(f"[Contratos] Erro ao vetorizar chunks do contrato {contrato_id}: {e}")
+
+        return {
+            "sucesso": True,
+            "contrato_id": contrato_id,
+            "documento_id": doc_id,
+            "mensagem": f"Contrato #{contrato_id} ('{arquivo.filename}') importado e indexado com sucesso!"
+        }
+    finally:
+        conexao.close()
+
+
+@router.delete("/contratos/{contrato_id}")
+def excluir_contrato(contrato_id: int, request: Request = None, empresa_id: Optional[int] = Query(None)):
+    """Exclui um contrato e seus documentos/chunks vinculados. Apenas para admins e master."""
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT c.id FROM contratos c
+            JOIN negocios n ON c.negocio_id = n.id
+            WHERE c.id = {ph} AND n.empresa_id = {ph}
+        """, (contrato_id, target_empresa))
+        c = cursor.fetchone()
+        if not c:
+            raise HTTPException(status_code=404, detail="Contrato não encontrado.")
+
+        # Remove chunks e documento associado
+        cursor.execute(f"""
+            DELETE FROM chunks WHERE documento_id IN (
+                SELECT id FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = {ph}
+            )
+        """, (contrato_id,))
+        cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = {ph}", (contrato_id,))
+        cursor.execute(f"DELETE FROM contratos WHERE id = {ph}", (contrato_id,))
+        conexao.commit()
+        return {"sucesso": True, "mensagem": f"Contrato #{contrato_id} excluído com sucesso."}
+    finally:
+        conexao.close()
+
+
 # ============================================================================
 # ENDPOINTS: PROPOSTAS COMERCIAIS (PARTE 27)
 # ============================================================================
@@ -1634,7 +1792,7 @@ def listar_todas_propostas(request: Request = None, empresa_id: Optional[int] = 
         cursor.execute(f"""
             SELECT p.id, p.negocio_id, p.empresa_id, p.cliente_id, p.produto_id, p.valor,
                    p.condicoes_pagamento, p.validade_dias, p.status_envio, p.email_destinatario,
-                   p.documento_id, p.criado_em,
+                   p.documento_id, p.criado_em, p.descricao_itens,
                    cli.nome AS cliente_nome, cli.telefone AS cliente_telefone,
                    prod.nome AS produto_nome,
                    n.estagio AS negocio_estagio
@@ -1791,10 +1949,10 @@ def criar_proposta_direta(dados: PropostaDirectCreate, request: Request = None):
 
         # 5. Inserir registro na tabela 'propostas'
         cursor.execute(f"""
-            INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
-            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
+            INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio, descricao_itens)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente', {ph})
             RETURNING id
-        """, (negocio_id, target_empresa, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
+        """, (negocio_id, target_empresa, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None, dados.descricao_itens or None))
         proposta_id = cursor.fetchone()["id"]
 
         conexao.commit()
@@ -1913,8 +2071,16 @@ def previa_proposta_direta(dados: PropostaDirectCreate, request: Request = None)
 
 
 @router.get("/propostas/{proposta_id}/html")
-def obter_html_proposta(proposta_id: int):
-    """Retorna o documento HTML completo de uma proposta comercial existente para visualização no portal."""
+def obter_html_proposta(
+    proposta_id: int,
+    request: Request = None,
+    format: Optional[str] = Query(None)
+):
+    """
+    Retorna o documento HTML completo de uma proposta comercial existente para visualização no portal.
+    Se requisitado diretamente pelo navegador ou format='html', responde com HTMLResponse.
+    Se format='json', responde com JSON contendo id, html e documento_id.
+    """
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
@@ -1946,7 +2112,134 @@ def obter_html_proposta(proposta_id: int):
             empresa_nome=p.get("empresa_nome") or "FluxIA",
             proposta_id=p["id"]
         )
+
+        accept = request.headers.get("accept", "") if request else ""
+        if format == "html" or ("text/html" in accept and format != "json"):
+            return HTMLResponse(content=html, media_type="text/html")
+
         return {"id": proposta_id, "html": html, "documento_id": p.get("documento_id")}
+    finally:
+        conexao.close()
+
+
+@router.put("/propostas/{proposta_id}")
+def atualizar_proposta(
+    proposta_id: int,
+    dados: PropostaUpdate,
+    request: Request = None,
+    empresa_id: Optional[int] = Query(None)
+):
+    """Edita uma proposta comercial existente. Apenas para administradores e master."""
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT p.*, cli.nome AS cliente_nome, cli.email AS cliente_email, cli.telefone AS cliente_telefone,
+                   prod.nome AS prod_nome, prod.descricao AS prod_descricao,
+                   emp.nome AS empresa_nome
+            FROM propostas p
+            JOIN clientes cli ON p.cliente_id = cli.id
+            LEFT JOIN produtos prod ON p.produto_id = prod.id
+            LEFT JOIN empresas emp ON p.empresa_id = emp.id
+            WHERE p.id = {ph} AND p.empresa_id = {ph}
+        """, (proposta_id, target_empresa))
+        prop = cursor.fetchone()
+        if not prop:
+            raise HTTPException(status_code=404, detail="Proposta não encontrada.")
+
+        campos = []
+        valores = []
+        if dados.valor is not None:
+            campos.append(f"valor = {ph}")
+            valores.append(float(dados.valor))
+        if dados.validade_dias is not None:
+            campos.append(f"validade_dias = {ph}")
+            valores.append(int(dados.validade_dias))
+        if dados.condicoes_pagamento is not None:
+            campos.append(f"condicoes_pagamento = {ph}")
+            valores.append(dados.condicoes_pagamento.strip())
+        if dados.descricao_itens is not None:
+            campos.append(f"descricao_itens = {ph}")
+            valores.append(dados.descricao_itens.strip())
+        if dados.produto_id is not None:
+            campos.append(f"produto_id = {ph}")
+            valores.append(dados.produto_id)
+
+        if campos:
+            valores.extend([proposta_id, target_empresa])
+            cursor.execute(f"UPDATE propostas SET {', '.join(campos)} WHERE id = {ph} AND empresa_id = {ph}", tuple(valores))
+            conexao.commit()
+
+        # Atualiza negócio vinculado se houver alteração de valor
+        if dados.valor is not None and prop.get("negocio_id"):
+            cursor.execute(f"UPDATE negocios SET valor_estimado = {ph} WHERE id = {ph} AND empresa_id = {ph}", (float(dados.valor), prop["negocio_id"], target_empresa))
+            conexao.commit()
+
+        # Regenera HTML e atualiza documento RAG se existir
+        novo_valor = float(dados.valor) if dados.valor is not None else float(prop["valor"] or 0)
+        novo_prod_nome = dados.produto_nome or prop.get("prod_nome") or "Solução Especializada"
+        novo_cond = dados.condicoes_pagamento or prop.get("condicoes_pagamento") or "À vista"
+        novo_val_dias = dados.validade_dias if dados.validade_dias is not None else (prop.get("validade_dias") or 15)
+
+        html_atualizado = gerar_template_proposta_html(
+            cliente_nome=prop["cliente_nome"],
+            cliente_email=prop.get("cliente_email") or "",
+            cliente_telefone=prop.get("cliente_telefone") or "",
+            produto_nome=novo_prod_nome,
+            produto_descricao=dados.descricao_itens or prop.get("prod_descricao") or "",
+            valor=novo_valor,
+            condicoes=novo_cond,
+            validade_dias=novo_val_dias,
+            empresa_nome=prop.get("empresa_nome") or "FluxIA",
+            proposta_id=proposta_id
+        )
+
+        cursor.execute(f"""
+            UPDATE documentos 
+            SET conteudo_texto = {ph}
+            WHERE ref_tipo = 'proposta' AND ref_id = {ph} AND empresa_id = {ph}
+        """, (html_atualizado, proposta_id, target_empresa))
+        conexao.commit()
+
+        return {"sucesso": True, "proposta_id": proposta_id, "mensagem": "Proposta comercial atualizada com sucesso!"}
+    finally:
+        conexao.close()
+
+
+@router.delete("/propostas/{proposta_id}")
+def excluir_proposta(
+    proposta_id: int,
+    request: Request = None,
+    empresa_id: Optional[int] = Query(None)
+):
+    """Exclui uma proposta comercial e seus documentos/chunks vinculados. Apenas para administradores e master."""
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"SELECT id FROM propostas WHERE id = {ph} AND empresa_id = {ph}", (proposta_id, target_empresa))
+        p = cursor.fetchone()
+        if not p:
+            raise HTTPException(status_code=404, detail="Proposta não encontrada.")
+
+        # Remove chunks e documento associado
+        cursor.execute(f"""
+            DELETE FROM chunks WHERE documento_id IN (
+                SELECT id FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = {ph}
+            )
+        """, (proposta_id,))
+        cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = {ph}", (proposta_id,))
+        cursor.execute(f"DELETE FROM propostas WHERE id = {ph} AND empresa_id = {ph}", (proposta_id, target_empresa))
+        conexao.commit()
+
+        return {"sucesso": True, "mensagem": f"Proposta #{proposta_id} excluída com sucesso."}
     finally:
         conexao.close()
 

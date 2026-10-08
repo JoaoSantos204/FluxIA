@@ -43,6 +43,19 @@
     })();
   </script>
   <style>
+    /* AJUSTE TELA EQUIPE: Garante que os botões Editar e Excluir fiquem 100% visíveis sem corte */
+    #equipe-table-container {
+      overflow: visible !important;
+    }
+    #equipe-table-container .kb-row {
+      overflow: visible !important;
+      justify-content: space-between !important;
+    }
+    #equipe-table-container .kb-status {
+      width: auto !important;
+      min-width: max-content !important;
+    }
+
     /* KANBAN CRM ESTILOS */
     .kanban-board {
       display: flex;
@@ -809,7 +822,13 @@
           <div class="page-title">Contratos & Formalizações</div>
           <div class="page-sub">Contratos originados de negócios fechados no CRM · Ao assinar, vira documento interno na base de conhecimento</div>
         </div>
-        <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">🔄 Atualizar Lista</button>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-green" onclick="abrirModalImportarContrato()" style="font-size:12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importar Contrato
+          </button>
+          <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">🔄 Atualizar Lista</button>
+        </div>
       </div>
       <div class="contract-content">
         <div class="contract-list" id="lista-contratos-crm" style="margin-top:20px;">
@@ -3233,6 +3252,8 @@ function renderizarTabelaPropostas(propostas) {
     return;
   }
 
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
+
   corpo.innerHTML = propostas.map(p => `
     <tr>
       <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
@@ -3248,7 +3269,13 @@ function renderizarTabelaPropostas(propostas) {
         </span>
       </td>
       <td style="text-align:right;">
-        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">👁 Ver Documento</button>
+        <div style="display:inline-flex; gap:6px; justify-content:flex-end; align-items:center;">
+          <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">👁 Ver</button>
+          ${isAdmin ? `
+            <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarProposta(${p.id})">✏️ Editar</button>
+            <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="excluirPropostaCRM(${p.id})">🗑️ Excluir</button>
+          ` : ''}
+        </div>
       </td>
     </tr>
   `).join('');
@@ -3478,10 +3505,6 @@ async function salvarEGerarPropostaTela() {
 
     mostrarToast('Proposta gerada com sucesso e indexada na Base de Conhecimento!', 'success');
 
-    if (data.proposta_id) {
-      window.open(`/propostas/${data.proposta_id}/html`, '_blank');
-    }
-
     switchTab('propostas');
     await Promise.all([
       carregarPropostasCRM(),
@@ -3671,6 +3694,8 @@ async function carregarContratosCRM() {
   const container = document.getElementById('lista-contratos-crm');
   if (!container) return;
 
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
+
   try {
     const res = await apiFetch(`/contratos?empresa_id=${empresaId}`);
     if (!res.ok) return;
@@ -3680,7 +3705,7 @@ async function carregarContratosCRM() {
     if (contratos.length === 0) {
       container.innerHTML = `
         <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">
-          Nenhum contrato formalizado ainda. Negócios movidos para o estágio "Fechado" gerarão contratos automaticamente.
+          Nenhum contrato formalizado ainda. Clique em "Importar Contrato" para subir um arquivo ou feche um negócio no CRM.
         </div>
       `;
       return;
@@ -3694,16 +3719,19 @@ async function carregarContratosCRM() {
           </div>
           <div class="contract-info">
             <div class="contract-name">Contrato Comercial #${c.id} — ${escapeHtml(c.produto_nome || 'FluxIA')}</div>
-            <div class="contract-client">Cliente: ${escapeHtml(c.cliente_nome || 'Lead')} · Negócio #${c.negocio_id} · ${formatarData(c.criado_em)}</div>
+            <div class="contract-client">Cliente: ${escapeHtml(c.cliente_nome || 'Lead')} · Negócio #${c.negocio_id || '-'} · ${formatarData(c.criado_em)}</div>
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:16px;">
+        <div style="display:flex; align-items:center; gap:12px;">
           <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor || 0)}</div>
           <span class="contract-status-badge ${c.status === 'assinado' ? 'cs-signed' : 'cs-draft'}">
             ${c.status === 'assinado' ? '✓ Assinado (RAG)' : 'Minuta'}
           </span>
           ${c.status !== 'assinado' ? `
             <button class="btn-green" style="font-size:11px; padding:4px 10px;" onclick="assinarContratoCRM(${c.id})">Assinar & Indexar</button>
+          ` : ''}
+          ${isAdmin ? `
+            <button class="btn-secondary" style="font-size:11px; padding:4px 10px; color:#f87171;" onclick="excluirContratoCRM(${c.id})">Excluir</button>
           ` : ''}
         </div>
       </div>
@@ -3728,6 +3756,218 @@ async function assinarContratoCRM(contratoId) {
     carregarDocumentos();
   } catch (e) {
     alert('Erro: ' + e.message);
+  }
+}
+
+// ===== INTERAÇÃO DE PROPOSTAS & CONTRATOS (PARTE 28) =====
+function abrirModalEditarProposta(propostaId) {
+  const p = propostasCache.find(x => x.id === propostaId);
+  if (!p) {
+    mostrarToast('Proposta não encontrada no cache.', 'error');
+    return;
+  }
+  document.getElementById('proposta-edit-id').value = p.id;
+  document.getElementById('proposta-edit-cliente').value = p.cliente_nome || 'Lead';
+  document.getElementById('proposta-edit-valor').value = p.valor || 0;
+  document.getElementById('proposta-edit-validade').value = p.validade_dias || 15;
+  document.getElementById('proposta-edit-condicoes').value = p.condicoes_pagamento || '';
+  document.getElementById('proposta-edit-descricao').value = p.descricao_itens || '';
+
+  const modal = document.getElementById('modal-editar-proposta');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
+}
+
+function fecharModalEditarProposta() {
+  const modal = document.getElementById('modal-editar-proposta');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+}
+
+async function salvarEdicaoPropostaCRM() {
+  const id = document.getElementById('proposta-edit-id').value;
+  const valor = parseFloat(document.getElementById('proposta-edit-valor').value);
+  const validade_dias = parseInt(document.getElementById('proposta-edit-validade').value);
+  const condicoes_pagamento = document.getElementById('proposta-edit-condicoes').value.trim();
+  const descricao_itens = document.getElementById('proposta-edit-descricao').value.trim();
+
+  if (isNaN(valor) || valor <= 0) {
+    mostrarToast('Por favor, informe um valor válido para a proposta.', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('btn-salvar-edicao-proposta');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/propostas/${id}?empresa_id=${empresaId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        valor,
+        validade_dias: isNaN(validade_dias) ? 15 : validade_dias,
+        condicoes_pagamento,
+        descricao_itens
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar proposta');
+
+    mostrarToast('Proposta comercial atualizada com sucesso!', 'success');
+    fecharModalEditarProposta();
+    await carregarPropostasCRM();
+    carregarPipelinesKanban();
+  } catch (err) {
+    mostrarToast('Erro ao atualizar proposta: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Alterações';
+    }
+  }
+}
+
+async function excluirPropostaCRM(propostaId) {
+  if (!confirm(`Deseja realmente excluir a Proposta #${propostaId}? Os documentos e referências RAG vinculados serão apagados permanentemente.`)) return;
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/propostas/${propostaId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao excluir proposta');
+
+    mostrarToast('Proposta excluída com sucesso!', 'success');
+    await carregarPropostasCRM();
+    carregarDocumentos();
+    carregarPipelinesKanban();
+  } catch (err) {
+    mostrarToast('Erro ao excluir proposta: ' + err.message, 'error');
+  }
+}
+
+async function abrirModalImportarContrato() {
+  const modal = document.getElementById('modal-importar-contrato');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/clientes?empresa_id=${empresaId}`);
+    if (res.ok) {
+      const data = await res.json();
+      const sel = document.getElementById('contrato-import-cliente-select');
+      if (sel) {
+        sel.innerHTML = '<option value="">-- Selecione ou informe cliente avulso --</option>' + (data.clientes || []).map(c => `
+          <option value="${c.id}" data-nome="${escapeHtml(c.nome || '')}">${escapeHtml(c.nome || 'Cliente')} ${c.email ? '(' + escapeHtml(c.email) + ')' : ''}</option>
+        `).join('');
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar clientes para contrato:', e);
+  }
+}
+
+function fecharModalImportarContrato() {
+  const modal = document.getElementById('modal-importar-contrato');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+}
+
+function aoSelecionarClienteContrato(val) {
+  const inputNome = document.getElementById('contrato-import-cliente-nome');
+  if (!inputNome) return;
+  if (val) {
+    const sel = document.getElementById('contrato-import-cliente-select');
+    const opt = sel.options[sel.selectedIndex];
+    inputNome.value = opt.getAttribute('data-nome') || '';
+  }
+}
+
+async function salvarImportacaoContrato() {
+  const fileInput = document.getElementById('contrato-import-arquivo');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    mostrarToast('Por favor, selecione um arquivo de contrato para importar.', 'warning');
+    return;
+  }
+
+  const arquivo = fileInput.files[0];
+  const clienteId = document.getElementById('contrato-import-cliente-select').value;
+  const clienteNome = document.getElementById('contrato-import-cliente-nome').value.trim();
+  const produtoNome = document.getElementById('contrato-import-produto-nome').value.trim();
+  const valor = document.getElementById('contrato-import-valor').value;
+
+  const formData = new FormData();
+  formData.append('arquivo', arquivo);
+  if (clienteId) formData.append('cliente_id', clienteId);
+  if (clienteNome) formData.append('cliente_nome', clienteNome);
+  if (produtoNome) formData.append('produto_nome', produtoNome);
+  if (valor) formData.append('valor', valor);
+
+  const btn = document.getElementById('btn-importar-contrato-salvar');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Importando & Indexando no RAG...';
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/contratos/importar?empresa_id=${empresaId}`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao importar contrato');
+
+    mostrarToast('Contrato importado com sucesso e indexado no Copiloto RAG!', 'success');
+    fecharModalImportarContrato();
+    fileInput.value = '';
+    document.getElementById('contrato-import-cliente-nome').value = '';
+    document.getElementById('contrato-import-produto-nome').value = '';
+    document.getElementById('contrato-import-valor').value = '';
+
+    await carregarContratosCRM();
+    carregarDocumentos();
+    carregarPipelinesKanban();
+  } catch (err) {
+    mostrarToast('Erro ao importar contrato: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '📤 Importar & Indexar';
+    }
+  }
+}
+
+async function excluirContratoCRM(contratoId) {
+  if (!confirm(`Deseja realmente excluir o Contrato #${contratoId}? Os documentos RAG e chunks indexados serão removidos.`)) return;
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/contratos/${contratoId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao excluir contrato');
+
+    mostrarToast('Contrato excluído com sucesso!', 'success');
+    await carregarContratosCRM();
+    carregarDocumentos();
+  } catch (err) {
+    mostrarToast('Erro ao excluir contrato: ' + err.message, 'error');
   }
 }
 
@@ -4845,19 +5085,21 @@ function renderizarEquipe(usuarios) {
   const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
 
   container.innerHTML = usuarios.map(u => `
-    <div class="kb-row">
-      <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700;">${escapeHtml((u.nome || 'U').substring(0,2).toUpperCase())}</div>
-      <div class="kb-info">
-        <div class="kb-name">${escapeHtml(u.nome || '')}</div>
-        <div class="kb-meta">${escapeHtml(u.email || '')} · Perfil: <strong>${escapeHtml((u.perfil || 'funcionario').toUpperCase())}</strong></div>
+    <div class="kb-row" style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 20px;">
+      <div style="display:flex; align-items:center; gap:14px; min-width:0; flex:1;">
+        <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700; width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${escapeHtml((u.nome || 'U').substring(0,2).toUpperCase())}</div>
+        <div class="kb-info" style="min-width:0; flex:1;">
+          <div class="kb-name" style="font-weight:700; font-size:13px; color:var(--text);">${escapeHtml(u.nome || '')}</div>
+          <div class="kb-meta" style="font-size:11px; color:var(--text-muted); margin-top:2px;">${escapeHtml(u.email || '')} · Perfil: <strong style="color:var(--text);">${escapeHtml((u.perfil || 'funcionario').toUpperCase())}</strong></div>
+        </div>
       </div>
-      <div class="kb-status" style="display:flex; align-items:center; gap:8px;">
-        <span class="contract-status-badge ${u.status === 'ativo' ? 'cs-signed' : 'cs-pending'}">
+      <div style="display:flex; align-items:center; gap:8px; flex-shrink:0; margin-left:auto; min-width:max-content;">
+        <span class="contract-status-badge ${u.status === 'ativo' ? 'cs-signed' : 'cs-pending'}" style="margin-right:4px;">
           ${escapeHtml((u.status || 'ativo').toUpperCase())}
         </span>
         ${isAdmin ? `
-          <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarEquipePorId(${u.id})">Editar</button>
-          <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="removerMembroEquipe(${u.id})">Excluir</button>
+          <button class="btn-secondary" style="padding:5px 12px; font-size:11px; white-space:nowrap;" onclick="abrirModalEditarEquipePorId(${u.id})">Editar</button>
+          <button class="btn-secondary" style="padding:5px 12px; font-size:11px; color:#f87171; white-space:nowrap;" onclick="removerMembroEquipe(${u.id})">Excluir</button>
         ` : ''}
       </div>
     </div>
@@ -5583,6 +5825,86 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:12px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" onclick="document.getElementById('container-previa-html').contentWindow.print()">🖨 Imprimir</button>
       <button class="btn-green" onclick="fecharModalPreviaProposta()">Concluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR PROPOSTA (PARTE 28) -->
+<div class="modal-overlay" id="modal-editar-proposta" style="display:none; align-items:center; justify-content:center; z-index:10000;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:550px; overflow:hidden;">
+    <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">✏️ Editar Proposta Comercial</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalEditarProposta()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+      <input type="hidden" id="proposta-edit-id" />
+      <div class="config-field">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Cliente Destinatário</label>
+        <input class="login-input" type="text" id="proposta-edit-cliente" disabled style="padding:10px 14px; background:var(--bg); color:var(--text-muted); border:1px solid var(--border); border-radius:8px; width:100%;" />
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="config-field">
+          <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Valor Total (R$) *</label>
+          <input class="login-input" type="number" step="0.01" id="proposta-edit-valor" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="0.00" />
+        </div>
+        <div class="config-field">
+          <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Validade (dias) *</label>
+          <input class="login-input" type="number" id="proposta-edit-validade" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="15" />
+        </div>
+      </div>
+      <div class="config-field">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Condições de Pagamento</label>
+        <input class="login-input" type="text" id="proposta-edit-condicoes" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="Ex: À vista via PIX ou em até 12x" />
+      </div>
+      <div class="config-field">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Descrição dos Itens / Escopo</label>
+        <textarea class="login-input" id="proposta-edit-descricao" rows="4" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%; resize:vertical;" placeholder="Detalhes do escopo e entregáveis"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalEditarProposta()">Cancelar</button>
+      <button class="btn-green" id="btn-salvar-edicao-proposta" onclick="salvarEdicaoPropostaCRM()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: IMPORTAR CONTRATO (PARTE 28) -->
+<div class="modal-overlay" id="modal-importar-contrato" style="display:none; align-items:center; justify-content:center; z-index:10000;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:550px; overflow:hidden;">
+    <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">📤 Importar Contrato Formalizado</div>
+      <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalImportarContrato()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+      <div class="config-field">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Arquivo do Contrato (PDF, DOCX, TXT) *</label>
+        <input type="file" id="contrato-import-arquivo" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%; cursor:pointer;" />
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">O texto será processado, dividido em blocos e indexado no Copiloto IA (RAG).</div>
+      </div>
+      <div class="config-field">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Selecionar Cliente Existente</label>
+        <select class="login-input" id="contrato-import-cliente-select" onchange="aoSelecionarClienteContrato(this.value)" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;">
+          <option value="">-- Selecione ou informe cliente avulso --</option>
+        </select>
+      </div>
+      <div class="config-field" id="contrato-import-novo-cliente-box">
+        <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Nome do Cliente / Empresa Destinatária</label>
+        <input class="login-input" type="text" id="contrato-import-cliente-nome" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="Ex: AcquaClean Ltda" />
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="config-field">
+          <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Produto / Serviço Contratado</label>
+          <input class="login-input" type="text" id="contrato-import-produto-nome" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="Ex: Licença Enterprise FluxIA" />
+        </div>
+        <div class="config-field">
+          <label style="font-size:12px; font-weight:600; color:var(--text); display:block; margin-bottom:4px;">Valor do Contrato (R$)</label>
+          <input class="login-input" type="number" step="0.01" id="contrato-import-valor" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; width:100%;" placeholder="0.00" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn-secondary" onclick="fecharModalImportarContrato()">Cancelar</button>
+      <button class="btn-green" id="btn-importar-contrato-salvar" onclick="salvarImportacaoContrato()">📤 Importar & Indexar</button>
     </div>
   </div>
 </div>
