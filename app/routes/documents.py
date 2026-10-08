@@ -132,14 +132,11 @@ async def enviar_documento(
                 empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo,
                 conteudo_texto, hash_conteudo, nivel_acesso, data_upload
             ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
         """, (empresa_id, arquivo.filename, extensao, str(caminho_arquivo), texto_documento, hash_conteudo, nivel_formatado, data_upload))
 
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            documento_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM documentos WHERE hash_conteudo = {ph} AND empresa_id = {ph}", (hash_conteudo, empresa_id))
-            row = cursor.fetchone()
-            documento_id = row["id"] if row else None
+        row = cursor.fetchone()
+        documento_id = row["id"] if row else None
 
         # 9. Geração de Embeddings e Inserção dos Chunks
         total_chunks = 0

@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr, Field
 
+from app.database.database import conectar, _cursor, _placeholder
 from app.services.user_service import (
     cadastrar_usuario,
     listar_usuarios,
     obter_usuario_por_id,
     alterar_perfil_usuario,
     alterar_status_usuario,
-    deletar_usuario
+    deletar_usuario,
+    gerar_hash_senha
 )
-from app.services.security_service import verificar_admin_api_key
+from app.services.security_service import verificar_admin_api_key, exigir_perfil
 
 
 router = APIRouter(
@@ -34,6 +37,14 @@ class EquipeUsuarioCreateRequest(BaseModel):
     perfil: str = Field(default="funcionario", description="Perfil: 'admin' ou 'funcionario'")
 
 
+class EquipeUsuarioUpdateRequest(BaseModel):
+    nome: str = Field(..., min_length=2, description="Nome completo")
+    email: str = Field(..., description="E-mail do colaborador")
+    perfil: str = Field(..., description="Perfil: 'admin' ou 'funcionario'")
+    status: str = Field(..., description="Status: 'ativo' ou 'inativo'")
+    senha: Optional[str] = Field(None, min_length=4, description="Nova senha opcional")
+
+
 class PerfilUpdateRequest(BaseModel):
     perfil: str = Field(..., description="Novo perfil: 'master', 'admin', 'funcionario' ou 'cliente'")
 
@@ -43,10 +54,11 @@ class StatusUpdateRequest(BaseModel):
 
 
 @router.get("/equipe")
-def listar_equipe(empresa_id: int):
+def listar_equipe(empresa_id: int, request: Request):
     """
     Lista todos os colaboradores da empresa específica para o administrador do tenant.
     """
+    exigir_perfil(request, empresa_id, ["admin", "master"])
     usuarios = listar_usuarios(empresa_id=empresa_id)
     return {
         "total": len(usuarios),
@@ -55,12 +67,14 @@ def listar_equipe(empresa_id: int):
 
 
 @router.post("/equipe", status_code=status.HTTP_201_CREATED)
-def criar_membro_equipe(dados: EquipeUsuarioCreateRequest):
+def criar_membro_equipe(dados: EquipeUsuarioCreateRequest, request: Request):
     """
     Cadastra um colaborador na empresa do admin.
     Regra estrita: Administradores de empresa NÃO podem criar perfil 'master'.
     Clientes não são usuários de acesso à plataforma (apenas CRM).
     """
+    exigir_perfil(request, dados.empresa_id, ["admin", "master"])
+
     perfil_normalizado = dados.perfil.strip().lower()
     if perfil_normalizado == "master":
         raise HTTPException(
@@ -96,11 +110,13 @@ def criar_membro_equipe(dados: EquipeUsuarioCreateRequest):
     }
 
 
-@router.delete("/equipe/{usuario_id}")
-def remover_membro_equipe(usuario_id: int, empresa_id: int):
+@router.put("/equipe/{usuario_id}")
+def atualizar_membro_equipe(usuario_id: int, dados: EquipeUsuarioUpdateRequest, request: Request, empresa_id: int = 1):
     """
-    Remove um membro da equipe garantindo que pertença à empresa informada e não seja master.
+    Edita um membro da equipe (nome, e-mail, perfil, status e senha opcional).
+    Garante unicidade de e-mail, proteção de usuário master e impede auto-desativação/rebaixamento do último admin.
     """
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
     usuario = obter_usuario_por_id(usuario_id)
     if not usuario:
         raise HTTPException(
@@ -108,7 +124,97 @@ def remover_membro_equipe(usuario_id: int, empresa_id: int):
             detail="Usuário não encontrado."
         )
 
-    if usuario["empresa_id"] != empresa_id:
+    if operador.get("perfil") != "master" and usuario["empresa_id"] != empresa_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para alterar usuários de outra empresa."
+        )
+
+    if usuario["perfil"] == "master":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Não é permitido editar um usuário Master."
+        )
+
+    novo_perfil = dados.perfil.strip().lower()
+    novo_status = dados.status.strip().lower()
+    if novo_perfil not in ["admin", "funcionario"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Perfil deve ser 'admin' ou 'funcionario'.")
+    if novo_status not in ["ativo", "inativo"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status deve ser 'ativo' ou 'inativo'.")
+
+    email_limpo = dados.email.strip().lower()
+
+    conn = conectar()
+    cur = _cursor(conn)
+    ph = _placeholder()
+    try:
+        # 1. Verifica duplicidade de e-mail em outro usuário
+        cur.execute(f"SELECT id FROM usuarios WHERE LOWER(email) = {ph} AND id != {ph}", (email_limpo, usuario_id))
+        if cur.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe outro usuário cadastrado com este e-mail."
+            )
+
+        # 2. Regra do último admin ativo
+        if usuario["perfil"] == "admin" and usuario["status"] == "ativo" and (novo_perfil != "admin" or novo_status != "ativo"):
+            cur.execute(f"SELECT COUNT(*) as qtd FROM usuarios WHERE empresa_id = {ph} AND perfil = 'admin' AND status = 'ativo' AND id != {ph}", (usuario["empresa_id"], usuario_id))
+            row = cur.fetchone()
+            qtd = row["qtd"] if row else 0
+            if qtd == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Não é possível inativar ou alterar o perfil do único administrador ativo da empresa."
+                )
+
+        # 3. Monta query de atualização
+        updates = [f"nome = {ph}", f"email = {ph}", f"perfil = {ph}", f"status = {ph}"]
+        params = [dados.nome.strip(), email_limpo, novo_perfil, novo_status]
+
+        if dados.senha and dados.senha.strip():
+            updates.append(f"senha_hash = {ph}")
+            params.append(gerar_hash_senha(dados.senha.strip()))
+
+        params.extend([usuario_id, empresa_id])
+        set_str = ", ".join(updates)
+        cur.execute(f"UPDATE usuarios SET {set_str} WHERE id = {ph} AND empresa_id = {ph}", tuple(params))
+        conn.commit()
+
+        return {
+            "mensagem": "Colaborador atualizado com sucesso!",
+            "usuario_id": usuario_id,
+            "nome": dados.nome.strip(),
+            "email": email_limpo,
+            "perfil": novo_perfil,
+            "status": novo_status
+        }
+    finally:
+        conn.close()
+
+
+@router.delete("/equipe/{usuario_id}")
+def remover_membro_equipe(usuario_id: int, empresa_id: int, request: Request):
+    """
+    Remove um membro da equipe garantindo permissão de admin/master, mesma empresa,
+    bloqueando auto-exclusão, proteção do perfil master e proteção do último administrador ativo.
+    """
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+
+    if operador.get("id") == usuario_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Você não pode excluir sua própria conta de administrador."
+        )
+
+    usuario = obter_usuario_por_id(usuario_id)
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado."
+        )
+
+    if operador.get("perfil") != "master" and usuario["empresa_id"] != empresa_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Você não tem permissão para remover usuários de outra empresa."
@@ -120,12 +226,31 @@ def remover_membro_equipe(usuario_id: int, empresa_id: int):
             detail="Não é permitido remover um usuário Master."
         )
 
-    sucesso = deletar_usuario(usuario_id=usuario_id)
-    if not sucesso:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Não foi possível remover o colaborador."
-        )
+    # Verifica se é o último admin ativo da empresa
+    if usuario["perfil"] == "admin" and usuario["status"] == "ativo":
+        conn = conectar()
+        cur = _cursor(conn)
+        ph = _placeholder()
+        try:
+            cur.execute(f"SELECT COUNT(*) as qtd FROM usuarios WHERE empresa_id = {ph} AND perfil = 'admin' AND status = 'ativo' AND id != {ph}", (usuario["empresa_id"], usuario_id))
+            row = cur.fetchone()
+            qtd = row["qtd"] if row else 0
+            if qtd == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Não é possível remover o único administrador ativo da empresa."
+                )
+        finally:
+            conn.close()
+
+    conn = conectar()
+    cur = _cursor(conn)
+    ph = _placeholder()
+    try:
+        cur.execute(f"DELETE FROM usuarios WHERE id = {ph} AND empresa_id = {ph}", (usuario_id, empresa_id))
+        conn.commit()
+    finally:
+        conn.close()
 
     return {"mensagem": "Colaborador removido da equipe com sucesso."}
 

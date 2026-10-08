@@ -133,7 +133,9 @@ def salvar_e_indexar_documento_texto(
     conteudo_texto: str,
     tipo_arquivo: str = ".txt",
     nivel_acesso: str = "interno",
-    origem: str = "sistema"
+    origem: str = "sistema",
+    ref_tipo: str | None = None,
+    ref_id: int | None = None
 ) -> int:
     """
     Cria um documento sintético (ex: contrato assinado, proposta comercial),
@@ -174,16 +176,13 @@ def salvar_e_indexar_documento_texto(
         cursor.execute(f"""
             INSERT INTO documentos (
                 empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo,
-                conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem
-            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-        """, (empresa_id, nome_arquivo, tipo_arquivo, str(caminho_arquivo), conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem))
+                conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem, ref_tipo, ref_id
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
+        """, (empresa_id, nome_arquivo, tipo_arquivo, str(caminho_arquivo), conteudo_texto, hash_conteudo, nivel_acesso, data_upload, origem, ref_tipo, ref_id))
 
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            doc_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM documentos WHERE hash_conteudo = {ph} AND empresa_id = {ph} ORDER BY id DESC LIMIT 1", (hash_conteudo, empresa_id))
-            row = cursor.fetchone()
-            doc_id = row["id"] if row else None
+        row = cursor.fetchone()
+        doc_id = row["id"] if row else None
 
         # Chunking e Embeddings automáticos
         chunks = dividir_texto(conteudo_texto)

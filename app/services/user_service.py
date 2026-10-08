@@ -23,18 +23,12 @@ def cadastrar_usuario(empresa_id: int, nome: str, email: str, senha: str, perfil
         cursor.execute(f"""
             INSERT INTO usuarios (empresa_id, nome, email, senha_hash, perfil, data_criacao)
             VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
         """, (empresa_id, nome, email, senha_hash, perfil, data_criacao))
 
+        row = cursor.fetchone()
+        usuario_id = row["id"] if row else None
         conexao.commit()
-
-        # lastrowid funciona em SQLite; no Postgres usamos RETURNING via fetchone
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            usuario_id = cursor.lastrowid
-        else:
-            # Busca o id recém inserido
-            cursor.execute(f"SELECT id FROM usuarios WHERE email = {ph}", (email,))
-            row = cursor.fetchone()
-            usuario_id = row["id"] if row else None
 
         return {"sucesso": True, "usuario_id": usuario_id}
     except Exception as e:
@@ -336,13 +330,9 @@ def cadastrar_empresa_com_admin(nome_empresa: str, cnpj: str, nome_responsavel: 
         cursor.execute(f"""
             INSERT INTO empresas (nome, cnpj_ou_identificador, data_criacao)
             VALUES ({ph}, {ph}, {ph})
+            RETURNING id
         """, (nome_emp, cnpj_limpo, data_criacao))
-
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            empresa_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM empresas WHERE cnpj_ou_identificador = {ph}", (cnpj_limpo,))
-            empresa_id = cursor.fetchone()["id"]
+        empresa_id = cursor.fetchone()["id"]
 
         # 4. Insere Configurações padrão de suporte para a nova empresa
         cursor.execute(f"""
@@ -355,13 +345,9 @@ def cadastrar_empresa_com_admin(nome_empresa: str, cnpj: str, nome_responsavel: 
         cursor.execute(f"""
             INSERT INTO usuarios (empresa_id, nome, email, senha_hash, perfil, status, data_criacao)
             VALUES ({ph}, {ph}, {ph}, {ph}, 'admin', 'ativo', {ph})
+            RETURNING id
         """, (empresa_id, nome_user, email_user, senha_hash, data_criacao))
-
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            usuario_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM usuarios WHERE LOWER(email) = {ph}", (email_user,))
-            usuario_id = cursor.fetchone()["id"]
+        usuario_id = cursor.fetchone()["id"]
 
         conexao.commit()
 

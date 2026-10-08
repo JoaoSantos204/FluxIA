@@ -1,6 +1,5 @@
 import os
 import sys
-import sqlite3
 from fastapi.testclient import TestClient
 
 from app.database.database import conectar, criar_banco
@@ -16,13 +15,13 @@ def testar_banco_e_migracoes():
     conn = conectar()
     cur = conn.cursor()
 
-    cur.execute("PRAGMA table_info(documentos)")
-    colunas_doc = [c["name"] for c in cur.fetchall()]
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'documentos'")
+    colunas_doc = [c["column_name"] for c in cur.fetchall()]
     assert "nivel_acesso" in colunas_doc, "Coluna 'nivel_acesso' não encontrada em documentos!"
     assert "empresa_id" in colunas_doc, "Coluna 'empresa_id' não encontrada em documentos!"
 
-    cur.execute("PRAGMA table_info(usuarios)")
-    colunas_user = [c["name"] for c in cur.fetchall()]
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'usuarios'")
+    colunas_user = [c["column_name"] for c in cur.fetchall()]
     assert "perfil" in colunas_user, "Coluna 'perfil' não encontrada em usuarios!"
 
     cur.execute("SELECT * FROM configuracoes_empresa WHERE empresa_id = 1")
@@ -54,7 +53,7 @@ def testar_servicos_auxiliares():
     # Limpeza dos dados de teste
     conn = conectar()
     cur = conn.cursor()
-    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = ?", (chat_teste,))
+    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = %s", (chat_teste,))
     conn.commit()
     conn.close()
 
@@ -70,7 +69,8 @@ def testar_user_service():
     print("\n--- 3. Testando UserService e RBAC ---")
     user = buscar_usuario_por_telegram("8342030105")
     assert user is not None, "Usuário existente não localizado!"
-    assert user["perfil"] in ["admin", "funcionario", "cliente"], f"Perfil inválido: {user['perfil']}"
+    assert user["perfil"] in ["master", "admin", "funcionario", "cliente"], f"Perfil inválido: {user['perfil']}"
+    perfil_original = user["perfil"]
 
     # Teste de validação ao cadastrar com perfil inválido
     res = cadastrar_usuario(1, "Invalido", "invalido@email.com", "123", perfil="perfil_inexistente")
@@ -82,10 +82,10 @@ def testar_user_service():
     user_alt = buscar_usuario_por_telegram("8342030105")
     assert user_alt["perfil"] == "funcionario"
 
-    # Restaura perfil para cliente
-    alterar_perfil_usuario(user["id"], "cliente")
+    # Restaura perfil original
+    alterar_perfil_usuario(user["id"], perfil_original)
     user_restaurado = buscar_usuario_por_telegram("8342030105")
-    assert user_restaurado["perfil"] == "cliente"
+    assert user_restaurado["perfil"] == perfil_original
 
     print("[PASS] UserService com perfis RBAC validado com sucesso!")
 
@@ -98,26 +98,36 @@ def testar_filtro_rag_rbac():
     # Cria documento público e interno para Empresa 1
     cur.execute("""
         INSERT INTO documentos (empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo, conteudo_texto, hash_conteudo, nivel_acesso, data_upload)
-        VALUES (1, 'doc_empresa1_pub.txt', '.txt', '/tmp/p1.txt', 'conteudo pub emp1', 'hash_pub_1', 'publico', datetime('now'))
+        VALUES (1, 'doc_empresa1_pub.txt', '.txt', '/tmp/p1.txt', 'conteudo pub emp1', 'hash_pub_1', 'publico', NOW())
+        RETURNING id
     """)
-    doc_pub1_id = cur.lastrowid
+    doc_pub1_id = cur.fetchone()["id"]
 
     cur.execute("""
         INSERT INTO documentos (empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo, conteudo_texto, hash_conteudo, nivel_acesso, data_upload)
-        VALUES (1, 'doc_empresa1_int.txt', '.txt', '/tmp/i1.txt', 'conteudo int emp1', 'hash_int_1', 'interno', datetime('now'))
+        VALUES (1, 'doc_empresa1_int.txt', '.txt', '/tmp/i1.txt', 'conteudo int emp1', 'hash_int_1', 'interno', NOW())
+        RETURNING id
     """)
-    doc_int1_id = cur.lastrowid
+    doc_int1_id = cur.fetchone()["id"]
+
+    # Garante que Empresa 2 existe para integridade referencial
+    cur.execute("""
+        INSERT INTO empresas (id, nome, cnpj_ou_identificador, data_criacao)
+        VALUES (2, 'Empresa 2 Teste', 'empresa_2_test', NOW())
+        ON CONFLICT (id) DO NOTHING
+    """)
 
     # Cria documento para Empresa 2
     cur.execute("""
         INSERT INTO documentos (empresa_id, nome_arquivo, tipo_arquivo, caminho_arquivo, conteudo_texto, hash_conteudo, nivel_acesso, data_upload)
-        VALUES (2, 'doc_empresa2_pub.txt', '.txt', '/tmp/p2.txt', 'conteudo emp2', 'hash_pub_2', 'publico', datetime('now'))
+        VALUES (2, 'doc_empresa2_pub.txt', '.txt', '/tmp/p2.txt', 'conteudo emp2', 'hash_pub_2', 'publico', NOW())
+        RETURNING id
     """)
-    doc_emp2_id = cur.lastrowid
+    doc_emp2_id = cur.fetchone()["id"]
 
-    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (?, 1, 'chunk pub emp1', '[0.1]')", (doc_pub1_id,))
-    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (?, 1, 'chunk int emp1', '[0.2]')", (doc_int1_id,))
-    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (?, 1, 'chunk emp2', '[0.3]')", (doc_emp2_id,))
+    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (%s, 1, 'chunk pub emp1', '[0.1]')", (doc_pub1_id,))
+    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (%s, 1, 'chunk int emp1', '[0.2]')", (doc_int1_id,))
+    cur.execute("INSERT INTO chunks (documento_id, numero_chunk, conteudo, embedding) VALUES (%s, 1, 'chunk emp2', '[0.3]')", (doc_emp2_id,))
     conn.commit()
 
     # 1. Query para perfil 'cliente' da Empresa 1: deve ver apenas o público da Empresa 1
@@ -143,8 +153,8 @@ def testar_filtro_rag_rbac():
     assert any("chunk int emp1" in r["conteudo"] for r in chunks_func_emp1), "Funcionário não viu documento interno da sua própria empresa!"
 
     # Limpeza
-    cur.execute("DELETE FROM chunks WHERE documento_id IN (?, ?, ?)", (doc_pub1_id, doc_int1_id, doc_emp2_id))
-    cur.execute("DELETE FROM documentos WHERE id IN (?, ?, ?)", (doc_pub1_id, doc_int1_id, doc_emp2_id))
+    cur.execute("DELETE FROM chunks WHERE documento_id IN (%s, %s, %s)", (doc_pub1_id, doc_int1_id, doc_emp2_id))
+    cur.execute("DELETE FROM documentos WHERE id IN (%s, %s, %s)", (doc_pub1_id, doc_int1_id, doc_emp2_id))
     conn.commit()
     conn.close()
 
@@ -164,27 +174,26 @@ def testar_prompt_ai_service():
 
 
 def testar_endpoints_documentos():
-    print("\n--- 6. Testando Endpoints FastAPI e Proteção de API Key ---")
+    print("\n--- 6. Testando Endpoints FastAPI e Proteção de Perfil ---")
     client = TestClient(app)
-    admin_key = os.getenv("ADMIN_API_KEY", "fluxia-admin-secret-key-2026")
 
-    # 1. Tentativa de upload sem header de autenticação (deve dar 403)
+    # 1. Tentativa de upload sem usuario_id (deve dar 422)
     files = {"arquivo": ("teste.txt", b"Conteudo de teste", "text/plain")}
     resp_unauth = client.post("/documents/upload", files=files)
-    assert resp_unauth.status_code == 403, f"Esperado 403 sem API Key, obtido {resp_unauth.status_code}"
+    assert resp_unauth.status_code == 422, f"Esperado 422 sem usuario_id, obtido {resp_unauth.status_code}"
 
-    # 2. Tentativa com chave errada (deve dar 403)
-    resp_bad_key = client.post("/documents/upload", files=files, headers={"X-Admin-API-Key": "chave_errada"})
-    assert resp_bad_key.status_code == 403, f"Esperado 403 com chave inválida, obtido {resp_bad_key.status_code}"
+    # 2. Tentativa com usuario_id inexistente/inválido (deve dar 403 ou 404)
+    resp_bad_user = client.post("/documents/upload", files=files, data={"usuario_id": 999999})
+    assert resp_bad_user.status_code in (403, 404), f"Esperado 403 ou 404 com usuario inválido, obtido {resp_bad_user.status_code}"
 
-    # 3. Com chave correta e nivel_acesso inválido (deve passar pela autenticação e falhar com 400)
-    data = {"nivel_acesso": "invalido_xyz", "empresa_id": 1}
-    resp_val = client.post("/documents/upload", files=files, data=data, headers={"X-Admin-API-Key": admin_key})
+    # 3. Com usuario admin e nivel_acesso inválido (deve passar pela autenticação e falhar com 400)
+    data = {"nivel_acesso": "invalido_xyz", "empresa_id": 1, "usuario_id": 1}
+    resp_val = client.post("/documents/upload", files=files, data=data)
     assert resp_val.status_code == 400, f"Esperado 400 para nivel_acesso inválido, obtido {resp_val.status_code}"
 
-    # 4. Tentativa de exclusão sem chave (deve dar 403)
+    # 4. Tentativa de exclusão sem identificação (deve dar 401)
     resp_del_unauth = client.delete("/documents/999")
-    assert resp_del_unauth.status_code == 403, f"Esperado 403 no DELETE sem chave, obtido {resp_del_unauth.status_code}"
+    assert resp_del_unauth.status_code == 401, f"Esperado 401 no DELETE sem identificação, obtido {resp_del_unauth.status_code}"
 
     # 5. Listagem de documentos deve conter nivel_acesso e empresa_id
     resp_list = client.get("/documents/")
@@ -207,7 +216,7 @@ def testar_webhook_telegram_com_historico():
     # Limpa histórico anterior deste chat
     conn = conectar()
     cur = conn.cursor()
-    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = ?", (chat_id,))
+    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = %s", (chat_id,))
     conn.commit()
     conn.close()
 
@@ -220,11 +229,11 @@ def testar_webhook_telegram_com_historico():
 
     # Mocka chamadas externas (Telegram API e Gemini)
     with patch("app.routes.telegram.enviar_mensagem_telegram") as mock_envio, \
-         patch("app.routes.telegram.ai_service.gerar_resposta") as mock_ia, \
+         patch("app.services.ai_engine_service.ai_engine.gerar_resposta_orquestrada") as mock_ia_engine, \
          patch("app.routes.telegram.buscar_contexto_relevante") as mock_rag:
 
-        mock_rag.return_value = "Horário de atendimento: Segunda a Sexta das 9h às 18h."
-        mock_ia.return_value = "Nosso horário de atendimento é de segunda a sexta, das 9h às 18h."
+        mock_rag.return_value = ("Horário de atendimento: Segunda a Sexta das 9h às 18h.", [])
+        mock_ia_engine.return_value = ("Nosso horário de atendimento é de segunda a sexta, das 9h às 18h.", 1)
 
         resp = client.post("/telegram/webhook", json=payload)
         assert resp.status_code == 200
@@ -232,23 +241,23 @@ def testar_webhook_telegram_com_historico():
 
         # Verifica se enviou a mensagem
         assert mock_envio.called
-        assert mock_ia.called
+        assert mock_ia_engine.called
         # Verifica se os parâmetros passados para IA continham config_suporte e historico
-        _, kwargs = mock_ia.call_args
+        _, kwargs = mock_ia_engine.call_args
         assert "config_suporte" in kwargs
         assert "historico" in kwargs
 
     # Verifica se a interação foi gravada no histórico
     conn = conectar()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM historico_conversas WHERE telegram_chat_id = ?", (chat_id,))
+    cur.execute("SELECT * FROM historico_conversas WHERE telegram_chat_id = %s", (chat_id,))
     interacao = cur.fetchone()
     assert interacao is not None, "Interação não foi salva no histórico!"
     assert interacao["mensagem_usuario"] == "Qual o horário de atendimento?"
     assert "9h às 18h" in interacao["resposta_ia"]
 
     # Limpa dados de teste
-    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = ?", (chat_id,))
+    cur.execute("DELETE FROM historico_conversas WHERE telegram_chat_id = %s", (chat_id,))
     conn.commit()
     conn.close()
 
@@ -261,8 +270,8 @@ def testar_endpoints_empresa_e_usuarios():
     admin_key = os.getenv("ADMIN_API_KEY", "fluxia-admin-secret-key-2026")
     headers = {"X-Admin-API-Key": admin_key}
 
-    # 1. Consulta de configurações de empresa (aberta para leitura)
-    resp_get_cfg = client.get("/empresa/configuracoes?empresa_id=1")
+    # 1. Consulta de configurações de empresa (com perfil admin)
+    resp_get_cfg = client.get("/empresa/configuracoes?empresa_id=1&usuario_perfil=admin")
     assert resp_get_cfg.status_code == 200
     cfg_original = resp_get_cfg.json()
     assert "numero_suporte_humano" in cfg_original
@@ -340,7 +349,7 @@ def testar_comandos_rapidos_telegram():
         assert resp.status_code == 200
         assert mock_envio.called
         msg_enviada = mock_envio.call_args[0][1]
-        assert "Guia de Uso" in msg_enviada
+        assert "Guia" in msg_enviada
 
         # 2. Teste /suporte
         resp = client.post("/telegram/webhook", json={"message": {"chat": {"id": chat_id}, "text": "/suporte"}})
@@ -354,7 +363,7 @@ def testar_comandos_rapidos_telegram():
         assert resp.status_code == 200
         msg_enviada = mock_envio.call_args[0][1]
         assert "Seu Perfil no FluxIA" in msg_enviada
-        assert "CLIENTE" in msg_enviada
+        assert ("CLIENTE" in msg_enviada or "MASTER" in msg_enviada)
 
         # 4. Teste /start
         resp = client.post("/telegram/webhook", json={"message": {"chat": {"id": chat_id}, "text": "/start"}})

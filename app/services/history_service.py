@@ -16,20 +16,10 @@ def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: 
         cursor.execute(f"""
             INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
             VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
         """, (str(telegram_chat_id), mensagem_usuario, resposta_ia, lida, empresa_id))
-        conexao.commit()
-
-        # lastrowid no SQLite; fallback para Postgres
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            return cursor.lastrowid
-
-        cursor.execute(f"""
-            SELECT id FROM historico_conversas
-            WHERE telegram_chat_id = {ph}
-            ORDER BY id DESC
-            LIMIT 1
-        """, (str(telegram_chat_id),))
         row = cursor.fetchone()
+        conexao.commit()
         return row["id"] if row else None
     except Exception as e:
         conexao.rollback()

@@ -1555,6 +1555,19 @@ function obterEmpresaAtivaId() {
   return (usuarioAtual && usuarioAtual.empresa_id) ? parseInt(usuarioAtual.empresa_id) : 1;
 }
 
+// Helper de API central com autenticação e headers padrão
+async function apiFetch(url, opts = {}) {
+  const options = { ...opts };
+  options.headers = { ...(options.headers || {}) };
+  if (usuarioAtual && usuarioAtual.id) {
+    options.headers['X-User-Id'] = String(usuarioAtual.id);
+  }
+  if (options.body && typeof options.body === 'string' && !options.headers['Content-Type']) {
+    options.headers['Content-Type'] = 'application/json';
+  }
+  return fetch(url, options);
+}
+
 // ===== CONVERSAS DO TELEGRAM & ATENDENTE HUMANO =====
 let intervalPollingConversaAtiva = null;
 let ultimaQtdMensagens = -1;
@@ -2188,7 +2201,7 @@ async function carregarClientesCRM() {
 
   try {
     corpo.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando clientes...</td></tr>`;
-    const res = await fetch(`/clientes?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/clientes?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar clientes');
     const data = await res.json();
     clientesCache = data.clientes || [];
@@ -2221,6 +2234,8 @@ function renderizarTabelaClientes(clientes) {
     return;
   }
 
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
+
   corpo.innerHTML = clientes.map(c => `
     <tr>
       <td style="color:var(--text-muted); font-size:11px;">#${c.id}</td>
@@ -2229,11 +2244,17 @@ function renderizarTabelaClientes(clientes) {
       <td>${c.telefone ? escapeHtml(c.telefone) : '<span style="color:var(--text-muted); font-size:11px;">-</span>'}</td>
       <td><span class="badge-status badge-default" style="text-transform:capitalize;">${c.origem || 'manual'}</span></td>
       <td style="color:var(--text-muted); font-size:11px;">${formatarData(c.criado_em)}</td>
-      <td style="text-align:right;">
-        <button class="btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="abrirModalCliente(${JSON.stringify(c).replace(/"/g, '&quot;')})">Editar</button>
+      <td style="text-align:right; display:flex; gap:6px; justify-content:flex-end;">
+        <button class="btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="abrirModalClientePorId(${c.id})">Editar</button>
+        ${isAdmin ? `<button class="btn-secondary" style="padding:4px 10px; font-size:11px; color:#f87171;" onclick="excluirClienteCRM(${c.id})">Excluir</button>` : ''}
       </td>
     </tr>
   `).join('');
+}
+
+function abrirModalClientePorId(clienteId) {
+  const cliente = clientesCache.find(c => c.id === clienteId);
+  abrirModalCliente(cliente || null);
 }
 
 function abrirModalCliente(cliente = null) {
@@ -2280,7 +2301,7 @@ async function salvarClienteCRM() {
     const url = id ? `/clientes/${id}` : '/clientes';
     const method = id ? 'PUT' : 'POST';
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2297,6 +2318,43 @@ async function salvarClienteCRM() {
   }
 }
 
+async function excluirClienteCRM(clienteId) {
+  if (!confirm('Deseja realmente excluir este cliente?')) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    let res = await apiFetch(`/clientes/${clienteId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+
+    if (res.status === 409) {
+      const err = await res.json().catch(() => ({}));
+      if (err.detail && err.detail.includes('Confirme a exclusão')) {
+        if (confirm(err.detail)) {
+          res = await apiFetch(`/clientes/${clienteId}?empresa_id=${empresaId}&confirmar=true`, {
+            method: 'DELETE'
+          });
+        } else {
+          return;
+        }
+      } else {
+        throw new Error(err.detail || 'Não é possível excluir este cliente');
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao excluir cliente');
+    }
+
+    fecharModalCliente();
+    mostrarToast('Cliente excluído com sucesso!', 'success');
+    carregarClientesCRM();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
 // ===== PRODUTOS CRM (PARTE 23) =====
 let produtosCache = [];
 
@@ -2307,7 +2365,7 @@ async function carregarProdutosCRM() {
 
   try {
     corpo.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando produtos...</td></tr>`;
-    const res = await fetch(`/produtos?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/produtos?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar produtos');
     const data = await res.json();
     produtosCache = data.produtos || [];
@@ -2326,6 +2384,8 @@ function renderizarTabelaProdutos(produtos) {
     return;
   }
 
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
+
   corpo.innerHTML = produtos.map(p => `
     <tr>
       <td style="color:var(--text-muted); font-size:11px;">#${p.id}</td>
@@ -2338,13 +2398,19 @@ function renderizarTabelaProdutos(produtos) {
         </span>
       </td>
       <td style="text-align:right; display:flex; gap:6px; justify-content:flex-end;">
-        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalProduto(${JSON.stringify(p).replace(/"/g, '&quot;')})">Editar</button>
+        <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalProdutoPorId(${p.id})">Editar</button>
         <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:${p.ativo ? '#f87171' : '#34d399'};" onclick="alternarStatusProduto(${p.id})">
           ${p.ativo ? 'Desativar' : 'Ativar'}
         </button>
+        ${isAdmin ? `<button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="excluirProdutoCRM(${p.id})">Excluir</button>` : ''}
       </td>
     </tr>
   `).join('');
+}
+
+function abrirModalProdutoPorId(produtoId) {
+  const produto = produtosCache.find(p => p.id === produtoId);
+  abrirModalProduto(produto || null);
 }
 
 function abrirModalProduto(produto = null) {
@@ -2391,7 +2457,7 @@ async function salvarProdutoCRM() {
     const url = id ? `/produtos/${id}` : '/produtos';
     const method = id ? 'PUT' : 'POST';
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2403,6 +2469,8 @@ async function salvarProdutoCRM() {
     fecharModalProduto();
     mostrarToast(id ? 'Produto atualizado com sucesso!' : 'Novo produto cadastrado com sucesso!', 'success');
     carregarProdutosCRM();
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
   } catch (e) {
     alert('Erro: ' + e.message);
   }
@@ -2410,9 +2478,31 @@ async function salvarProdutoCRM() {
 
 async function alternarStatusProduto(produtoId) {
   try {
-    const res = await fetch(`/produtos/${produtoId}/toggle-ativo`, { method: 'PATCH' });
+    const res = await apiFetch(`/produtos/${produtoId}/toggle-ativo`, { method: 'PATCH' });
     if (!res.ok) throw new Error('Falha ao alternar status');
     carregarProdutosCRM();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function excluirProdutoCRM(produtoId) {
+  if (!confirm('Deseja realmente excluir este produto? Se houver um pipeline sem negócios vinculado a ele, o pipeline também será excluído.')) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await apiFetch(`/produtos/${produtoId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao excluir produto');
+    }
+    fecharModalProduto();
+    mostrarToast('Produto excluído com sucesso!', 'success');
+    carregarProdutosCRM();
+    carregarPipelinesAdmin();
+    carregarPipelinesKanban();
   } catch (e) {
     alert('Erro: ' + e.message);
   }
@@ -2429,7 +2519,7 @@ async function carregarPipelinesKanban() {
   if (!select) return;
 
   try {
-    const res = await fetch(`/pipelines?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/pipelines?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar pipelines');
     const data = await res.json();
     pipelinesCache = data.pipelines || [];
@@ -2471,7 +2561,7 @@ async function carregarNegociosDoPipeline(pipelineId) {
 
   try {
     container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px; width:100%;">Carregando oportunidades do funil...</div>`;
-    const res = await fetch(`/negocios?empresa_id=${empresaId}&pipeline_id=${pipelineId}`);
+    const res = await apiFetch(`/negocios?empresa_id=${empresaId}&pipeline_id=${pipelineId}`);
     if (!res.ok) throw new Error('Falha ao listar oportunidades');
     const data = await res.json();
     negociosPipelineCache = data.negocios || [];
@@ -2490,6 +2580,8 @@ function renderizarKanbanDinamico(pipeline, negocios) {
     container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px; width:100%;">Este pipeline não possui etapas cadastradas. Configure as etapas no menu Pipelines.</div>`;
     return;
   }
+
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
 
   container.innerHTML = etapas.map((etapa, idx) => {
     const itens = negocios.filter(n => n.etapa_id === etapa.id);
@@ -2534,6 +2626,10 @@ function renderizarKanbanDinamico(pipeline, negocios) {
                   </button>
                 ` : ''}
               </div>
+              <div style="display:flex; justify-content:flex-end; gap:6px; margin-top:8px;">
+                <button class="btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="abrirModalEditarNegocio(${n.id})">Editar</button>
+                ${isAdmin ? `<button class="btn-secondary" style="padding:3px 8px; font-size:11px; color:#f87171;" onclick="excluirNegocioCRM(${n.id})">Excluir</button>` : ''}
+              </div>
             </div>
           `).join('')}
         </div>
@@ -2573,7 +2669,7 @@ async function dropNegocio(event, novaEtapaId) {
 
 async function atualizarEtapaNegocio(negocioId, novaEtapaId) {
   try {
-    const res = await fetch(`/negocios/${negocioId}`, {
+    const res = await apiFetch(`/negocios/${negocioId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ etapa_id: novaEtapaId })
@@ -2596,11 +2692,21 @@ async function abrirModalNovoNegocio() {
     modal.style.display = 'flex';
     modal.classList.add('active');
   }
+
+  document.getElementById('modal-negocio-id').value = '';
+  document.getElementById('modal-negocio-titulo').textContent = 'Nova Oportunidade (Negócio)';
+  document.getElementById('modal-negocio-btn-salvar').textContent = 'Criar Negócio';
+  document.getElementById('modal-negocio-cliente-id').style.display = 'block';
+  document.getElementById('modal-negocio-novo-cliente-link').style.display = 'inline';
+  document.getElementById('modal-negocio-cliente-readonly').style.display = 'none';
+  document.getElementById('modal-negocio-etapa-container').style.display = 'none';
+  document.getElementById('modal-negocio-aviso-auto').style.display = 'block';
+
   const empresaId = obterEmpresaAtivaId();
   try {
     const [resCli, resProd] = await Promise.all([
-      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
-      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+      apiFetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      apiFetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
     ]);
 
     const selCli = document.getElementById('modal-negocio-cliente-id');
@@ -2616,12 +2722,69 @@ async function abrirModalNovoNegocio() {
       selProd.innerHTML = '<option value="">Sem produto específico</option>' + (resProd.produtos || []).map(p => `
         <option value="${p.id}" data-preco="${p.preco || 0}">${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</option>
       `).join('');
+      delete selProd.dataset.originalProdId;
     }
 
     const valInput = document.getElementById('modal-negocio-valor');
     if (valInput) valInput.value = '';
   } catch (e) {
     console.warn('Erro ao preparar formulário de negócio:', e);
+  }
+}
+
+async function abrirModalEditarNegocio(negocioId) {
+  const n = negociosPipelineCache.find(x => x.id === negocioId);
+  if (!n) {
+    alert('Negócio não encontrado no funil ativo.');
+    return;
+  }
+
+  const modal = document.getElementById('modal-negocio');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+  }
+
+  document.getElementById('modal-negocio-id').value = n.id;
+  document.getElementById('modal-negocio-titulo').textContent = 'Editar Oportunidade';
+  document.getElementById('modal-negocio-btn-salvar').textContent = 'Salvar Alterações';
+  document.getElementById('modal-negocio-cliente-id').style.display = 'none';
+  document.getElementById('modal-negocio-novo-cliente-link').style.display = 'none';
+
+  const roEl = document.getElementById('modal-negocio-cliente-readonly');
+  roEl.style.display = 'block';
+  roEl.textContent = `${n.cliente_nome || 'Lead sem nome'} (#${n.cliente_id || ''})`;
+
+  document.getElementById('modal-negocio-aviso-auto').style.display = 'none';
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const resProd = await apiFetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }));
+    const selProd = document.getElementById('modal-negocio-produto-id');
+    if (selProd) {
+      selProd.innerHTML = '<option value="">Sem produto específico</option>' + (resProd.produtos || []).map(p => `
+        <option value="${p.id}" data-preco="${p.preco || 0}">${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}</option>
+      `).join('');
+      selProd.value = n.produto_id ? String(n.produto_id) : '';
+      selProd.dataset.originalProdId = n.produto_id ? String(n.produto_id) : '';
+    }
+
+    const etapaContainer = document.getElementById('modal-negocio-etapa-container');
+    const selEtapa = document.getElementById('modal-negocio-etapa-id');
+    if (etapaContainer && selEtapa) {
+      etapaContainer.style.display = 'block';
+      const pipe = pipelinesCache.find(x => x.id === (n.pipeline_id || pipelineAtivoId)) || pipelinesCache[0];
+      const etapas = pipe ? pipe.etapas || [] : [];
+      selEtapa.innerHTML = etapas.map(e => `
+        <option value="${e.id}" ${e.id === n.etapa_id ? 'selected' : ''}>${escapeHtml(e.nome)}</option>
+      `).join('');
+      if (n.etapa_id) selEtapa.value = String(n.etapa_id);
+    }
+
+    const valInput = document.getElementById('modal-negocio-valor');
+    if (valInput) valInput.value = n.valor_estimado || '';
+  } catch (e) {
+    console.warn('Erro ao carregar dados do negócio para edição:', e);
   }
 }
 
@@ -2644,11 +2807,52 @@ function fecharModalNovoNegocio() {
 }
 
 async function salvarNovoNegocio() {
-  const clienteId = document.getElementById('modal-negocio-cliente-id').value;
+  const negocioId = document.getElementById('modal-negocio-id').value;
   const produtoIdVal = document.getElementById('modal-negocio-produto-id').value;
   const valor = parseFloat(document.getElementById('modal-negocio-valor').value) || 0;
   const empresaId = obterEmpresaAtivaId();
 
+  if (negocioId) {
+    // Modo Edição (PATCH)
+    const nId = parseInt(negocioId);
+    const etapaIdVal = document.getElementById('modal-negocio-etapa-id').value;
+    const originalProdId = document.getElementById('modal-negocio-produto-id').dataset.originalProdId || '';
+
+    if ((produtoIdVal || '') !== originalProdId) {
+      if (!confirm('O produto deste negócio foi alterado. Se este produto estiver vinculado a outro pipeline, o negócio será movido para o pipeline correspondente. Deseja confirmar?')) {
+        return;
+      }
+    }
+
+    try {
+      const payload = {
+        produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
+        etapa_id: etapaIdVal ? parseInt(etapaIdVal) : null,
+        valor_estimado: valor
+      };
+
+      const res = await apiFetch(`/negocios/${nId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Erro ao atualizar negócio');
+      }
+
+      fecharModalNovoNegocio();
+      mostrarToast('Oportunidade atualizada com sucesso!', 'success');
+      await carregarPipelinesKanban();
+      carregarDashboardMetricas();
+    } catch (e) {
+      alert('Erro ao atualizar negócio: ' + e.message);
+    }
+    return;
+  }
+
+  // Modo Criação (POST)
+  const clienteId = document.getElementById('modal-negocio-cliente-id').value;
   if (!clienteId) {
     alert('Selecione um cliente.');
     return;
@@ -2661,7 +2865,7 @@ async function salvarNovoNegocio() {
       produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
       valor_estimado: valor
     };
-    const res = await fetch('/negocios', {
+    const res = await apiFetch('/negocios', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -2679,18 +2883,35 @@ async function salvarNovoNegocio() {
   }
 }
 
+async function excluirNegocioCRM(negocioId) {
+  if (!confirm('Deseja realmente excluir este negócio? Todas as propostas e contratos vinculados a ele também serão excluídos.')) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await apiFetch(`/negocios/${negocioId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao excluir negócio');
+    }
+    mostrarToast('Negócio excluído com sucesso!', 'success');
+    await carregarNegociosDoPipeline(pipelineAtivoId);
+    carregarDashboardMetricas();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
 // ===== PIPELINES ADMIN (PARTE 22 & 23) =====
 async function carregarPipelinesAdmin() {
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
   const container = document.getElementById('lista-pipelines-admin');
   if (!container) return;
 
   try {
     container.innerHTML = `<div style="padding:30px; text-align:center; color:var(--text-muted); font-size:13px;">Carregando pipelines...</div>`;
-    const res = await fetch(`/pipelines?empresa_id=${empresaId}`, {
-      headers: { 'X-User-Id': String(uid || '') }
-    });
+    const res = await apiFetch(`/pipelines?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar pipelines');
     const data = await res.json();
     const pipelines = data.pipelines || [];
@@ -2751,13 +2972,49 @@ async function abrirModalNovoPipeline() {
   }
   const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch(`/produtos?empresa_id=${empresaId}&ativo=true`);
-    const data = await res.json();
+    const [resPipelines, resProd] = await Promise.all([
+      apiFetch(`/pipelines?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ pipelines: [] })),
+      apiFetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+    ]);
+
+    const pipelinesExistentes = resPipelines.pipelines || [];
+    const prodsExistentes = resProd.produtos || [];
+
+    const produtosComPipeline = new Set(pipelinesExistentes.map(p => p.produto_id).filter(Boolean));
+    const temGeral = pipelinesExistentes.some(p => !p.produto_id);
+    const prodsDisponiveis = prodsExistentes.filter(p => !produtosComPipeline.has(p.id));
+
     const selProd = document.getElementById('modal-pipeline-produto-id');
+    const aviso = document.getElementById('modal-pipeline-aviso');
+    const btnSalvar = document.getElementById('modal-pipeline-btn-salvar');
+
+    let options = [];
+    if (!temGeral) {
+      options.push('<option value="">Geral (Todos os Produtos)</option>');
+    }
+    prodsDisponiveis.forEach(p => {
+      options.push(`<option value="${p.id}">${escapeHtml(p.nome)}</option>`);
+    });
+
     if (selProd) {
-      selProd.innerHTML = '<option value="">Geral (Todos os Produtos)</option>' + (data.produtos || []).map(p => `
-        <option value="${p.id}">${escapeHtml(p.nome)}</option>
-      `).join('');
+      selProd.innerHTML = options.join('');
+    }
+
+    if (options.length === 0) {
+      if (aviso) {
+        aviso.style.display = 'block';
+        aviso.textContent = 'Todos os produtos ativos já possuem funil dedicado e o funil Geral já foi criado.';
+      }
+      if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.style.opacity = '0.5';
+      }
+    } else {
+      if (aviso) aviso.style.display = 'none';
+      if (btnSalvar) {
+        btnSalvar.disabled = false;
+        btnSalvar.style.opacity = '1';
+      }
     }
 
     document.getElementById('modal-pipeline-nome').value = '';
@@ -2780,7 +3037,6 @@ async function salvarNovoPipeline() {
   const produtoIdVal = document.getElementById('modal-pipeline-produto-id').value;
   const padrao = document.getElementById('modal-pipeline-padrao').checked;
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
 
   if (!nome) {
     alert('Informe o nome do pipeline.');
@@ -2794,12 +3050,9 @@ async function salvarNovoPipeline() {
       produto_id: produtoIdVal ? parseInt(produtoIdVal) : null,
       padrao
     };
-    const res = await fetch('/pipelines', {
+    const res = await apiFetch('/pipelines', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': String(uid || '')
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
@@ -2817,12 +3070,10 @@ async function salvarNovoPipeline() {
 async function excluirPipeline(pipelineId) {
   if (!confirm('Deseja realmente excluir este pipeline e suas etapas?')) return;
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
 
   try {
-    const res = await fetch(`/pipelines/${pipelineId}?empresa_id=${empresaId}`, {
-      method: 'DELETE',
-      headers: { 'X-User-Id': String(uid || '') }
+    const res = await apiFetch(`/pipelines/${pipelineId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2851,7 +3102,6 @@ async function salvarEtapaPipeline() {
   const nome = document.getElementById('modal-etapa-nome').value.trim();
   const cor = document.getElementById('modal-etapa-cor').value;
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
 
   if (!nome) {
     alert('Informe o nome da etapa.');
@@ -2860,12 +3110,9 @@ async function salvarEtapaPipeline() {
 
   try {
     const payload = { nome, cor };
-    const res = await fetch(`/pipelines/${pipelineId}/etapas?empresa_id=${empresaId}`, {
+    const res = await apiFetch(`/pipelines/${pipelineId}/etapas?empresa_id=${empresaId}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': String(uid || '')
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
@@ -2882,7 +3129,6 @@ async function salvarEtapaPipeline() {
 
 async function moverEtapaOrdem(pipelineId, etapaId, delta) {
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
   const p = pipelinesCache.find(x => x.id === pipelineId);
   if (!p || !p.etapas) return;
 
@@ -2899,15 +3145,18 @@ async function moverEtapaOrdem(pipelineId, etapaId, delta) {
   const novaOrdemIds = etapas.map(e => e.id);
 
   try {
-    const res = await fetch(`/pipelines/${pipelineId}/etapas/reordenar?empresa_id=${empresaId}`, {
+    const res = await apiFetch(`/pipelines/${pipelineId}/etapas/reordenar?empresa_id=${empresaId}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': String(uid || '')
-      },
-      body: JSON.stringify(novaOrdemIds)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ordem_ids: novaOrdemIds,
+        usuario_id: usuarioAtual ? usuarioAtual.id : null
+      })
     });
-    if (!res.ok) throw new Error('Falha ao reordenar etapas');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Falha ao reordenar etapas');
+    }
     carregarPipelinesAdmin();
     carregarPipelinesKanban();
   } catch (e) {
@@ -2918,12 +3167,10 @@ async function moverEtapaOrdem(pipelineId, etapaId, delta) {
 async function excluirEtapaPipeline(pipelineId, etapaId) {
   if (!confirm('Deseja realmente excluir esta etapa? Negócios vinculados a ela serão movidos para a primeira etapa do pipeline.')) return;
   const empresaId = obterEmpresaAtivaId();
-  const uid = usuarioAtual ? usuarioAtual.id : null;
 
   try {
-    const res = await fetch(`/pipelines/${pipelineId}/etapas/${etapaId}?empresa_id=${empresaId}`, {
-      method: 'DELETE',
-      headers: { 'X-User-Id': String(uid || '') }
+    const res = await apiFetch(`/pipelines/${pipelineId}/etapas/${etapaId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2999,8 +3246,8 @@ async function abrirModalCriarProposta() {
   const empresaId = obterEmpresaAtivaId();
   try {
     const [resCli, resProd] = await Promise.all([
-      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
-      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+      apiFetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      apiFetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
     ]);
 
     clientesParaPropostaCache = resCli.clientes || [];
@@ -3056,8 +3303,8 @@ async function carregarDadosFormularioPropostaTela() {
   const empresaId = obterEmpresaAtivaId();
   try {
     const [resCli, resProd] = await Promise.all([
-      fetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
-      fetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
+      apiFetch(`/clientes?empresa_id=${empresaId}`).then(r => r.json()).catch(() => ({ clientes: [] })),
+      apiFetch(`/produtos?empresa_id=${empresaId}&ativo=true`).then(r => r.json()).catch(() => ({ produtos: [] }))
     ]);
 
     clientesParaPropostaCache = resCli.clientes || [];
@@ -4551,7 +4798,7 @@ async function carregarEquipe() {
   const empresaId = obterEmpresaAtivaId();
 
   try {
-    const res = await fetch(`/usuarios/equipe?empresa_id=${empresaId}`);
+    const res = await apiFetch(`/usuarios/equipe?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar equipe');
     const data = await res.json();
     equipeCarregada = data.usuarios || [];
@@ -4573,39 +4820,131 @@ function renderizarEquipe(usuarios) {
     return;
   }
 
+  const isAdmin = usuarioAtual && (usuarioAtual.perfil === 'admin' || usuarioAtual.perfil === 'master');
+
   container.innerHTML = usuarios.map(u => `
     <div class="kb-row">
-      <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700;">${(u.nome || 'U').substring(0,2).toUpperCase()}</div>
+      <div class="kb-icon" style="background:#534AB7; color:white; font-size:11px; font-weight:700;">${escapeHtml((u.nome || 'U').substring(0,2).toUpperCase())}</div>
       <div class="kb-info">
-        <div class="kb-name">${u.nome}</div>
-        <div class="kb-meta">${u.email} · Perfil: <strong>${(u.perfil || 'funcionario').toUpperCase()}</strong></div>
+        <div class="kb-name">${escapeHtml(u.nome || '')}</div>
+        <div class="kb-meta">${escapeHtml(u.email || '')} · Perfil: <strong>${escapeHtml((u.perfil || 'funcionario').toUpperCase())}</strong></div>
       </div>
-      <div class="kb-status">
+      <div class="kb-status" style="display:flex; align-items:center; gap:8px;">
         <span class="contract-status-badge ${u.status === 'ativo' ? 'cs-signed' : 'cs-pending'}">
-          ${(u.status || 'ativo').toUpperCase()}
+          ${escapeHtml((u.status || 'ativo').toUpperCase())}
         </span>
+        ${isAdmin ? `
+          <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarEquipePorId(${u.id})">Editar</button>
+          <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="removerMembroEquipe(${u.id})">Excluir</button>
+        ` : ''}
       </div>
     </div>
   `).join('');
 }
 
-function abrirModalMembroEquipe() { document.getElementById('modal-membro-equipe').classList.add('active'); }
-function fecharModalMembroEquipe() { document.getElementById('modal-membro-equipe').classList.remove('active'); }
+function abrirModalMembroEquipe(usuario = null) {
+  const modal = document.getElementById('modal-membro-equipe');
+  if (modal) modal.classList.add('active');
+
+  const tituloEl = document.getElementById('modal-membro-equipe-titulo');
+  const btnEl = document.getElementById('modal-membro-equipe-btn-salvar');
+  const senhaLabel = document.getElementById('equipe-novo-senha-label');
+  const statusContainer = document.getElementById('equipe-status-container');
+
+  if (usuario) {
+    if (tituloEl) tituloEl.textContent = 'Editar Colaborador';
+    if (btnEl) btnEl.textContent = 'Salvar Alterações';
+    if (senhaLabel) senhaLabel.textContent = 'Nova Senha (Opcional)';
+    if (statusContainer) statusContainer.style.display = 'block';
+
+    document.getElementById('equipe-membro-id').value = usuario.id;
+    document.getElementById('equipe-novo-nome').value = usuario.nome || '';
+    document.getElementById('equipe-novo-email').value = usuario.email || '';
+    document.getElementById('equipe-novo-senha').value = '';
+    document.getElementById('equipe-novo-senha').placeholder = 'Deixe em branco para não alterar';
+    document.getElementById('equipe-novo-perfil').value = usuario.perfil || 'funcionario';
+    document.getElementById('equipe-membro-status').value = usuario.status || 'ativo';
+  } else {
+    if (tituloEl) tituloEl.textContent = 'Adicionar Colaborador à Equipe';
+    if (btnEl) btnEl.textContent = 'Cadastrar Colaborador';
+    if (senhaLabel) senhaLabel.textContent = 'Senha *';
+    if (statusContainer) statusContainer.style.display = 'none';
+
+    document.getElementById('equipe-membro-id').value = '';
+    document.getElementById('equipe-novo-nome').value = '';
+    document.getElementById('equipe-novo-email').value = '';
+    document.getElementById('equipe-novo-senha').value = '';
+    document.getElementById('equipe-novo-senha').placeholder = 'Mínimo 4 caracteres';
+    document.getElementById('equipe-novo-perfil').value = 'funcionario';
+    document.getElementById('equipe-membro-status').value = 'ativo';
+  }
+}
+
+function abrirModalEditarEquipePorId(usuarioId) {
+  const usuario = equipeCarregada.find(u => u.id === usuarioId);
+  if (usuario) {
+    abrirModalMembroEquipe(usuario);
+  }
+}
+
+function fecharModalMembroEquipe() {
+  const modal = document.getElementById('modal-membro-equipe');
+  if (modal) modal.classList.remove('active');
+}
 
 async function salvarNovoColaborador() {
+  const membroId = document.getElementById('equipe-membro-id').value;
   const nome = document.getElementById('equipe-novo-nome').value.trim();
   const email = document.getElementById('equipe-novo-email').value.trim();
   const senha = document.getElementById('equipe-novo-senha').value.trim();
   const perfil = document.getElementById('equipe-novo-perfil').value;
+  const status = document.getElementById('equipe-membro-status').value;
   const empresaId = obterEmpresaAtivaId();
 
+  if (membroId) {
+    // Modo Edição (PUT)
+    if (!nome || !email) {
+      alert('Preencha os campos obrigatórios (Nome e E-mail).');
+      return;
+    }
+
+    try {
+      const payload = {
+        empresa_id: empresaId,
+        nome,
+        email,
+        perfil,
+        status
+      };
+      if (senha) {
+        payload.senha = senha;
+      }
+
+      const res = await apiFetch(`/usuarios/equipe/${membroId}?empresa_id=${empresaId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar colaborador');
+
+      mostrarToast('Colaborador atualizado com sucesso!', 'success');
+      fecharModalMembroEquipe();
+      carregarEquipe();
+    } catch (err) {
+      alert('Erro: ' + err.message);
+    }
+    return;
+  }
+
+  // Modo Criação (POST)
   if (!nome || !email || !senha) {
     alert('Preencha todos os campos obrigatórios.');
     return;
   }
 
   try {
-    const res = await fetch('/usuarios/equipe', {
+    const res = await apiFetch(`/usuarios/equipe?empresa_id=${empresaId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4616,10 +4955,27 @@ async function salvarNovoColaborador() {
         perfil: perfil
       })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || 'Erro ao cadastrar');
-    alert('✓ Colaborador cadastrado com sucesso!');
+    mostrarToast('Colaborador cadastrado com sucesso!', 'success');
     fecharModalMembroEquipe();
+    carregarEquipe();
+  } catch (err) {
+    alert('Erro: ' + err.message);
+  }
+}
+
+async function removerMembroEquipe(usuarioId) {
+  if (!confirm('Deseja realmente remover este colaborador da equipe?')) return;
+  const empresaId = obterEmpresaAtivaId();
+
+  try {
+    const res = await apiFetch(`/usuarios/equipe/${usuarioId}?empresa_id=${empresaId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || 'Erro ao remover colaborador');
+    mostrarToast('Colaborador removido com sucesso!', 'success');
     carregarEquipe();
   } catch (err) {
     alert('Erro: ' + err.message);
@@ -4804,10 +5160,11 @@ document.addEventListener('DOMContentLoaded', () => {
 <div class="modal-overlay" id="modal-membro-equipe">
   <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg);">
     <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px;">
-      <div class="modal-title" style="color:var(--text); font-weight:700; font-family:'Syne',sans-serif;">Adicionar Colaborador à Equipe</div>
+      <div class="modal-title" id="modal-membro-equipe-titulo" style="color:var(--text); font-weight:700; font-family:'Syne',sans-serif;">Adicionar Colaborador à Equipe</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalMembroEquipe()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px;">
+      <input type="hidden" id="equipe-membro-id" value="" />
       <div class="config-field" style="margin-bottom:14px;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome Completo *</div>
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-nome" placeholder="Ex: Maria Oliveira" required />
@@ -4817,7 +5174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-email" type="email" placeholder="maria@empresa.com" required />
       </div>
       <div class="config-field" style="margin-bottom:14px;">
-        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Senha Inicial *</div>
+        <div class="cf-label" id="equipe-novo-senha-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Senha *</div>
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-novo-senha" type="password" placeholder="Mínimo 4 caracteres" required />
       </div>
       <div class="config-field" style="margin-bottom:14px;">
@@ -4828,10 +5185,17 @@ document.addEventListener('DOMContentLoaded', () => {
         </select>
         <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">* Acesso restrito aos dados deste ambiente. Clientes são gerenciados exclusivamente pelo CRM.</div>
       </div>
+      <div class="config-field" id="equipe-status-container" style="margin-bottom:14px; display:none;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Status da Conta *</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="equipe-membro-status">
+          <option value="ativo">Ativo</option>
+          <option value="inativo">Inativo</option>
+        </select>
+      </div>
     </div>
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" style="background:transparent; color:var(--text); border-color:var(--border);" onclick="fecharModalMembroEquipe()">Cancelar</button>
-      <button class="btn-green" onclick="salvarNovoColaborador()">Cadastrar Colaborador</button>
+      <button class="btn-green" id="modal-membro-equipe-btn-salvar" onclick="salvarNovoColaborador()">Cadastrar Colaborador</button>
     </div>
   </div>
 </div>
@@ -4961,22 +5325,24 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
-<!-- MODAL NOVO NEGÓCIO (PARTE 22 & 23) -->
+<!-- MODAL NOVO / EDITAR NEGÓCIO (PARTE 22 & 23) -->
 <div class="modal-overlay" id="modal-negocio" style="display:none; align-items:center; justify-content:center; z-index:9999;">
   <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
     <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif;">Nova Oportunidade (Negócio)</div>
+      <div class="modal-title" id="modal-negocio-titulo" style="font-weight:700; font-family:'Syne',sans-serif;">Nova Oportunidade (Negócio)</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalNovoNegocio()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px;">
+      <input type="hidden" id="modal-negocio-id" value="" />
       <div class="config-field" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted);">Cliente / Lead *</div>
-          <a href="javascript:void(0)" onclick="abrirModalCliente()" style="font-size:11px; color:var(--green); text-decoration:none; font-weight:600;">+ Novo Cliente</a>
+          <a href="javascript:void(0)" id="modal-negocio-novo-cliente-link" onclick="abrirModalCliente()" style="font-size:11px; color:var(--green); text-decoration:none; font-weight:600;">+ Novo Cliente</a>
         </div>
         <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-cliente-id">
           <option value="">Carregando clientes...</option>
         </select>
+        <div id="modal-negocio-cliente-readonly" style="display:none; padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; font-weight:600;"></div>
       </div>
       <div class="config-field" style="margin-bottom:14px;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Produto / Serviço</div>
@@ -4984,17 +5350,22 @@ document.addEventListener('DOMContentLoaded', () => {
           <option value="">Sem produto específico</option>
         </select>
       </div>
+      <div class="config-field" id="modal-negocio-etapa-container" style="display:none; margin-bottom:14px;">
+        <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Etapa do Funil *</div>
+        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-etapa-id">
+        </select>
+      </div>
       <div class="config-field" style="margin-bottom:14px;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Valor Estimado (R$)</div>
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-negocio-valor" type="number" step="0.01" placeholder="0.00" />
       </div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+      <div id="modal-negocio-aviso-auto" style="font-size:11px; color:var(--text-muted); line-height:1.4;">
         * O negócio será alocado automaticamente na primeira etapa do pipeline dedicado ao produto (se houver) ou no pipeline padrão da empresa.
       </div>
     </div>
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" onclick="fecharModalNovoNegocio()">Cancelar</button>
-      <button class="btn-green" onclick="salvarNovoNegocio()">Criar Negócio</button>
+      <button class="btn-green" id="modal-negocio-btn-salvar" onclick="salvarNovoNegocio()">Criar Negócio</button>
     </div>
   </div>
 </div>
@@ -5007,6 +5378,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalNovoPipeline()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px;">
+      <div id="modal-pipeline-aviso" style="display:none; margin-bottom:14px; padding:10px 14px; background:rgba(239,68,68,0.1); border:1px solid #ef4444; border-radius:6px; color:#ef4444; font-size:12px;"></div>
       <div class="config-field" style="margin-bottom:14px;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome do Pipeline *</div>
         <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-pipeline-nome" placeholder="Ex: Funil Enterprise, Suporte N2..." required />
@@ -5025,7 +5397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" onclick="fecharModalNovoPipeline()">Cancelar</button>
-      <button class="btn-green" onclick="salvarNovoPipeline()">Salvar Pipeline</button>
+      <button class="btn-green" id="modal-pipeline-btn-salvar" onclick="salvarNovoPipeline()">Salvar Pipeline</button>
     </div>
   </div>
 </div>

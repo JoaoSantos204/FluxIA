@@ -69,11 +69,8 @@ def salvar_avaliacao_no_banco(
                 {ph}, {ph}, {ph},
                 {ph}, {ph}, {ph},
                 {ph}
-            )
+            ) RETURNING id
         """
-        from app.database.database import USAR_POSTGRES
-        if USAR_POSTGRES:
-            query += " RETURNING id"
 
         valores = (
             telemetria_id, empresa_id, pergunta, resposta,
@@ -83,11 +80,8 @@ def salvar_avaliacao_no_banco(
         )
 
         cursor.execute(query, valores)
-        if USAR_POSTGRES:
-            res = cursor.fetchone()
-            eval_id = res["id"] if isinstance(res, dict) else res[0]
-        else:
-            eval_id = cursor.lastrowid
+        res = cursor.fetchone()
+        eval_id = res["id"] if isinstance(res, dict) else res[0]
 
         conexao.commit()
         logger.info(f"[AIEvaluation] Avaliação salva #{eval_id} (Fidelidade: {score_fid}, Alucinação: {possivel_alucinacao})")

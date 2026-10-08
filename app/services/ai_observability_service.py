@@ -74,12 +74,8 @@ def registrar_telemetria(
                 {ph}, {ph}, {ph},
                 {ph}, {ph}, {ph},
                 {ph}, {ph}
-            )
+            ) RETURNING id
         """
-        # Em Postgres usa RETURNING id
-        from app.database.database import USAR_POSTGRES
-        if USAR_POSTGRES:
-            query += " RETURNING id"
 
         valores = (
             empresa_id, canal, session_id, vendor, modelo,
@@ -89,11 +85,8 @@ def registrar_telemetria(
         )
 
         cursor.execute(query, valores)
-        if USAR_POSTGRES:
-            res = cursor.fetchone()
-            telemetria_id = res["id"] if isinstance(res, dict) else res[0]
-        else:
-            telemetria_id = cursor.lastrowid
+        res = cursor.fetchone()
+        telemetria_id = res["id"] if isinstance(res, dict) else res[0]
 
         conexao.commit()
         logger.info(f"[AIObservability] Telemetria registrada #{telemetria_id}: {vendor}/{modelo} ({latencia_ms}ms, {tokens_total} tok, ${custo} USD)")

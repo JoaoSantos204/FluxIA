@@ -302,15 +302,11 @@ def cadastrar_empresa(nome: str, cnpj_ou_identificador: str | None = None) -> di
         cursor.execute(f"""
             INSERT INTO empresas (nome, cnpj_ou_identificador, data_criacao)
             VALUES ({ph}, {ph}, {ph})
+            RETURNING id
         """, (nome, cnpj_ou_identificador or None, data_criacao))
+        row = cursor.fetchone()
+        empresa_id = row["id"] if row else None
         conexao.commit()
-
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            empresa_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM empresas WHERE nome = {ph} ORDER BY id DESC LIMIT 1", (nome,))
-            row = cursor.fetchone()
-            empresa_id = row["id"] if row else None
 
         # Cria configuração padrão de suporte
         if empresa_id:

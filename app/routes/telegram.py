@@ -463,9 +463,18 @@ async def telegram_webhook(
             config_suporte = obter_configuracao_empresa(empresa_id=empresa_id)
             telefone = config_suporte.get("numero_suporte_humano", "(11) 99999-9999")
             orientacao = config_suporte.get("mensagem_suporte", "Entre em contato com nossa equipe.")
-            msg_suporte = f"📞 **Suporte e Atendimento:**\n\n{orientacao}\n📱 Contato: `{telefone}`"
+            msg_suporte = f"📞 **Canais de Suporte Humano:**\n\n{orientacao}\n📱 Contato: `{telefone}`"
             enviar_mensagem_telegram(chat_id, msg_suporte, empresa_id=empresa_id)
             salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False, empresa_id=empresa_id)
+            return {"status": "ok"}
+
+        if comando in ["/perfil", "perfil"]:
+            from app.services.user_service import buscar_usuario_por_telegram
+            user = buscar_usuario_por_telegram(chat_id)
+            perfil_nome = (user.get("perfil") if user else "cliente").upper()
+            msg_perfil = f"👤 **Seu Perfil no FluxIA:** `{perfil_nome}`"
+            enviar_mensagem_telegram(chat_id, msg_perfil, empresa_id=empresa_id)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_perfil, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
         # 3. Estado 'aguardando dados de contato' com entendimento de contexto
@@ -607,12 +616,9 @@ async def telegram_webhook(
             cursor.execute(f"""
                 INSERT INTO negocios (empresa_id, cliente_id, estagio)
                 VALUES ({ph}, {ph}, 'novo')
+                RETURNING id
             """, (empresa_id, cliente_id))
-            if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-                negocio_id = cursor.lastrowid
-            else:
-                cursor.execute(f"SELECT id FROM negocios WHERE cliente_id = {ph} ORDER BY id DESC LIMIT 1", (cliente_id,))
-                negocio_id = cursor.fetchone()["id"]
+            negocio_id = cursor.fetchone()["id"]
             estagio_atual = "novo"
             produto_atual_id = None
         else:
@@ -808,7 +814,7 @@ def assumir_conversa_atendente(chat_id: str, dados: AssumirAtendimentoRequest):
     ph = _placeholder()
     emp_id = dados.empresa_id or 1
     try:
-        # UPSERT compatível com SQLite e Postgres
+        # Atualiza status para humano e vincula atendente
         cursor.execute(f"SELECT chat_id FROM conversas_telegram WHERE chat_id = {ph}", (str(chat_id),))
         existe = cursor.fetchone()
 

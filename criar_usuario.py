@@ -5,13 +5,13 @@ def inserir_usuario():
     conn = conectar()
     cursor = conn.cursor()
     
-    # Gera a data e hora atual no formato padrão do SQLite
+    # Data e hora atual
     data_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
         cursor.execute("""
             INSERT INTO usuarios (nome, email, empresa_id, senha_hash, data_criacao)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, ("Joao", "joao2012vr@gmail.com", 1, "hash_senha_teste_123", data_atual))
         
         conn.commit()

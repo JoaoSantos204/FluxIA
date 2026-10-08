@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Query, Body, Header, Request
 from pydantic import BaseModel
 
-from app.database.database import conectar, _cursor, _placeholder, USAR_POSTGRES
-from app.services.security_service import validar_perfil_admin_ou_master
+from app.database.database import conectar, _cursor, _placeholder
+from app.services.security_service import validar_perfil_admin_ou_master, exigir_perfil
 from app.services.document_service import salvar_e_indexar_documento_texto
 
 logger = logging.getLogger(__name__)
@@ -266,63 +266,66 @@ def listar_produtos(empresa_id: int = Query(1), apenas_ativos: bool = Query(Fals
 
 @router.post("/produtos", status_code=status.HTTP_201_CREATED)
 def criar_produto(dados: ProdutoCreate, request: Request = None):
-    uid = dados.usuario_id
-    if not uid and request:
-        h_uid = request.headers.get("X-User-Id")
-        if h_uid and h_uid.isdigit():
-            uid = int(h_uid)
-    if uid:
-        try:
-            validar_perfil_admin_ou_master(uid)
-        except Exception:
-            pass
+    exigir_perfil(request, dados.empresa_id, ["admin", "funcionario", "master"])
+
+    nome_limpo = dados.nome.strip()
+    if not nome_limpo:
+        raise HTTPException(status_code=400, detail="Nome do produto é obrigatório.")
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        # Unicidade de nome por empresa
+        cursor.execute(f"""
+            SELECT id FROM produtos
+            WHERE empresa_id = {ph} AND LOWER(TRIM(nome)) = {ph}
+        """, (dados.empresa_id, nome_limpo.lower()))
+        if cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um produto com este nome.")
+
         cursor.execute(f"""
             INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
             VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
-            { 'RETURNING id' if USAR_POSTGRES else '' }
-        """, (dados.empresa_id, dados.nome, dados.descricao, float(dados.preco or 0.0), dados.ativo))
+            RETURNING id
+        """, (dados.empresa_id, nome_limpo, dados.descricao, float(dados.preco or 0.0), dados.ativo))
 
-        prod_id = None
-        if USAR_POSTGRES:
-            row = cursor.fetchone()
-            if row:
-                prod_id = row["id"] if isinstance(row, dict) else row[0]
-        else:
-            prod_id = cursor.lastrowid
-
+        prod_id = cursor.fetchone()["id"]
         conexao.commit()
-        return {"id": prod_id, "mensagem": f"Produto '{dados.nome}' cadastrado com sucesso!"}
+        return {"id": prod_id, "mensagem": f"Produto '{nome_limpo}' cadastrado com sucesso!"}
     finally:
         conexao.close()
 
 
 @router.put("/produtos/{produto_id}")
-def atualizar_produto(produto_id: int, dados: ProdutoUpdate, request: Request = None):
-    uid = dados.usuario_id
-    if not uid and request:
-        h_uid = request.headers.get("X-User-Id")
-        if h_uid and h_uid.isdigit():
-            uid = int(h_uid)
-    if uid:
-        try:
-            validar_perfil_admin_ou_master(uid)
-        except Exception:
-            pass
+def atualizar_produto(produto_id: int, dados: ProdutoUpdate, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "funcionario", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        cursor.execute(f"SELECT id FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
         campos = []
         valores = []
         if dados.nome is not None:
+            nome_limpo = dados.nome.strip()
+            if not nome_limpo:
+                raise HTTPException(status_code=400, detail="Nome do produto não pode ser vazio.")
+            # Unicidade de nome por empresa em outro registro
+            cursor.execute(f"""
+                SELECT id FROM produtos
+                WHERE empresa_id = {ph} AND LOWER(TRIM(nome)) = {ph} AND id != {ph}
+            """, (empresa_id, nome_limpo.lower(), produto_id))
+            if cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um produto com este nome.")
+
             campos.append(f"nome = {ph}")
-            valores.append(dados.nome)
+            valores.append(nome_limpo)
+
         if dados.descricao is not None:
             campos.append(f"descricao = {ph}")
             valores.append(dados.descricao)
@@ -336,9 +339,9 @@ def atualizar_produto(produto_id: int, dados: ProdutoUpdate, request: Request = 
         if not campos:
             return {"mensagem": "Nenhum campo para atualizar."}
 
-        valores.append(produto_id)
+        valores.extend([produto_id, empresa_id])
         cursor.execute(f"""
-            UPDATE produtos SET {', '.join(campos)} WHERE id = {ph}
+            UPDATE produtos SET {', '.join(campos)} WHERE id = {ph} AND empresa_id = {ph}
         """, tuple(valores))
 
         conexao.commit()
@@ -348,30 +351,59 @@ def atualizar_produto(produto_id: int, dados: ProdutoUpdate, request: Request = 
 
 
 @router.patch("/produtos/{produto_id}/toggle-ativo")
-def alternar_ativo_produto(produto_id: int, usuario_id: Optional[int] = Query(None), request: Request = None):
-    uid = usuario_id
-    if not uid and request:
-        h_uid = request.headers.get("X-User-Id")
-        if h_uid and h_uid.isdigit():
-            uid = int(h_uid)
-    if uid:
-        try:
-            validar_perfil_admin_ou_master(uid)
-        except Exception:
-            pass
+def alternar_ativo_produto(produto_id: int, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "funcionario", "master"])
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"SELECT id, ativo, nome FROM produtos WHERE id = {ph}", (produto_id,))
+        cursor.execute(f"SELECT id, ativo, nome FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
         prod = cursor.fetchone()
         if not prod:
             raise HTTPException(status_code=404, detail="Produto não encontrado.")
 
         novo_status = not bool(prod["ativo"])
-        cursor.execute(f"UPDATE produtos SET ativo = {ph} WHERE id = {ph}", (novo_status, produto_id))
+        cursor.execute(f"UPDATE produtos SET ativo = {ph} WHERE id = {ph} AND empresa_id = {ph}", (novo_status, produto_id, empresa_id))
         conexao.commit()
         return {"mensagem": f"Produto '{prod['nome']}' agora está {'ativo' if novo_status else 'inativo'}.", "ativo": novo_status}
+    finally:
+        conexao.close()
+
+
+@router.delete("/produtos/{produto_id}")
+def excluir_produto(produto_id: int, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"SELECT id, nome FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+        prod = cursor.fetchone()
+        if not prod:
+            raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+        cursor.execute(f"SELECT COUNT(*) as qtd FROM negocios WHERE produto_id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+        qtd_negocios = cursor.fetchone()["qtd"]
+
+        cursor.execute(f"SELECT COUNT(*) as qtd FROM propostas WHERE produto_id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+        qtd_propostas = cursor.fetchone()["qtd"]
+
+        if qtd_negocios > 0 or qtd_propostas > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Não é possível excluir o produto pois existem {qtd_negocios} negócio(s) e {qtd_propostas} proposta(s) vinculados a ele. Sugerimos desativar o produto."
+            )
+
+        # Se só houver o pipeline do produto (sem negócios): excluir etapas, pipeline e o produto
+        cursor.execute(f"""
+            DELETE FROM etapas_pipeline 
+            WHERE pipeline_id IN (SELECT id FROM pipelines WHERE produto_id = {ph} AND empresa_id = {ph})
+        """, (produto_id, empresa_id))
+        cursor.execute(f"DELETE FROM pipelines WHERE produto_id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+        cursor.execute(f"DELETE FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, empresa_id))
+
+        conexao.commit()
+        return {"sucesso": True, "mensagem": f"Produto '{prod['nome']}' e seu pipeline foram excluídos com sucesso."}
     finally:
         conexao.close()
 
@@ -408,25 +440,19 @@ def listar_clientes(empresa_id: int = Query(1), busca: Optional[str] = Query(Non
 
 
 @router.post("/clientes", status_code=status.HTTP_201_CREATED)
-def criar_cliente(dados: ClienteCreate):
+def criar_cliente(dados: ClienteCreate, request: Request = None):
+    exigir_perfil(request, dados.empresa_id, ["admin", "funcionario", "master"])
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        if USAR_POSTGRES:
-            cursor.execute(f"""
-                INSERT INTO clientes (empresa_id, nome, telefone, email, telegram_chat_id, origem)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                RETURNING id
-            """, (dados.empresa_id, dados.nome, dados.telefone, dados.email, dados.telegram_chat_id, dados.origem))
-            row = cursor.fetchone()
-            novo_id = row["id"] if isinstance(row, dict) else row[0]
-        else:
-            cursor.execute(f"""
-                INSERT INTO clientes (empresa_id, nome, telefone, email, telegram_chat_id, origem)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-            """, (dados.empresa_id, dados.nome, dados.telefone, dados.email, dados.telegram_chat_id, dados.origem))
-            novo_id = cursor.lastrowid
+        cursor.execute(f"""
+            INSERT INTO clientes (empresa_id, nome, telefone, email, telegram_chat_id, origem)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
+        """, (dados.empresa_id, dados.nome, dados.telefone, dados.email, dados.telegram_chat_id, dados.origem))
+        row = cursor.fetchone()
+        novo_id = row["id"] if isinstance(row, dict) else row[0]
 
         conexao.commit()
         return {"id": novo_id, "mensagem": f"Cliente '{dados.nome}' cadastrado com sucesso!"}
@@ -435,15 +461,15 @@ def criar_cliente(dados: ClienteCreate):
 
 
 @router.get("/clientes/{cliente_id}")
-def obter_cliente(cliente_id: int):
+def obter_cliente(cliente_id: int, empresa_id: int = Query(1)):
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
         cursor.execute(f"""
             SELECT id, empresa_id, nome, telefone, email, telegram_chat_id, origem, criado_em
-            FROM clientes WHERE id = {ph}
-        """, (cliente_id,))
+            FROM clientes WHERE id = {ph} AND empresa_id = {ph}
+        """, (cliente_id, empresa_id))
         cliente = cursor.fetchone()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente não encontrado.")
@@ -454,9 +480,9 @@ def obter_cliente(cliente_id: int):
             FROM negocios n
             LEFT JOIN etapas_pipeline ep ON n.etapa_id = ep.id
             LEFT JOIN produtos p ON n.produto_id = p.id
-            WHERE n.cliente_id = {ph}
+            WHERE n.cliente_id = {ph} AND n.empresa_id = {ph}
             ORDER BY n.id DESC
-        """, (cliente_id,))
+        """, (cliente_id, empresa_id))
         negocios = cursor.fetchall()
 
         res = dict(cliente)
@@ -467,11 +493,16 @@ def obter_cliente(cliente_id: int):
 
 
 @router.put("/clientes/{cliente_id}")
-def atualizar_cliente(cliente_id: int, dados: ClienteUpdate):
+def atualizar_cliente(cliente_id: int, dados: ClienteUpdate, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "funcionario", "master"])
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        cursor.execute(f"SELECT id FROM clientes WHERE id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+
         campos = []
         valores = []
         if dados.nome is not None:
@@ -493,10 +524,92 @@ def atualizar_cliente(cliente_id: int, dados: ClienteUpdate):
         if not campos:
             return {"mensagem": "Nenhum dado para atualizar."}
 
-        valores.append(cliente_id)
-        cursor.execute(f"UPDATE clientes SET {', '.join(campos)} WHERE id = {ph}", tuple(valores))
+        valores.extend([cliente_id, empresa_id])
+        cursor.execute(f"UPDATE clientes SET {', '.join(campos)} WHERE id = {ph} AND empresa_id = {ph}", tuple(valores))
         conexao.commit()
         return {"mensagem": "Cliente atualizado com sucesso."}
+    finally:
+        conexao.close()
+
+
+@router.delete("/clientes/{cliente_id}")
+def excluir_cliente(cliente_id: int, request: Request = None, empresa_id: int = Query(1), confirmar: bool = Query(False)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"SELECT id, nome FROM clientes WHERE id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        cli = cursor.fetchone()
+        if not cli:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+
+        # Bloqueia se existir contrato assinado
+        cursor.execute(f"""
+            SELECT COUNT(*) as qtd FROM contratos c
+            JOIN negocios n ON c.negocio_id = n.id
+            WHERE (n.cliente_id = {ph} OR c.cliente_id = {ph}) AND c.status = 'assinado'
+        """, (cliente_id, cliente_id))
+        if cursor.fetchone()["qtd"] > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Não é possível excluir o cliente pois existem contratos assinados vinculados a ele."
+            )
+
+        cursor.execute(f"SELECT COUNT(*) as qtd FROM negocios WHERE cliente_id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        qtd_neg = cursor.fetchone()["qtd"]
+
+        cursor.execute(f"SELECT COUNT(*) as qtd FROM propostas WHERE cliente_id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        qtd_prop = cursor.fetchone()["qtd"]
+
+        cursor.execute(f"""
+            SELECT COUNT(*) as qtd FROM contratos c
+            JOIN negocios n ON c.negocio_id = n.id
+            WHERE (n.cliente_id = {ph} OR c.cliente_id = {ph}) AND n.empresa_id = {ph}
+        """, (cliente_id, cliente_id, empresa_id))
+        qtd_cont = cursor.fetchone()["qtd"]
+
+        if not confirmar and (qtd_neg > 0 or qtd_prop > 0 or qtd_cont > 0):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Este cliente possui {qtd_neg} negócio(s), {qtd_prop} proposta(s) e {qtd_cont} contrato(s) que também serão excluídos. Confirme a exclusão para prosseguir."
+            )
+
+        # Buscar IDs de contratos e propostas vinculados
+        cursor.execute(f"""
+            SELECT c.id FROM contratos c
+            JOIN negocios n ON c.negocio_id = n.id
+            WHERE (n.cliente_id = {ph} OR c.cliente_id = {ph})
+        """, (cliente_id, cliente_id))
+        contratos_ids = [r["id"] for r in cursor.fetchall()]
+
+        cursor.execute(f"SELECT id FROM propostas WHERE cliente_id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        propostas_ids = [r["id"] for r in cursor.fetchall()]
+
+        # Excluir documentos sintéticos e seus chunks
+        if contratos_ids:
+            cursor.execute(f"""
+                DELETE FROM chunks WHERE documento_id IN (
+                    SELECT id FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = ANY({ph})
+                )
+            """, (contratos_ids,))
+            cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = ANY({ph})", (contratos_ids,))
+            cursor.execute(f"DELETE FROM contratos WHERE id = ANY({ph})", (contratos_ids,))
+
+        if propostas_ids:
+            cursor.execute(f"""
+                DELETE FROM chunks WHERE documento_id IN (
+                    SELECT id FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = ANY({ph})
+                )
+            """, (propostas_ids,))
+            cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = ANY({ph})", (propostas_ids,))
+            cursor.execute(f"DELETE FROM propostas WHERE id = ANY({ph})", (propostas_ids,))
+
+        cursor.execute(f"DELETE FROM negocios WHERE cliente_id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+        cursor.execute(f"DELETE FROM clientes WHERE id = {ph} AND empresa_id = {ph}", (cliente_id, empresa_id))
+
+        conexao.commit()
+        return {"sucesso": True, "mensagem": f"Cliente '{cli['nome']}' e seus registros vinculados foram excluídos com sucesso."}
     finally:
         conexao.close()
 
@@ -540,29 +653,34 @@ def listar_pipelines(empresa_id: int = Query(1)):
 
 
 @router.post("/pipelines", status_code=status.HTTP_201_CREATED)
-def criar_pipeline(dados: PipelineCreate):
-    """Cria um novo pipeline para a empresa com etapas personalizadas ou padrão."""
-    if dados.usuario_id:
-        validar_perfil_admin_ou_master(dados.usuario_id)
+def criar_pipeline(dados: PipelineCreate, request: Request = None, empresa_id: int = Query(1)):
+    target_empresa = dados.empresa_id or empresa_id
+    exigir_perfil(request, target_empresa, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        # Validação 1 pipeline por produto e apenas 1 pipeline geral por empresa
+        if dados.produto_id:
+            cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id = {ph}", (target_empresa, dados.produto_id))
+            if cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este produto já possui um pipeline.")
+        else:
+            cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id IS NULL", (target_empresa,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um pipeline Geral para esta empresa.")
+
         # Se for marcado como padrão, desmarca outros pipelines da mesma empresa
         if dados.padrao:
-            cursor.execute(f"UPDATE pipelines SET padrao = {ph} WHERE empresa_id = {ph}", (False, dados.empresa_id))
+            cursor.execute(f"UPDATE pipelines SET padrao = {ph} WHERE empresa_id = {ph}", (False, target_empresa))
 
         cursor.execute(f"""
             INSERT INTO pipelines (empresa_id, nome, produto_id, padrao)
             VALUES ({ph}, {ph}, {ph}, {ph})
-        """, (dados.empresa_id, dados.nome, dados.produto_id, dados.padrao))
-
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            pipe_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} ORDER BY id DESC LIMIT 1", (dados.empresa_id,))
-            pipe_id = cursor.fetchone()["id"]
+            RETURNING id
+        """, (target_empresa, dados.nome, dados.produto_id, dados.padrao))
+        pipe_id = cursor.fetchone()["id"]
 
         # Cria etapas
         etapas_para_criar = dados.etapas or [
@@ -590,21 +708,31 @@ def criar_pipeline(dados: PipelineCreate):
 
 
 @router.patch("/pipelines/{pipeline_id}")
-def atualizar_pipeline(pipeline_id: int, dados: PipelineUpdate):
-    if dados.usuario_id:
-        validar_perfil_admin_ou_master(dados.usuario_id)
+def atualizar_pipeline(pipeline_id: int, dados: PipelineUpdate, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"SELECT id, empresa_id FROM pipelines WHERE id = {ph}", (pipeline_id,))
+        cursor.execute(f"SELECT id, empresa_id, produto_id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
         p = cursor.fetchone()
         if not p:
             raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
 
+        if dados.produto_id is not None:
+            novo_prod_id = dados.produto_id if dados.produto_id > 0 else None
+            if novo_prod_id:
+                cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id = {ph} AND id != {ph}", (empresa_id, novo_prod_id, pipeline_id))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este produto já possui um pipeline.")
+            else:
+                cursor.execute(f"SELECT id FROM pipelines WHERE empresa_id = {ph} AND produto_id IS NULL AND id != {ph}", (empresa_id, pipeline_id))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um pipeline Geral para esta empresa.")
+
         if dados.padrao:
-            cursor.execute(f"UPDATE pipelines SET padrao = {ph} WHERE empresa_id = {ph}", (False, p["empresa_id"]))
+            cursor.execute(f"UPDATE pipelines SET padrao = {ph} WHERE empresa_id = {ph}", (False, empresa_id))
 
         campos = []
         valores = []
@@ -619,8 +747,8 @@ def atualizar_pipeline(pipeline_id: int, dados: PipelineUpdate):
             valores.append(dados.padrao)
 
         if campos:
-            valores.append(pipeline_id)
-            cursor.execute(f"UPDATE pipelines SET {', '.join(campos)} WHERE id = {ph}", tuple(valores))
+            valores.extend([pipeline_id, empresa_id])
+            cursor.execute(f"UPDATE pipelines SET {', '.join(campos)} WHERE id = {ph} AND empresa_id = {ph}", tuple(valores))
             conexao.commit()
 
         return {"sucesso": True, "mensagem": "Pipeline atualizado com sucesso."}
@@ -629,21 +757,20 @@ def atualizar_pipeline(pipeline_id: int, dados: PipelineUpdate):
 
 
 @router.delete("/pipelines/{pipeline_id}")
-def excluir_pipeline(pipeline_id: int, usuario_id: Optional[int] = Query(None)):
-    if usuario_id:
-        validar_perfil_admin_ou_master(usuario_id)
+def excluir_pipeline(pipeline_id: int, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"SELECT id, nome, padrao, empresa_id FROM pipelines WHERE id = {ph}", (pipeline_id,))
+        cursor.execute(f"SELECT id, nome, padrao, empresa_id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
         pipe = cursor.fetchone()
         if not pipe:
             raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
 
         if pipe["padrao"]:
-            cursor.execute(f"SELECT COUNT(*) AS total FROM pipelines WHERE empresa_id = {ph}", (pipe["empresa_id"],))
+            cursor.execute(f"SELECT COUNT(*) AS total FROM pipelines WHERE empresa_id = {ph}", (empresa_id,))
             if cursor.fetchone()["total"] <= 1:
                 raise HTTPException(status_code=400, detail="Não é possível excluir o único pipeline da empresa.")
 
@@ -657,7 +784,8 @@ def excluir_pipeline(pipeline_id: int, usuario_id: Optional[int] = Query(None)):
         if total_negocios > 0:
             raise HTTPException(status_code=400, detail=f"Este pipeline possui {total_negocios} negócio(s) vinculado(s). Mova os negócios antes de excluir.")
 
-        cursor.execute(f"DELETE FROM pipelines WHERE id = {ph}", (pipeline_id,))
+        cursor.execute(f"DELETE FROM etapas_pipeline WHERE pipeline_id = {ph}", (pipeline_id,))
+        cursor.execute(f"DELETE FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
         conexao.commit()
         return {"sucesso": True, "mensagem": f"Pipeline '{pipe['nome']}' excluído com sucesso."}
     finally:
@@ -665,15 +793,14 @@ def excluir_pipeline(pipeline_id: int, usuario_id: Optional[int] = Query(None)):
 
 
 @router.post("/pipelines/{pipeline_id}/etapas")
-def criar_etapa_pipeline(pipeline_id: int, dados: EtapaCreate):
-    if dados.usuario_id:
-        validar_perfil_admin_ou_master(dados.usuario_id)
+def criar_etapa_pipeline(pipeline_id: int, dados: EtapaCreate, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph}", (pipeline_id,))
+        cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
 
@@ -694,14 +821,17 @@ def criar_etapa_pipeline(pipeline_id: int, dados: EtapaCreate):
 
 
 @router.patch("/pipelines/{pipeline_id}/etapas/{etapa_id}")
-def atualizar_etapa_pipeline(pipeline_id: int, etapa_id: int, dados: EtapaUpdate):
-    if dados.usuario_id:
-        validar_perfil_admin_ou_master(dados.usuario_id)
+def atualizar_etapa_pipeline(pipeline_id: int, etapa_id: int, dados: EtapaUpdate, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
+
         campos = []
         valores = []
         if dados.nome is not None:
@@ -726,14 +856,17 @@ def atualizar_etapa_pipeline(pipeline_id: int, etapa_id: int, dados: EtapaUpdate
 
 
 @router.delete("/pipelines/{pipeline_id}/etapas/{etapa_id}")
-def excluir_etapa_pipeline(pipeline_id: int, etapa_id: int, usuario_id: Optional[int] = Query(None)):
-    if usuario_id:
-        validar_perfil_admin_ou_master(usuario_id)
+def excluir_etapa_pipeline(pipeline_id: int, etapa_id: int, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
+
         cursor.execute(f"SELECT COUNT(*) AS total FROM negocios WHERE etapa_id = {ph}", (etapa_id,))
         total = cursor.fetchone()["total"]
         if total > 0:
@@ -747,14 +880,31 @@ def excluir_etapa_pipeline(pipeline_id: int, etapa_id: int, usuario_id: Optional
 
 
 @router.put("/pipelines/{pipeline_id}/etapas/reordenar")
-def reordenar_etapas_pipeline(pipeline_id: int, dados: EtapasReordenarRequest):
-    if dados.usuario_id:
-        validar_perfil_admin_ou_master(dados.usuario_id)
+def reordenar_etapas_pipeline(pipeline_id: int, dados: EtapasReordenarRequest, request: Request = None, empresa_id: int = Query(1)):
+    exigir_perfil(request, empresa_id, ["admin", "master"])
 
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
+        # Verifica pertencimento do pipeline à empresa
+        cursor.execute(f"SELECT id FROM pipelines WHERE id = {ph} AND empresa_id = {ph}", (pipeline_id, empresa_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Pipeline não encontrado.")
+
+        # Busca etapas existentes do pipeline
+        cursor.execute(f"SELECT id FROM etapas_pipeline WHERE pipeline_id = {ph}", (pipeline_id,))
+        etapas_existentes = [r["id"] for r in cursor.fetchall()]
+        set_existentes = set(etapas_existentes)
+        set_recebidos = set(dados.ordem_ids)
+
+        # Validação estrita: sem faltar, sem repetir, sem id de outro pipeline
+        if len(dados.ordem_ids) != len(etapas_existentes) or set_recebidos != set_existentes or len(set_recebidos) != len(dados.ordem_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A lista de etapas para reordenação deve conter exatamente todas as etapas deste pipeline, sem faltar, sem repetir e sem etapas externas."
+            )
+
         for idx, et_id in enumerate(dados.ordem_ids, 1):
             cursor.execute(f"UPDATE etapas_pipeline SET ordem = {ph} WHERE id = {ph} AND pipeline_id = {ph}", (idx, et_id, pipeline_id))
         conexao.commit()
@@ -827,7 +977,8 @@ def listar_negocios(
 
 
 @router.post("/negocios", status_code=status.HTTP_201_CREATED)
-def criar_negocio(dados: NegocioCreate):
+def criar_negocio(dados: NegocioCreate, request: Request = None):
+    exigir_perfil(request, dados.empresa_id, ["admin", "funcionario", "master"])
     """
     Ao criar negócio:
     - Se etapa_id for informado: utiliza-o diretamente.
@@ -894,20 +1045,13 @@ def criar_negocio(dados: NegocioCreate):
             if row_p:
                 pipeline_id_resolvido = row_p["pipeline_id"] if isinstance(row_p, dict) else row_p[0]
 
-        if USAR_POSTGRES:
-            cursor.execute(f"""
-                INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                RETURNING id
-            """, (dados.empresa_id, dados.cliente_id, dados.produto_id, etapa_id, dados.valor_estimado, estagio_nome.lower()))
-            row = cursor.fetchone()
-            novo_id = row["id"] if isinstance(row, dict) else row[0]
-        else:
-            cursor.execute(f"""
-                INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-            """, (dados.empresa_id, dados.cliente_id, dados.produto_id, etapa_id, dados.valor_estimado, estagio_nome.lower()))
-            novo_id = cursor.lastrowid
+        cursor.execute(f"""
+            INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
+        """, (dados.empresa_id, dados.cliente_id, dados.produto_id, etapa_id, dados.valor_estimado, estagio_nome.lower()))
+        row = cursor.fetchone()
+        novo_id = row["id"] if isinstance(row, dict) else row[0]
 
         conexao.commit()
         return {
@@ -923,13 +1067,14 @@ def criar_negocio(dados: NegocioCreate):
 
 
 @router.patch("/negocios/{negocio_id}")
-def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
-    """Permite ao atendente editar manualmente a etapa, valor ou produto do negócio."""
+def atualizar_negocio(negocio_id: int, dados: NegocioUpdate, request: Request = None, empresa_id: int = Query(1)):
+    """Permite editar etapa, valor ou produto do negócio. Se o produto mudar de pipeline, move para a 1ª etapa do novo pipeline."""
+    exigir_perfil(request, empresa_id, ["admin", "funcionario", "master"])
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"SELECT id, etapa_id, estagio, valor_estimado, empresa_id FROM negocios WHERE id = {ph}", (negocio_id,))
+        cursor.execute(f"SELECT id, etapa_id, estagio, valor_estimado, empresa_id, produto_id FROM negocios WHERE id = {ph} AND empresa_id = {ph}", (negocio_id, empresa_id))
         negocio = cursor.fetchone()
         if not negocio:
             raise HTTPException(status_code=404, detail="Negócio não encontrado.")
@@ -938,6 +1083,32 @@ def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
         valores = []
 
         novo_etapa_nome = None
+
+        # Se o produto mudar e o pipeline for outro: move o negócio para a primeira etapa do novo pipeline
+        if dados.produto_id is not None and dados.produto_id != negocio.get("produto_id"):
+            novo_prod = dados.produto_id if dados.produto_id > 0 else None
+            campos.append(f"produto_id = {ph}")
+            valores.append(novo_prod)
+
+            if dados.etapa_id is None:
+                pipe_row = None
+                if novo_prod:
+                    cursor.execute(f"SELECT id FROM pipelines WHERE produto_id = {ph} AND empresa_id = {ph} LIMIT 1", (novo_prod, empresa_id))
+                    pipe_row = cursor.fetchone()
+
+                if not pipe_row:
+                    cursor.execute(f"SELECT id FROM pipelines WHERE produto_id IS NULL AND empresa_id = {ph} LIMIT 1", (empresa_id,))
+                    pipe_row = cursor.fetchone()
+
+                if pipe_row:
+                    cursor.execute(f"SELECT id, nome FROM etapas_pipeline WHERE pipeline_id = {ph} ORDER BY ordem ASC, id ASC LIMIT 1", (pipe_row["id"],))
+                    primeira_et = cursor.fetchone()
+                    if primeira_et:
+                        campos.append(f"etapa_id = {ph}")
+                        valores.append(primeira_et["id"])
+                        campos.append(f"estagio = {ph}")
+                        valores.append(primeira_et["nome"].lower())
+                        novo_etapa_nome = primeira_et["nome"]
 
         if dados.etapa_id is not None:
             cursor.execute(f"SELECT id, nome FROM etapas_pipeline WHERE id = {ph}", (dados.etapa_id,))
@@ -950,7 +1121,7 @@ def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
             valores.append(et_row["nome"].lower())
             novo_etapa_nome = et_row["nome"]
 
-        elif dados.estagio is not None:
+        elif dados.estagio is not None and novo_etapa_nome is None:
             estagio_fmt = dados.estagio.strip().lower()
             cursor.execute(f"""
                 SELECT ep.id, ep.nome
@@ -958,7 +1129,7 @@ def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
                 JOIN pipelines p ON ep.pipeline_id = p.id
                 WHERE p.empresa_id = {ph} AND LOWER(ep.nome) = {ph}
                 ORDER BY ep.id ASC LIMIT 1
-            """, (negocio["empresa_id"], estagio_fmt))
+            """, (empresa_id, estagio_fmt))
             et_row = cursor.fetchone()
             if et_row:
                 campos.append(f"etapa_id = {ph}")
@@ -973,16 +1144,12 @@ def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
             campos.append(f"valor_estimado = {ph}")
             valores.append(dados.valor_estimado)
 
-        if dados.produto_id is not None:
-            campos.append(f"produto_id = {ph}")
-            valores.append(dados.produto_id if dados.produto_id > 0 else None)
-
         if dados.proposta_enviada is not None:
             campos.append(f"proposta_enviada = {ph}")
             valores.append(dados.proposta_enviada)
 
-        valores.append(negocio_id)
-        cursor.execute(f"UPDATE negocios SET {', '.join(campos)} WHERE id = {ph}", tuple(valores))
+        valores.extend([negocio_id, empresa_id])
+        cursor.execute(f"UPDATE negocios SET {', '.join(campos)} WHERE id = {ph} AND empresa_id = {ph}", tuple(valores))
 
         # Se a etapa virou 'fechado', garante criação automática de contrato pendente
         if novo_etapa_nome and novo_etapa_nome.strip().lower() == "fechado":
@@ -1000,14 +1167,55 @@ def atualizar_negocio(negocio_id: int, dados: NegocioUpdate):
 
 
 @router.delete("/negocios/{negocio_id}")
-def excluir_negocio(negocio_id: int):
+def excluir_negocio(negocio_id: int, request: Request = None, empresa_id: int = Query(1)):
+    """Exclui negócio e limpa propostas, contratos e documentos sintéticos associados. Bloqueia se contrato assinado."""
+    exigir_perfil(request, empresa_id, ["admin", "master"])
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     try:
-        cursor.execute(f"DELETE FROM negocios WHERE id = {ph}", (negocio_id,))
+        cursor.execute(f"SELECT id FROM negocios WHERE id = {ph} AND empresa_id = {ph}", (negocio_id, empresa_id))
+        neg = cursor.fetchone()
+        if not neg:
+            raise HTTPException(status_code=404, detail="Negócio não encontrado.")
+
+        # Bloqueia se houver contrato assinado
+        cursor.execute(f"SELECT COUNT(*) as qtd FROM contratos WHERE negocio_id = {ph} AND status = 'assinado'", (negocio_id,))
+        if cursor.fetchone()["qtd"] > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Não é possível excluir o negócio pois possui contratos assinados vinculados."
+            )
+
+        # Buscar IDs de contratos e propostas do negócio
+        cursor.execute(f"SELECT id FROM contratos WHERE negocio_id = {ph}", (negocio_id,))
+        contratos_ids = [r["id"] for r in cursor.fetchall()]
+
+        cursor.execute(f"SELECT id FROM propostas WHERE negocio_id = {ph}", (negocio_id,))
+        propostas_ids = [r["id"] for r in cursor.fetchall()]
+
+        # Excluir documentos sintéticos vinculados e chunks
+        if contratos_ids:
+            cursor.execute(f"""
+                DELETE FROM chunks WHERE documento_id IN (
+                    SELECT id FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = ANY({ph})
+                )
+            """, (contratos_ids,))
+            cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'contrato' AND ref_id = ANY({ph})", (contratos_ids,))
+            cursor.execute(f"DELETE FROM contratos WHERE id = ANY({ph})", (contratos_ids,))
+
+        if propostas_ids:
+            cursor.execute(f"""
+                DELETE FROM chunks WHERE documento_id IN (
+                    SELECT id FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = ANY({ph})
+                )
+            """, (propostas_ids,))
+            cursor.execute(f"DELETE FROM documentos WHERE ref_tipo = 'proposta' AND ref_id = ANY({ph})", (propostas_ids,))
+            cursor.execute(f"DELETE FROM propostas WHERE id = ANY({ph})", (propostas_ids,))
+
+        cursor.execute(f"DELETE FROM negocios WHERE id = {ph} AND empresa_id = {ph}", (negocio_id, empresa_id))
         conexao.commit()
-        return {"sucesso": True, "mensagem": f"Negócio {negocio_id} excluído com sucesso."}
+        return {"sucesso": True, "mensagem": f"Negócio {negocio_id} e seus dados vinculados foram excluídos com sucesso."}
     finally:
         conexao.close()
 
@@ -1126,7 +1334,9 @@ Condições: Contrato fechado com aceite formal do cliente."""
                         conteudo_texto=texto_contrato,
                         tipo_arquivo=".txt",
                         nivel_acesso="interno",
-                        origem="sistema"
+                        origem="sistema",
+                        ref_tipo="contrato",
+                        ref_id=contrato_id
                     )
             except Exception as e:
                 logger.error(f"[Contratos] Erro ao indexar contrato {contrato_id} na base de conhecimento: {e}")
@@ -1225,14 +1435,10 @@ def gerar_e_enviar_proposta(negocio_id: int, dados: GerarPropostaRequest):
         cursor.execute(f"""
             INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario)
             VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            RETURNING id
         """, (negocio_id, neg["empresa_id"], neg["cliente_id"], neg["produto_id"], float(neg["valor_estimado"] or 0), dados.condicoes_pagamento, dados.validade_dias, email_cliente))
 
-        if hasattr(cursor, 'lastrowid') and cursor.lastrowid:
-            proposta_id = cursor.lastrowid
-        else:
-            cursor.execute(f"SELECT id FROM propostas WHERE negocio_id = {ph} ORDER BY id DESC LIMIT 1", (negocio_id,))
-            proposta_id = cursor.fetchone()["id"]
-
+        proposta_id = cursor.fetchone()["id"]
         conexao.commit()
 
         # 2. Gera HTML da Proposta
@@ -1269,7 +1475,9 @@ Status: Emitida para o cliente"""
                 conteudo_texto=texto_estruturado_rag,
                 tipo_arquivo=".html",
                 nivel_acesso="interno",
-                origem="sistema"
+                origem="sistema",
+                ref_tipo="proposta",
+                ref_id=proposta_id
             )
         except Exception as e:
             logger.error(f"[Propostas] Falha ao indexar proposta no RAG: {e}")
@@ -1358,7 +1566,8 @@ def listar_todas_propostas(empresa_id: int = Query(1)):
 
 
 @router.post("/propostas", status_code=status.HTTP_201_CREATED)
-def criar_proposta_direta(dados: PropostaDirectCreate):
+def criar_proposta_direta(dados: PropostaDirectCreate, request: Request = None):
+    exigir_perfil(request, dados.empresa_id, ["admin", "funcionario", "master"])
     """
     Cria uma proposta comercial completa diretamente com campos preenchíveis:
     1. Localiza ou cadastra o cliente automaticamente.
@@ -1411,19 +1620,12 @@ def criar_proposta_direta(dados: PropostaDirectCreate):
                 if cli_existente:
                     cliente_id = cli_existente["id"]
             if not cliente_id:
-                if USAR_POSTGRES:
-                    cursor.execute(f"""
-                        INSERT INTO clientes (empresa_id, nome, email, telefone, origem)
-                        VALUES ({ph}, {ph}, {ph}, {ph}, 'proposta')
-                        RETURNING id
-                    """, (dados.empresa_id, cliente_nome, cliente_email or None, cliente_telefone or None))
-                    cliente_id = cursor.fetchone()["id"]
-                else:
-                    cursor.execute(f"""
-                        INSERT INTO clientes (empresa_id, nome, email, telefone, origem)
-                        VALUES ({ph}, {ph}, {ph}, {ph}, 'proposta')
-                    """, (dados.empresa_id, cliente_nome, cliente_email or None, cliente_telefone or None))
-                    cliente_id = cursor.lastrowid
+                cursor.execute(f"""
+                    INSERT INTO clientes (empresa_id, nome, email, telefone, origem)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, 'proposta')
+                    RETURNING id
+                """, (dados.empresa_id, cliente_nome, cliente_email or None, cliente_telefone or None))
+                cliente_id = cursor.fetchone()["id"]
 
         # 3. Localizar ou criar produto
         produto_id = dados.produto_id
@@ -1448,19 +1650,12 @@ def criar_proposta_direta(dados: PropostaDirectCreate):
                 if not produto_desc:
                     produto_desc = p_exist.get("descricao") or ""
             else:
-                if USAR_POSTGRES:
-                    cursor.execute(f"""
-                        INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
-                        VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
-                        RETURNING id
-                    """, (dados.empresa_id, produto_nome, produto_desc or None, float(dados.valor)))
-                    produto_id = cursor.fetchone()["id"]
-                else:
-                    cursor.execute(f"""
-                        INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
-                        VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
-                    """, (dados.empresa_id, produto_nome, produto_desc or None, float(dados.valor)))
-                    produto_id = cursor.lastrowid
+                cursor.execute(f"""
+                    INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
+                    RETURNING id
+                """, (dados.empresa_id, produto_nome, produto_desc or None, float(dados.valor)))
+                produto_id = cursor.fetchone()["id"]
 
         # 4. Localizar ou criar negócio no CRM
         cursor.execute(f"""
@@ -1500,34 +1695,20 @@ def criar_proposta_direta(dados: PropostaDirectCreate):
                 et_def = cursor.fetchone()
                 etapa_id = et_def["id"] if et_def else None
 
-            if USAR_POSTGRES:
-                cursor.execute(f"""
-                    INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
-                    RETURNING id
-                """, (dados.empresa_id, cliente_id, produto_id, etapa_id, float(dados.valor)))
-                negocio_id = cursor.fetchone()["id"]
-            else:
-                cursor.execute(f"""
-                    INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
-                """, (dados.empresa_id, cliente_id, produto_id, etapa_id, float(dados.valor)))
-                negocio_id = cursor.lastrowid
+            cursor.execute(f"""
+                INSERT INTO negocios (empresa_id, cliente_id, produto_id, etapa_id, valor_estimado, estagio, proposta_enviada)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'Proposta', TRUE)
+                RETURNING id
+            """, (dados.empresa_id, cliente_id, produto_id, etapa_id, float(dados.valor)))
+            negocio_id = cursor.fetchone()["id"]
 
         # 5. Inserir registro na tabela 'propostas'
-        if USAR_POSTGRES:
-            cursor.execute(f"""
-                INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
-                RETURNING id
-            """, (negocio_id, dados.empresa_id, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
-            proposta_id = cursor.fetchone()["id"]
-        else:
-            cursor.execute(f"""
-                INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
-            """, (negocio_id, dados.empresa_id, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
-            proposta_id = cursor.lastrowid
+        cursor.execute(f"""
+            INSERT INTO propostas (negocio_id, empresa_id, cliente_id, produto_id, valor, condicoes_pagamento, validade_dias, email_destinatario, status_envio)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'pendente')
+            RETURNING id
+        """, (negocio_id, dados.empresa_id, cliente_id, produto_id, float(dados.valor), dados.condicoes_pagamento, dados.validade_dias or 15, cliente_email or None))
+        proposta_id = cursor.fetchone()["id"]
 
         conexao.commit()
 
@@ -1567,7 +1748,9 @@ Status: Proposta Oficial Gerada"""
                 conteudo_texto=texto_rag,
                 tipo_arquivo=".html",
                 nivel_acesso="interno",
-                origem="sistema"
+                origem="sistema",
+                ref_tipo="proposta",
+                ref_id=proposta_id
             )
             cursor.execute(f"UPDATE propostas SET documento_id = {ph} WHERE id = {ph}", (doc_id, proposta_id))
             conexao.commit()
