@@ -5,7 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FluxIA - Login</title>
   <link rel="stylesheet" href="/static/css/crm_whatsapp_leads_system.css">
-  <script src="https://accounts.google.com/gsi/client" async defer onload="configurarTokenClient()"></script>
+  <script>
+    function onGoogleClientLoaded() {
+      if (typeof configurarTokenClient === 'function') {
+        configurarTokenClient();
+      }
+    }
+  </script>
+  <script src="https://accounts.google.com/gsi/client" async defer onload="onGoogleClientLoaded()"></script>
   <style>
     body {
       background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08) 0%, transparent 40%),
@@ -412,8 +419,6 @@
 </div>
 
 <script>
-let googleClientIdConfigurado = '';
-
 function alternarVisibilidadeSenha() {
   const input = document.getElementById('login-senha');
   const eye = document.getElementById('eye-icon');
