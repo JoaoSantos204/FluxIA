@@ -12,6 +12,7 @@ from app.services.ai_service import AIService
 from app.services.embedding_service import gerar_embedding
 from app.services.history_service import salvar_interacao, obter_ultimas_interacoes, marcar_interacoes_como_lidas
 from app.services.company_service import obter_configuracao_empresa
+from app.services.agent_orchestrator import agent_orchestrator
 from app.database.database import conectar, _cursor, _placeholder
 from app.routes.analytics import registrar_pergunta_historico
 
@@ -419,33 +420,15 @@ async def telegram_webhook(
 
         cliente_id = cliente["id"]
 
-        # 1. Checa atribuição de atendente humano (Bot vs Humano)
-        cursor.execute(f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)", (chat_id, empresa_id))
-        conv_status = cursor.fetchone()
-        if conv_status and conv_status.get("status") == "humano":
-            # Modo humano ativo: não dispara IA nem resposta automática, apenas registra
-            cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
-            cursor.execute(f"""
-                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
-            """, (chat_id, texto_recebido, "", False, empresa_id))
-            conexao.commit()
-            return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
-
-        # 2. Tratamento de Comandos Básicos
         comando = texto_recebido.strip().lower()
-        if comando in ["/start", "start"]:
-            primeiro_nome = first_name or (cliente.get("nome") if cliente and not str(cliente.get("nome")).startswith("Usuário #") else "")
-            saudacao = f", {primeiro_nome}" if primeiro_nome and not primeiro_nome.startswith("@") else ""
-            msg_start = (
-                f"👋 Olá{saudacao}! Seja bem-vindo ao atendimento inteligente da **FluxIA**.\n\n"
-                "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos e serviços!\n\n"
-                "📌 **Comandos úteis:**\n"
-                "• `/ajuda` - Como usar o assistente\n"
-                "• `/suporte` - Falar com um consultor humano"
-            )
-            enviar_mensagem_telegram(chat_id, msg_start, empresa_id=empresa_id)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_start, lida=False, empresa_id=empresa_id)
+
+        if comando in ["/perfil", "perfil"]:
+            from app.services.user_service import buscar_usuario_por_telegram
+            user = buscar_usuario_por_telegram(chat_id)
+            perfil_nome = (user.get("perfil") if user else "cliente").upper()
+            msg_perfil = f"👤 **Seu Perfil no FluxIA:** `{perfil_nome}`"
+            enviar_mensagem_telegram(chat_id, msg_perfil, empresa_id=empresa_id)
+            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_perfil, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
         if comando in ["/ajuda", "/help", "ajuda", "help"]:
@@ -459,115 +442,38 @@ async def telegram_webhook(
             salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
-        if comando in ["/suporte", "/support", "suporte", "support"]:
-            config_suporte = obter_configuracao_empresa(empresa_id=empresa_id)
-            telefone = config_suporte.get("numero_suporte_humano", "(11) 99999-9999")
-            orientacao = config_suporte.get("mensagem_suporte", "Entre em contato com nossa equipe.")
-            msg_suporte = f"📞 **Canais de Suporte Humano:**\n\n{orientacao}\n📱 Contato: `{telefone}`"
-            enviar_mensagem_telegram(chat_id, msg_suporte, empresa_id=empresa_id)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_suporte, lida=False, empresa_id=empresa_id)
-            return {"status": "ok"}
-
-        if comando in ["/perfil", "perfil"]:
-            from app.services.user_service import buscar_usuario_por_telegram
-            user = buscar_usuario_por_telegram(chat_id)
-            perfil_nome = (user.get("perfil") if user else "cliente").upper()
-            msg_perfil = f"👤 **Seu Perfil no FluxIA:** `{perfil_nome}`"
-            enviar_mensagem_telegram(chat_id, msg_perfil, empresa_id=empresa_id)
-            salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_perfil, lida=False, empresa_id=empresa_id)
-            return {"status": "ok"}
-
-        # 3. Estado 'aguardando dados de contato' com entendimento de contexto
-        if cliente.get("aguardando_contato"):
-            # A) Se o usuário enviou uma cortesia ou agradecimento (ex: "Muito obrigado", "Valeu")
-            # NÃO altera o nome do lead! Apenas responde gentilmente e encerra o estado de espera.
-            if eh_cortesia_ou_agradecimento(texto_recebido):
-                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
-                conexao.commit()
-                msg_agradecimento = (
-                    "De nada! Fico sempre à sua disposição. Se precisar de mais alguma informação ou desejar falar com um consultor humano, "
-                    "basta me chamar ou usar o comando `/suporte`! 😊"
-                )
-                enviar_mensagem_telegram(chat_id, msg_agradecimento, empresa_id=empresa_id)
-                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_agradecimento, lida=False, empresa_id=empresa_id)
-                return {"status": "ok", "mensagem": "Agradecimento respondido com cortesia"}
-
-            # B) Se o usuário enviou dados reais de contato (email, telefone ou nome explícito)
-            dados_contato = extrair_dados_contato(texto_recebido)
-            if dados_contato["tem_contato"]:
-                novo_email = dados_contato["email"] or cliente.get("email")
-                novo_telefone = dados_contato["telefone"] or cliente.get("telefone")
-                nome_final = dados_contato["nome"] or cliente.get("nome") or nome_lead
-
-                cursor.execute(f"""
-                    UPDATE clientes
-                    SET nome = {ph}, email = {ph}, telefone = {ph}, aguardando_contato = {ph}
-                    WHERE id = {ph}
-                """, (nome_final, novo_email, novo_telefone, False, cliente_id))
-                conexao.commit()
-
-                msg_confirmacao = (
-                    f"Perfeito, {nome_final}! Anotei seus dados de contato com sucesso "
-                    f"(E-mail: {novo_email or 'não informado'} | Telefone: {novo_telefone or 'não informado'}).\n\n"
-                    "Nossa equipe de atendimento foi acionada e entrará em contato em breve para te auxiliar melhor! "
-                    "Se precisar de mais informações sobre nossos serviços, estou à sua disposição."
-                )
-                enviar_mensagem_telegram(chat_id, msg_confirmacao, empresa_id=empresa_id)
-                salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_confirmacao, lida=False, empresa_id=empresa_id)
-                return {"status": "ok", "mensagem": "Dados de contato salvos com sucesso"}
-            else:
-                # C) Se for uma pergunta ou comentário normal sem dados de contato,
-                # apenas desativa o aguardo de contato e prossegue para responder a dúvida normalmente com IA!
-                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
-                conexao.commit()
-
-        # 4. RAG: Busca estritamente pública da respectiva empresa
-        historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
-        config_suporte = obter_configuracao_empresa(empresa_id=empresa_id)
-
-        contexto_publico, docs_usados = buscar_contexto_relevante(
-            pergunta=texto_recebido,
-            empresa_id=empresa_id
+        # Execução orquestrada pelo Agente Gerente
+        resposta_ia, meta_exec = agent_orchestrator.executar_orquestracao(
+            mensagem=texto_recebido,
+            chat_id=chat_id,
+            empresa_id=empresa_id,
+            nome_telegram=nome_lead
         )
 
-        tem_contexto = bool(contexto_publico and len(contexto_publico.strip()) > 10)
+        if meta_exec.get("modo") == "humano":
+            cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
+            cursor.execute(f"""
+                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            """, (chat_id, texto_recebido, "", False, empresa_id))
+            conexao.commit()
+            return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
 
-        # 5. Geração de resposta com LangChain Multi-Vendor + Observabilidade
-        telemetria_id = 0
-        try:
-            from app.services.ai_engine_service import ai_engine
-            resposta_ia, telemetria_id = ai_engine.gerar_resposta_orquestrada(
-                pergunta=texto_recebido,
-                contexto=contexto_publico,
-                historico=historico_recente,
-                config_suporte=config_suporte,
-                empresa_id=empresa_id,
-                canal="telegram",
-                session_id=chat_id
-            )
-        except Exception as e:
-            logger.warning(f"[Telegram] Falha no ai_engine, usando fallback direto: {e}")
-            resposta_ia = ai_service.gerar_resposta(
-                pergunta=texto_recebido,
-                contexto=contexto_publico,
-                historico=historico_recente,
-                config_suporte=config_suporte,
+        if resposta_ia:
+            enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id)
+            salvar_interacao(
+                telegram_chat_id=chat_id,
+                mensagem_usuario=texto_recebido,
+                resposta_ia=resposta_ia,
+                lida=False,
                 empresa_id=empresa_id
             )
 
-        # Se não houver contexto na base pública e o lead não tiver dados de contato,
-        # orienta cordialmente sobre a possibilidade de deixar contato para um atendente
-        tem_nome_cadastrado = cliente.get("nome") and not str(cliente["nome"]).startswith("Lead") and not str(cliente["nome"]).startswith("Usuário #")
-        tem_email_cadastrado = bool(cliente.get("email") and cliente["email"].strip())
-        tem_tel_cadastrado = bool(cliente.get("telefone") and cliente["telefone"].strip())
+        telemetria_id = meta_exec.get("telemetria_id", 0)
+        docs_usados = meta_exec.get("documentos_usados", [])
+        contexto_publico = meta_exec.get("contexto_publico", "")
+        tem_contexto = bool(contexto_publico and len(contexto_publico.strip()) > 10)
 
-        if not tem_contexto and not (tem_nome_cadastrado and tem_email_cadastrado and tem_tel_cadastrado):
-            if "contato" not in resposta_ia.lower() and "telefone" not in resposta_ia.lower():
-                resposta_ia += "\n\n💡 *Caso deseje que um atendente fale diretamente com você, pode me informar seu e-mail ou telefone!*"
-                cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (True, cliente_id))
-                conexao.commit()
-
-        # Dispara continuous evaluation em background (latência zero para o cliente)
         if telemetria_id:
             from app.services.ai_evaluation_service import avaliar_interacao_ia
             background_tasks.add_task(
@@ -579,29 +485,17 @@ async def telegram_webhook(
                 contexto_utilizado=contexto_publico if tem_contexto else None
             )
 
-        # 6. Envia resposta ao Telegram da respectiva empresa
-        enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id)
-
-        # 7. Salva no histórico de conversas da empresa
-        salvar_interacao(
-            telegram_chat_id=chat_id,
-            mensagem_usuario=texto_recebido,
-            resposta_ia=resposta_ia,
-            lida=False,
-            empresa_id=empresa_id
-        )
-
-        # 8. Log no Analytics (Perguntas Histórico)
-        registrar_pergunta_historico(
-            canal="telegram",
-            empresa_id=empresa_id,
-            pergunta=texto_recebido,
-            resposta=resposta_ia,
-            telegram_chat_id=chat_id,
-            documentos_utilizados=docs_usados,
-            teve_contexto=tem_contexto,
-            fonte_resposta="base_conhecimento"
-        )
+        if meta_exec.get("intencao") == "PERGUNTA_CONHECIMENTO":
+            registrar_pergunta_historico(
+                canal="telegram",
+                empresa_id=empresa_id,
+                pergunta=texto_recebido,
+                resposta=resposta_ia,
+                telegram_chat_id=chat_id,
+                documentos_utilizados=docs_usados,
+                teve_contexto=tem_contexto,
+                fonte_resposta="base_conhecimento"
+            )
 
         # B. Busca ou cria negócio em andamento para este cliente
         cursor.execute(f"""

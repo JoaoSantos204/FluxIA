@@ -1433,6 +1433,92 @@
             </div>
           </div>
 
+          <!-- ORQUESTRADOR DE AGENTES & REGRAS DE ATENDIMENTO -->
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon" style="background:#7c3aed; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L15 15h3a3 3 0 0 1 3 3v2H3v-2a3 3 0 0 1 3-3h3l2.25-5.07A4 4 0 0 1 12 2z"/><circle cx="12" cy="6" r="1.5"/></svg>
+              </div>
+              Orquestrador de IA & Regras de Atendimento
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              O <strong>Agente Gerente</strong> interpreta as mensagens, identifica clientes cadastrados pelo nome, reconhece o histórico comercial e decide as ações (coleta, saudação, despedida, transbordo ou base de conhecimento).
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px; padding:10px 12px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid var(--border);">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text);">
+                <input type="checkbox" id="config-ia-coletar-obrigatorio" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" checked>
+                <span>Exigir Nome e Telefone ao Iniciar Chat (Obrigatório)</span>
+              </label>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px; margin-left:26px;">
+                Não permite avanço de conversas com leads sem cadastro de contato. Solicita cordialmente o nome completo e WhatsApp logo no início.
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label" style="display:flex; justify-content:space-between;">
+                <span>Diretrizes e Prompt do Sistema do Agente Gerente</span>
+                <span style="font-size:11px; color:var(--text-muted);">Instruções de tom e postura</span>
+              </div>
+              <textarea class="cf-input" id="config-ia-prompt-sistema" rows="3" style="width:100%; height:75px; resize:vertical; font-size:12px; font-family:inherit; padding:8px;" placeholder="Ex: Mantenha sempre um tom executivo e caloroso, chame o cliente pelo primeiro nome e destaque o valor das soluções da FluxIA..."></textarea>
+            </div>
+
+            <button class="btn-green" style="width:100%; justify-content:center; padding:10px;" onclick="salvarConfiguracaoIARegras()">
+              Salvar Regras do Agente Gerente
+            </button>
+          </div>
+
+          <!-- AGENDADOR DE FOLLOW-UP COMERCIAL -->
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon" style="background:#ea580c; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              Agendador de Follow-up Comercial
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              Controle automatizado de reengajamento de leads inativos no funil de vendas via Telegram, personalizando o tempo de espera e o conteúdo da mensagem.
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px; padding:10px 12px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid var(--border);">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; font-weight:600; color:var(--text);">
+                <input type="checkbox" id="config-followup-ativo" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" checked>
+                <span>Follow-up Automático Ativo</span>
+              </label>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px; margin-left:26px;">
+                O robô verifica periodicamente leads sem interação recente e envia uma mensagem humanizada de acompanhamento.
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label">Tempo de Inatividade para Disparo</div>
+              <select class="login-input" id="config-followup-horas" style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:8px 12px; width:100%;">
+                <option value="6">6 horas de inatividade</option>
+                <option value="12">12 horas de inatividade</option>
+                <option value="24" selected>24 horas de inatividade (1 dia - Recomendado)</option>
+                <option value="48">48 horas de inatividade (2 dias)</option>
+                <option value="72">72 horas de inatividade (3 dias)</option>
+              </select>
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label" style="display:flex; justify-content:space-between;">
+                <span>Mensagem Personalizada ou Diretriz IA</span>
+                <span style="font-size:11px; color:#38bdf8;">Tags: {nome}, {produto}, {estagio}</span>
+              </div>
+              <textarea class="cf-input" id="config-followup-mensagem" rows="3" style="width:100%; height:75px; resize:vertical; font-size:12px; font-family:inherit; padding:8px;" placeholder="Ex: Olá {nome}! Passando para saber se ficou alguma dúvida sobre o {produto}. Posso ajudar em algo mais? (Ou deixe vazio para redação contextualizada via IA)"></textarea>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+              <button class="btn-green" style="flex:1; justify-content:center; padding:10px;" onclick="salvarConfiguracaoFollowup()">
+                Salvar Configurações de Follow-up
+              </button>
+              <button class="btn-secondary" style="padding:10px 14px; font-size:12px;" onclick="dispararFollowupManual(true)">
+                ▶ Testar Agora
+              </button>
+            </div>
+          </div>
+
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon fi-blue"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
@@ -1454,12 +1540,10 @@
             </div>
             <div class="cf-row">
               <div>
-                <div class="cf-row-label">Follow-up Automático ("Aquecimento")</div>
-                <div class="cf-row-sub">Agendador interno APScheduler ativo (1x/hora)</div>
+                <div class="cf-row-label">Agente Gerente (Orquestrador)</div>
+                <div class="cf-row-sub">Roteamento de intenções, contexto de negócios e contato</div>
               </div>
-              <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="dispararFollowupManual()">
-                ▶ Testar Agora
-              </button>
+              <span class="contract-status-badge cs-signed">Ativo</span>
             </div>
           </div>
         </div>
@@ -4500,6 +4584,30 @@ async function carregarConfiguracoesEmpresa() {
     if (urlEl) {
       urlEl.value = `${window.location.origin}/telegram/webhook/${empresaId}`;
     }
+
+    // Regras do Agente Gerente & Follow-up
+    const iaColetarCheck = document.getElementById('config-ia-coletar-obrigatorio');
+    const iaPromptInput = document.getElementById('config-ia-prompt-sistema');
+    if (iaColetarCheck) {
+      iaColetarCheck.checked = data.ia_coletar_dados_obrigatorio !== false;
+    }
+    if (iaPromptInput) {
+      iaPromptInput.value = data.ia_prompt_sistema || '';
+    }
+
+    const foAtivoCheck = document.getElementById('config-followup-ativo');
+    const foHorasSelect = document.getElementById('config-followup-horas');
+    const foMsgInput = document.getElementById('config-followup-mensagem');
+    if (foAtivoCheck) {
+      foAtivoCheck.checked = data.followup_ativo !== false;
+    }
+    if (foHorasSelect) {
+      foHorasSelect.value = String(data.followup_horas_inatividade || 24);
+    }
+    if (foMsgInput) {
+      foMsgInput.value = data.followup_mensagem_personalizada || '';
+    }
+
     carregarStatusWebhook();
   } catch (err) {
     if (geminiStatus) geminiStatus.innerHTML = `<span style="color:#ef4444;">Erro: ${err.message}</span>`;
@@ -4850,10 +4958,86 @@ async function registrarWebhookTelegram() {
   }
 }
 
-async function dispararFollowupManual() {
+async function salvarConfiguracaoIARegras() {
+  const iaColetarCheck = document.getElementById('config-ia-coletar-obrigatorio');
+  const iaPromptInput = document.getElementById('config-ia-prompt-sistema');
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  const obrigatorio = iaColetarCheck ? iaColetarCheck.checked : true;
+  const promptSistema = iaPromptInput ? iaPromptInput.value.trim() : '';
+
   try {
-    const res = await fetch('/crm/executar-followup?horas_inatividade=0', { method: 'POST' });
+    const res = await fetch('/empresa/ia-regras', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        ia_coletar_dados_obrigatorio: obrigatorio,
+        ia_prompt_sistema: promptSistema || null,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar regras de IA');
+    alert(data.mensagem || 'Regras do Agente Gerente salvas com sucesso!');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    alert('Erro ao salvar regras: ' + err.message);
+  }
+}
+
+async function salvarConfiguracaoFollowup() {
+  const foAtivoCheck = document.getElementById('config-followup-ativo');
+  const foHorasSelect = document.getElementById('config-followup-horas');
+  const foMsgInput = document.getElementById('config-followup-mensagem');
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  const ativo = foAtivoCheck ? foAtivoCheck.checked : true;
+  const horas = foHorasSelect ? parseInt(foHorasSelect.value, 10) : 24;
+  const msgCustom = foMsgInput ? foMsgInput.value.trim() : '';
+
+  try {
+    const res = await fetch('/empresa/followup-config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': String(uid || '')
+      },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        followup_ativo: ativo,
+        followup_horas_inatividade: horas,
+        followup_mensagem_personalizada: msgCustom || null,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar configurações de follow-up');
+    alert(data.mensagem || 'Configurações de follow-up salvas com sucesso!');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    alert('Erro ao salvar follow-up: ' + err.message);
+  }
+}
+
+async function dispararFollowupManual(forcar = false) {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const url = `/crm/executar-followup?empresa_id=${empresaId}&horas_inatividade=0${forcar ? '&forcar=true' : ''}`;
+    const res = await fetch(url, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao disparar follow-up');
     alert(`✓ Rotina de Follow-up Executada!\nTotal de leads reengajados: ${data.total_enviados || 0}`);
   } catch (e) {
     alert('Erro ao acionar follow-up: ' + e.message);

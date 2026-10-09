@@ -389,6 +389,21 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='produtos' AND column_name='pipeline_id') THEN
                 ALTER TABLE produtos ADD COLUMN pipeline_id INTEGER REFERENCES pipelines(id) ON DELETE SET NULL;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='ia_prompt_sistema') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN ia_prompt_sistema TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='ia_coletar_dados_obrigatorio') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN ia_coletar_dados_obrigatorio BOOLEAN DEFAULT TRUE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='followup_ativo') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN followup_ativo BOOLEAN DEFAULT TRUE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='followup_horas_inatividade') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN followup_horas_inatividade INTEGER DEFAULT 24;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='followup_mensagem_personalizada') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN followup_mensagem_personalizada TEXT;
+            END IF;
         END $$;
     """)
 

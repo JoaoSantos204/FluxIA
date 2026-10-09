@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 from app.database.database import conectar, _cursor, _placeholder
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,12 @@ CONFIGURACAO_PADRAO = {
     "fuso_horario": "America/Sao_Paulo",
     "telegram_bot_token": None,
     "telegram_bot_username": None,
-    "telegram_webhook_ativo": False
+    "telegram_webhook_ativo": False,
+    "ia_prompt_sistema": "Você é o consultor comercial e assistente virtual inteligente da empresa. Trate o cliente cordialmente, responda suas dúvidas com precisão e conduza o atendimento para entender suas necessidades comerciais.",
+    "ia_coletar_dados_obrigatorio": True,
+    "followup_ativo": True,
+    "followup_horas_inatividade": 24,
+    "followup_mensagem_personalizada": "Olá, {nome}! Tudo bem? Passando para saber se ficou alguma dúvida sobre {produto} ou se podemos prosseguir com o seu atendimento!"
 }
 
 
@@ -29,8 +35,8 @@ def mascarar_api_key(chave: str | None) -> str:
 
 def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     """
-    Busca as configurações da empresa (como telefone, mensagem de suporte, fuso horário e chaves BYOK Google e OpenAI,
-    além do token dedicado do bot do Telegram da empresa).
+    Busca as configurações da empresa (como telefone, mensagem de suporte, fuso horário, chaves BYOK Google e OpenAI,
+    bot dedicado do Telegram, além das regras do Orquestrador de IA e do Agendador de Follow-up).
     Caso não exista configuração cadastrada, retorna os valores padrão do sistema.
     """
     conexao = conectar()
@@ -40,7 +46,9 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
     try:
         cursor.execute(f"""
             SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario,
-                   telegram_bot_token, telegram_bot_username, telegram_webhook_ativo
+                   telegram_bot_token, telegram_bot_username, telegram_webhook_ativo,
+                   ia_prompt_sistema, ia_coletar_dados_obrigatorio,
+                   followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -57,6 +65,12 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             tg_user = linha.get("telegram_bot_username") if isinstance(linha, dict) else linha["telegram_bot_username"]
             tg_ativo = bool(linha.get("telegram_webhook_ativo") if isinstance(linha, dict) else linha["telegram_webhook_ativo"])
 
+            ia_prompt = linha.get("ia_prompt_sistema") if isinstance(linha, dict) else linha["ia_prompt_sistema"]
+            ia_coletar = linha.get("ia_coletar_dados_obrigatorio") if isinstance(linha, dict) else linha["ia_coletar_dados_obrigatorio"]
+            fo_ativo = linha.get("followup_ativo") if isinstance(linha, dict) else linha["followup_ativo"]
+            fo_horas = linha.get("followup_horas_inatividade") if isinstance(linha, dict) else linha["followup_horas_inatividade"]
+            fo_msg = linha.get("followup_mensagem_personalizada") if isinstance(linha, dict) else linha["followup_mensagem_personalizada"]
+
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
@@ -72,7 +86,12 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
                 "telegram_bot_token_mascarada": mascarar_api_key(tg_token),
                 "telegram_bot_username": tg_user,
                 "telegram_webhook_ativo": tg_ativo,
-                "possui_bot_proprio": bool(tg_token and tg_token.strip())
+                "possui_bot_proprio": bool(tg_token and tg_token.strip()),
+                "ia_prompt_sistema": ia_prompt if ia_prompt is not None else CONFIGURACAO_PADRAO["ia_prompt_sistema"],
+                "ia_coletar_dados_obrigatorio": bool(ia_coletar) if ia_coletar is not None else CONFIGURACAO_PADRAO["ia_coletar_dados_obrigatorio"],
+                "followup_ativo": bool(fo_ativo) if fo_ativo is not None else CONFIGURACAO_PADRAO["followup_ativo"],
+                "followup_horas_inatividade": int(fo_horas) if fo_horas is not None else CONFIGURACAO_PADRAO["followup_horas_inatividade"],
+                "followup_mensagem_personalizada": fo_msg if fo_msg is not None else CONFIGURACAO_PADRAO["followup_mensagem_personalizada"]
             }
 
         padrao = CONFIGURACAO_PADRAO.copy()
@@ -523,4 +542,100 @@ def atualizar_telegram_bot_empresa(
         raise e
     finally:
         conexao.close()
+
+
+def salvar_configuracao_ia_regras(
+    empresa_id: int,
+    ia_prompt_sistema: Optional[str] = None,
+    ia_coletar_dados_obrigatorio: bool = True
+) -> dict:
+    """Atualiza as regras de atendimento e orquestração da IA para a empresa."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"SELECT id FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET ia_prompt_sistema = {ph},
+                    ia_coletar_dados_obrigatorio = {ph}
+                WHERE empresa_id = {ph}
+            """, (ia_prompt_sistema, ia_coletar_dados_obrigatorio, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (
+                    empresa_id, numero_suporte_humano, mensagem_suporte,
+                    ia_prompt_sistema, ia_coletar_dados_obrigatorio
+                )
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            """, (
+                empresa_id,
+                CONFIGURACAO_PADRAO["numero_suporte_humano"],
+                CONFIGURACAO_PADRAO["mensagem_suporte"],
+                ia_prompt_sistema,
+                ia_coletar_dados_obrigatorio
+            ))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao atualizar regras de IA da empresa {empresa_id}: {e}")
+        raise e
+    finally:
+        conexao.close()
+
+
+def salvar_configuracao_followup(
+    empresa_id: int,
+    followup_ativo: bool = True,
+    followup_horas_inatividade: int = 24,
+    followup_mensagem_personalizada: Optional[str] = None
+) -> dict:
+    """Atualiza as preferências do agendador automático de follow-up para a empresa."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"SELECT id FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET followup_ativo = {ph},
+                    followup_horas_inatividade = {ph},
+                    followup_mensagem_personalizada = {ph}
+                WHERE empresa_id = {ph}
+            """, (followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada, empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (
+                    empresa_id, numero_suporte_humano, mensagem_suporte,
+                    followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada
+                )
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            """, (
+                empresa_id,
+                CONFIGURACAO_PADRAO["numero_suporte_humano"],
+                CONFIGURACAO_PADRAO["mensagem_suporte"],
+                followup_ativo,
+                followup_horas_inatividade,
+                followup_mensagem_personalizada
+            ))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao atualizar configuração de follow-up da empresa {empresa_id}: {e}")
+        raise e
+    finally:
+        conexao.close()
+
 

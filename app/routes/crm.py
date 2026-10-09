@@ -2499,8 +2499,16 @@ def obter_serie_temporal(
 
 
 @router.post("/crm/executar-followup")
-def acionar_followup_manual(horas_inatividade: int = Query(24)):
-    """Dispara a rotina de reengajamento de leads inativos manualmente."""
+def acionar_followup_manual(
+    horas_inatividade: Optional[int] = Query(None),
+    empresa_id: Optional[int] = Query(None),
+    forcar: bool = Query(False)
+):
+    """Dispara a rotina de reengajamento de leads inativos manualmente por empresa ou globalmente."""
     from app.services.followup_service import executar_followup_automatico
-    resultado = executar_followup_automatico(horas_inatividade=horas_inatividade)
+    resultado = executar_followup_automatico(
+        horas_inatividade=horas_inatividade,
+        empresa_id=empresa_id,
+        forcar=forcar
+    )
     return resultado

@@ -18,7 +18,9 @@ from app.services.company_service import (
     buscar_empresa_por_bot_username_telegram,
     listar_empresas,
     cadastrar_empresa,
-    deletar_empresa
+    deletar_empresa,
+    salvar_configuracao_ia_regras,
+    salvar_configuracao_followup
 )
 from app.services.security_service import verificar_admin_api_key, validar_perfil_admin_ou_master
 
@@ -68,6 +70,23 @@ class TelegramBotConfigRequest(BaseModel):
     url_webhook_base: Optional[str] = Field(default=None, description="URL pública base opcional para o webhook")
     usuario_id: Optional[int] = Field(default=None, description="ID do usuário")
     usuario_perfil: Optional[str] = Field(default=None, description="Perfil do usuário")
+
+
+class IARegrasRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    ia_prompt_sistema: Optional[str] = Field(default=None, description="Diretrizes e tom de voz da IA")
+    ia_coletar_dados_obrigatorio: bool = Field(default=True, description="Exigir Nome e Telefone no início do atendimento")
+    usuario_id: Optional[int] = None
+    usuario_perfil: Optional[str] = None
+
+
+class FollowupConfigRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    followup_ativo: bool = Field(default=True, description="Ativar agendador de follow-up")
+    followup_horas_inatividade: int = Field(default=24, ge=1, le=720, description="Horas de inatividade antes do disparo")
+    followup_mensagem_personalizada: Optional[str] = Field(default=None, description="Modelo de mensagem ou diretrizes customizadas")
+    usuario_id: Optional[int] = None
+    usuario_perfil: Optional[str] = None
 
 
 @router.get("/configuracoes")
@@ -377,6 +396,35 @@ def salvar_telegram_bot_empresa(
         "webhook_detalhes": webhook_detalhes,
         "configuracao": resultado
     }
+
+
+@router.post("/ia-regras")
+def configurar_ia_regras(dados: IARegrasRequest, request: Request = None):
+    """Configura o comportamento e as regras de orquestração do Agente de IA."""
+    uid = dados.usuario_id or (int(request.headers.get("X-User-Id")) if request and request.headers.get("X-User-Id") and request.headers.get("X-User-Id").isdigit() else None)
+    if uid:
+        validar_perfil_admin_ou_master(uid)
+    res = salvar_configuracao_ia_regras(
+        empresa_id=dados.empresa_id,
+        ia_prompt_sistema=dados.ia_prompt_sistema,
+        ia_coletar_dados_obrigatorio=dados.ia_coletar_dados_obrigatorio
+    )
+    return {"sucesso": True, "mensagem": "Regras do Agente de IA salvas com sucesso!", "configuracao": res}
+
+
+@router.post("/followup-config")
+def configurar_followup(dados: FollowupConfigRequest, request: Request = None):
+    """Configura o agendador e os critérios de reengajamento automático (Follow-up)."""
+    uid = dados.usuario_id or (int(request.headers.get("X-User-Id")) if request and request.headers.get("X-User-Id") and request.headers.get("X-User-Id").isdigit() else None)
+    if uid:
+        validar_perfil_admin_ou_master(uid)
+    res = salvar_configuracao_followup(
+        empresa_id=dados.empresa_id,
+        followup_ativo=dados.followup_ativo,
+        followup_horas_inatividade=dados.followup_horas_inatividade,
+        followup_mensagem_personalizada=dados.followup_mensagem_personalizada
+    )
+    return {"sucesso": True, "mensagem": "Configurações do Agendador de Follow-up salvas com sucesso!", "configuracao": res}
 
 
 @router.put("/configuracoes", dependencies=[Depends(verificar_admin_api_key)])
