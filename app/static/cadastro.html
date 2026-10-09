@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,8 +9,8 @@
   <style>
     body {
       background: radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.08) 0%, transparent 40%),
-                  radial-gradient(circle at 80% 80%, rgba(83, 74, 183, 0.1) 0%, transparent 45%),
-                  #0e121b;
+        radial-gradient(circle at 80% 80%, rgba(83, 74, 183, 0.1) 0%, transparent 45%),
+        #0e121b;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -31,8 +32,15 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .signup-header {
@@ -131,8 +139,8 @@
     }
 
     .signup-input:-webkit-autofill,
-    .signup-input:-webkit-autofill:hover, 
-    .signup-input:-webkit-autofill:focus, 
+    .signup-input:-webkit-autofill:hover,
+    .signup-input:-webkit-autofill:focus,
     .signup-input:-webkit-autofill:active {
       -webkit-text-fill-color: #ffffff !important;
       -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
@@ -184,7 +192,9 @@
       line-height: 1.4;
     }
 
-    .alert-box.active { display: flex; }
+    .alert-box.active {
+      display: flex;
+    }
 
     .signup-footer {
       text-align: center;
@@ -199,7 +209,9 @@
       font-weight: 500;
     }
 
-    .signup-footer a:hover { text-decoration: underline; }
+    .signup-footer a:hover {
+      text-decoration: underline;
+    }
 
     .terms-text {
       font-size: 11px;
@@ -210,141 +222,153 @@
     }
   </style>
 </head>
+
 <body>
 
-<div class="signup-card">
-  <div class="signup-header">
-    <div class="signup-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+  <div class="signup-card">
+    <div class="signup-header">
+      <div class="signup-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 2L11 13" />
+          <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+        </svg>
+      </div>
+      <div class="signup-title">Crie sua Conta de Empresa</div>
+      <div class="signup-sub">Inicie seu ambiente isolado no CRM FluxIA</div>
     </div>
-    <div class="signup-title">Crie sua Conta de Empresa</div>
-    <div class="signup-sub">Inicie seu ambiente isolado no CRM FluxIA</div>
+
+    <div class="alert-box" id="signup-alert">
+      <span>⚠️</span>
+      <span id="signup-alert-text">Erro ao processar cadastro.</span>
+    </div>
+
+    <form id="form-signup" onsubmit="executarCadastro(event)">
+      <div class="section-divider">1. Dados da Empresa</div>
+
+      <div class="form-group">
+        <label class="form-label" for="empresa-nome">Nome da Empresa / Razão Social *</label>
+        <input class="signup-input" type="text" id="empresa-nome" placeholder="Ex: Acme Tecnologia Ltda" required />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="empresa-cnpj">CNPJ (Obrigatório) *</label>
+        <input class="signup-input" type="text" id="empresa-cnpj" placeholder="00.000.000/0000-00" maxlength="18"
+          oninput="aplicarMascaraCNPJ(this)" required />
+      </div>
+
+      <div class="section-divider">2. Administrador Responsável</div>
+
+      <div class="form-group">
+        <label class="form-label" for="admin-nome">Nome Completo do Responsável *</label>
+        <input class="signup-input" type="text" id="admin-nome" placeholder="Seu nome completo" required />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="admin-email">E-mail Corporativo *</label>
+        <input class="signup-input" type="email" id="admin-email" placeholder="contato@suaempresa.com" required
+          autocomplete="email" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="admin-senha">Senha de Acesso *</label>
+        <input class="signup-input" type="password" id="admin-senha" placeholder="Mínimo de 4 caracteres" minlength="4"
+          required autocomplete="new-password" />
+      </div>
+
+      <button type="submit" class="btn-submit" id="btn-signup-submit">
+        <span>Criar Empresa & Acessar</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>
+    </form>
+
+    <p class="terms-text">
+      Ao se cadastrar, seu usuário receberá o perfil <strong>Admin</strong> para gerenciar os colaboradores e documentos
+      exclusivos da sua empresa.
+    </p>
+
+    <div class="signup-footer">
+      Já tem uma conta cadastrada? <a href="/login">Fazer Login</a>
+    </div>
   </div>
 
-  <div class="alert-box" id="signup-alert">
-    <span>⚠️</span>
-    <span id="signup-alert-text">Erro ao processar cadastro.</span>
-  </div>
+  <script>
+    function aplicarMascaraCNPJ(input) {
+      let v = input.value.replace(/\D/g, '');
+      if (v.length > 14) v = v.slice(0, 14);
 
-  <form id="form-signup" onsubmit="executarCadastro(event)">
-    <div class="section-divider">1. Dados da Empresa</div>
+      if (v.length > 12) {
+        v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
+      } else if (v.length > 8) {
+        v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})$/, '$1.$2.$3/$4');
+      } else if (v.length > 5) {
+        v = v.replace(/^(\d{2})(\d{3})(\d{1,3})$/, '$1.$2.$3');
+      } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{1,3})$/, '$1.$2');
+      }
+      input.value = v;
+    }
 
-    <div class="form-group">
-      <label class="form-label" for="empresa-nome">Nome da Empresa / Razão Social *</label>
-      <input class="signup-input" type="text" id="empresa-nome" placeholder="Ex: Acme Tecnologia Ltda" required />
-    </div>
+    function exibirErro(msg) {
+      const alertEl = document.getElementById('signup-alert');
+      document.getElementById('signup-alert-text').textContent = msg;
+      alertEl.classList.add('active');
+    }
 
-    <div class="form-group">
-      <label class="form-label" for="empresa-cnpj">CNPJ (Obrigatório) *</label>
-      <input class="signup-input" type="text" id="empresa-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="aplicarMascaraCNPJ(this)" required />
-    </div>
+    function limparErro() {
+      document.getElementById('signup-alert').classList.remove('active');
+    }
 
-    <div class="section-divider">2. Administrador Responsável</div>
+    async function executarCadastro(e) {
+      e.preventDefault();
+      limparErro();
 
-    <div class="form-group">
-      <label class="form-label" for="admin-nome">Nome Completo do Responsável *</label>
-      <input class="signup-input" type="text" id="admin-nome" placeholder="Seu nome completo" required />
-    </div>
+      const nomeEmpresa = document.getElementById('empresa-nome').value.trim();
+      const cnpj = document.getElementById('empresa-cnpj').value.trim();
+      const nomeResponsavel = document.getElementById('admin-nome').value.trim();
+      const email = document.getElementById('admin-email').value.trim();
+      const senha = document.getElementById('admin-senha').value.trim();
+      const btn = document.getElementById('btn-signup-submit');
 
-    <div class="form-group">
-      <label class="form-label" for="admin-email">E-mail Corporativo *</label>
-      <input class="signup-input" type="email" id="admin-email" placeholder="contato@suaempresa.com" required autocomplete="email" />
-    </div>
+      if (!cnpj || cnpj.replace(/\D/g, '').length < 14) {
+        exibirErro('Por favor, informe um CNPJ válido com 14 dígitos.');
+        return;
+      }
 
-    <div class="form-group">
-      <label class="form-label" for="admin-senha">Senha de Acesso *</label>
-      <input class="signup-input" type="password" id="admin-senha" placeholder="Mínimo de 4 caracteres" minlength="4" required autocomplete="new-password" />
-    </div>
+      btn.disabled = true;
+      btn.innerHTML = `<span>Criando seu ambiente...</span>`;
 
-    <button type="submit" class="btn-submit" id="btn-signup-submit">
-      <span>Criar Empresa & Acessar</span>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-    </button>
-  </form>
+      try {
+        const res = await fetch('/auth/cadastro-empresa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nome_empresa: nomeEmpresa,
+            cnpj: cnpj,
+            nome_responsavel: nomeResponsavel,
+            email: email,
+            senha: senha
+          })
+        });
 
-  <p class="terms-text">
-    Ao se cadastrar, seu usuário receberá o perfil <strong>Admin</strong> para gerenciar os colaboradores e documentos exclusivos da sua empresa.
-  </p>
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Erro ao realizar cadastro.');
 
-  <div class="signup-footer">
-    Já tem uma conta cadastrada? <a href="/login">Fazer Login</a>
-  </div>
-</div>
+        // Grava usuário logado na sessão local
+        localStorage.setItem('fluxia_user', JSON.stringify(data.usuario));
 
-<script>
-function aplicarMascaraCNPJ(input) {
-  let v = input.value.replace(/\D/g, '');
-  if (v.length > 14) v = v.slice(0, 14);
-
-  if (v.length > 12) {
-    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
-  } else if (v.length > 8) {
-    v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})$/, '$1.$2.$3/$4');
-  } else if (v.length > 5) {
-    v = v.replace(/^(\d{2})(\d{3})(\d{1,3})$/, '$1.$2.$3');
-  } else if (v.length > 2) {
-    v = v.replace(/^(\d{2})(\d{1,3})$/, '$1.$2');
-  }
-  input.value = v;
-}
-
-function exibirErro(msg) {
-  const alertEl = document.getElementById('signup-alert');
-  document.getElementById('signup-alert-text').textContent = msg;
-  alertEl.classList.add('active');
-}
-
-function limparErro() {
-  document.getElementById('signup-alert').classList.remove('active');
-}
-
-async function executarCadastro(e) {
-  e.preventDefault();
-  limparErro();
-
-  const nomeEmpresa = document.getElementById('empresa-nome').value.trim();
-  const cnpj = document.getElementById('empresa-cnpj').value.trim();
-  const nomeResponsavel = document.getElementById('admin-nome').value.trim();
-  const email = document.getElementById('admin-email').value.trim();
-  const senha = document.getElementById('admin-senha').value.trim();
-  const btn = document.getElementById('btn-signup-submit');
-
-  if (!cnpj || cnpj.replace(/\D/g, '').length < 14) {
-    exibirErro('Por favor, informe um CNPJ válido com 14 dígitos.');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = `<span>Criando seu ambiente...</span>`;
-
-  try {
-    const res = await fetch('/auth/cadastro-empresa', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nome_empresa: nomeEmpresa,
-        cnpj: cnpj,
-        nome_responsavel: nomeResponsavel,
-        email: email,
-        senha: senha
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Erro ao realizar cadastro.');
-
-    // Grava usuário logado na sessão local
-    localStorage.setItem('fluxia_user', JSON.stringify(data.usuario));
-
-    // Redireciona para o Portal Operacional do cliente
-    window.location.href = '/';
-  } catch (err) {
-    exibirErro(err.message);
-    btn.disabled = false;
-    btn.innerHTML = `<span>Criar Empresa & Acessar</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
-  }
-}
-</script>
+        // Redireciona para o Portal Operacional do cliente
+        window.location.href = '/';
+      } catch (err) {
+        exibirErro(err.message);
+        btn.disabled = false;
+        btn.innerHTML = `<span>Criar Empresa & Acessar</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`;
+      }
+    }
+  </script>
 
 </body>
+
 </html>
