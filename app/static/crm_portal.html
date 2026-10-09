@@ -463,23 +463,23 @@
           <div class="metric-icon mi-blue" style="background:rgba(34,158,217,0.15); color:#229ED9;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           </div>
-          <div class="metric-label">Total de Leads Telegram</div>
+          <div class="metric-label" id="card-leads-label">Total de Clientes & Leads</div>
           <div class="metric-value" id="card-total-leads">0</div>
-          <div class="metric-change up">Sincronizado via Webhook</div>
+          <div class="metric-change up" id="card-leads-sub">CRM & Webhook Telegram</div>
         </div>
         <div class="metric-card">
           <div class="metric-icon mi-green">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
-          <div class="metric-label">Conversas Ativas</div>
+          <div class="metric-label" id="card-conversas-label">Conversas Ativas</div>
           <div class="metric-value" id="card-conversas-ativas">0</div>
-          <div class="metric-change up">Tempo Real</div>
+          <div class="metric-change up" id="card-conversas-sub">Tempo Real · Telegram</div>
         </div>
         <div class="metric-card">
           <div class="metric-icon mi-amber">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
-          <div class="metric-label">Receita em Pipeline</div>
+          <div class="metric-label" id="card-receita-label">Receita em Pipeline</div>
           <div class="metric-value" id="card-receita-pipeline">R$ 0,00</div>
           <div class="metric-change up" id="card-receita-sub">Negócios em Aberto</div>
         </div>
@@ -487,9 +487,9 @@
           <div class="metric-icon mi-purple">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
           </div>
-          <div class="metric-label">Taxa de Conversão</div>
+          <div class="metric-label" id="card-conversao-label">Taxa de Conversão</div>
           <div class="metric-value" id="card-taxa-conversao">0%</div>
-          <div class="metric-change up">Fechados vs Total</div>
+          <div class="metric-change up" id="card-conversao-sub">Fechados vs Total</div>
         </div>
       </div>
 
@@ -510,22 +510,20 @@
         </div>
       </div>
 
-      <div class="dash-body">
-        <div>
-          <div class="pipeline-mini">
-            <div class="section-title">Funil de Vendas Rápido</div>
-            <div class="pipeline-cols" id="dash-mini-kanban">
-              <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px; width:100%;">Carregando dados do funil...</div>
+      <div class="dash-body" style="grid-template-columns: 1fr; padding-left:0; padding-right:0;">
+        <div class="chat-list" style="box-shadow:var(--shadow-sm);">
+          <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#229ED9" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              <span>Conversas Recentes no Telegram</span>
             </div>
+            <button class="btn-secondary" style="font-size:11px; padding:5px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1])">
+              <span>Abrir Central de Conversas Telegram</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
-        </div>
-
-        <div>
-          <div class="chat-list">
-            <div class="section-title">Conversas Recentes no Telegram</div>
-            <div id="dashboard-recent-chats">
-              <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Carregando conversas do Telegram...</div>
-            </div>
+          <div id="dashboard-recent-chats">
+            <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Carregando conversas do Telegram...</div>
           </div>
         </div>
       </div>
@@ -1912,34 +1910,39 @@ function renderizarDashboardConversasTelegram() {
   const container = document.getElementById('dashboard-recent-chats');
   if (!container) return;
 
-  if (listaConversasTelegram.length === 0) {
-    container.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Nenhuma interação recente no Telegram.</div>`;
+  if (!listaConversasTelegram || listaConversasTelegram.length === 0) {
+    container.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhuma interação recente no Telegram.</div>`;
     return;
   }
 
-  container.innerHTML = listaConversasTelegram.slice(0, 5).map(c => {
-    const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
-    const hora = formatarHoraConversa(c.data_ultima_mensagem);
-    const isHuman = c.status_atendimento === 'humano';
-    const initials = nomeExibicao.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
-    return `
-      <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer;">
-        <div class="ci-avatar" style="background:#229ED9; color:white;">${initials}</div>
-        <div class="ci-info">
-          <div class="ci-name" style="display:flex; justify-content:space-between;">
-            <span>${nomeExibicao}</span>
-            <span style="font-size:10px; color:var(--text-muted);">${hora}</span>
+  container.innerHTML = `
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap:12px;">
+      ${listaConversasTelegram.slice(0, 6).map(c => {
+        const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
+        const hora = formatarHoraConversa(c.data_ultima_mensagem);
+        const isHuman = c.status_atendimento === 'humano';
+        const initials = (nomeExibicao.replace('@', '').substring(0, 2) || 'TG').toUpperCase();
+        return `
+          <div class="chat-item" onclick="switchTab('chat', document.querySelectorAll('.sidebar-nav .nav-item')[1]); selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer; padding:12px 14px; background:var(--bg); border:1px solid var(--border); border-radius:10px; display:flex; align-items:center; gap:12px; transition:border-color 0.2s, transform 0.15s;">
+            <div class="ci-avatar" style="background:#229ED9; color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;">${initials}</div>
+            <div class="ci-info" style="flex:1; min-width:0;">
+              <div class="ci-name" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                <span style="font-weight:600; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nomeExibicao}</span>
+                <span style="font-size:10px; color:var(--text-muted); flex-shrink:0; margin-left:6px;">${hora}</span>
+              </div>
+              <div class="ci-msg" style="color:var(--text-muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:6px;">${c.ultima_mensagem || 'Sem mensagens'}</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 7px;">
+                  ${isHuman ? '🧑 Atendente Humano' : '🤖 Assistente IA'}
+                </span>
+                <span style="font-size:10px; color:var(--text-muted);">Chat ID: ${c.chat_id}</span>
+              </div>
+            </div>
           </div>
-          <div class="ci-msg">${c.ultima_mensagem || 'Sem mensagens'}</div>
-          <div style="margin-top:2px;">
-            <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:1px 5px;">
-              ${isHuman ? '🧑 Humano' : '🤖 IA'}
-            </span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+        `;
+      }).join('')}
+    </div>
+  `;
 }
 
 function filtrarConversasTelegram(termo) {
@@ -2207,18 +2210,65 @@ async function enviarMensagemOperadorTelegram() {
 async function carregarDashboardMetricas() {
   const empresaId = obterEmpresaAtivaId();
   try {
-    const res = await fetch(`/dashboard/metricas?empresa_id=${empresaId}`);
-    if (!res.ok) return;
+    const res = await apiFetch(`/dashboard/metricas?empresa_id=${empresaId}`);
+    if (!res.ok) {
+      console.warn('Falha ao obter métricas do dashboard:', res.status);
+      return;
+    }
     const m = await res.json();
 
+    // 1. Leads e Clientes
     const elLeads = document.getElementById('card-total-leads');
-    if (elLeads) elLeads.textContent = m.total_clientes;
+    if (elLeads) {
+      elLeads.textContent = (m.total_clientes !== undefined) ? m.total_clientes : (m.total_leads_telegram || 0);
+    }
+    const elLeadsSub = document.getElementById('card-leads-sub');
+    if (elLeadsSub && m.total_leads_telegram !== undefined) {
+      elLeadsSub.textContent = m.total_leads_telegram > 0 
+        ? `${m.total_leads_telegram} via Telegram · Webhook` 
+        : 'Sincronizado via Webhook';
+    }
 
+    // 2. Conversas Ativas
+    const elConversas = document.getElementById('card-conversas-ativas');
+    if (elConversas) {
+      elConversas.textContent = m.conversas_ativas !== undefined ? m.conversas_ativas : (typeof listaConversasTelegram !== 'undefined' ? listaConversasTelegram.length : 0);
+    }
+
+    // 3. Receita em Pipeline / Fechada
     const elReceita = document.getElementById('card-receita-pipeline');
-    if (elReceita) elReceita.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.receita_pipeline || 0);
+    const elReceitaLabel = document.getElementById('card-receita-label');
+    const elReceitaSub = document.getElementById('card-receita-sub');
+    const formatBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
+    const recPipeline = Number(m.receita_pipeline || 0);
+    const recFechada = Number(m.receita_fechada || 0);
+
+    if (elReceita) {
+      if (recPipeline > 0) {
+        elReceita.textContent = formatBRL(recPipeline);
+        if (elReceitaLabel) elReceitaLabel.textContent = 'Receita em Pipeline';
+        if (elReceitaSub) elReceitaSub.textContent = recFechada > 0 ? `+ ${formatBRL(recFechada)} fechados` : 'Negócios em Aberto';
+      } else if (recFechada > 0) {
+        elReceita.textContent = formatBRL(recFechada);
+        if (elReceitaLabel) elReceitaLabel.textContent = 'Receita Fechada';
+        if (elReceitaSub) elReceitaSub.textContent = 'Vendas Concluídas';
+      } else {
+        elReceita.textContent = formatBRL(0);
+        if (elReceitaLabel) elReceitaLabel.textContent = 'Receita em Pipeline';
+        if (elReceitaSub) elReceitaSub.textContent = 'Nenhum negócio ativo';
+      }
+    }
+
+    // 4. Taxa de Conversão
     const elConversao = document.getElementById('card-taxa-conversao');
-    if (elConversao) elConversao.textContent = `${m.taxa_conversao}%`;
+    if (elConversao) {
+      elConversao.textContent = `${m.taxa_conversao !== undefined ? m.taxa_conversao : 0}%`;
+    }
+    const elConversaoSub = document.getElementById('card-conversao-sub');
+    if (elConversaoSub && m.total_negocios !== undefined) {
+      elConversaoSub.textContent = `${m.negocios_fechados || 0} fechados de ${m.total_negocios || 0} negócios`;
+    }
 
     renderizarMiniKanbanDashboard(m.estagios || {});
   } catch (e) {
@@ -2229,28 +2279,6 @@ async function carregarDashboardMetricas() {
 function renderizarMiniKanbanDashboard(estagios) {
   const container = document.getElementById('dash-mini-kanban');
   if (!container) return;
-
-  const cols = [
-    { id: 'novo', label: 'Novo', cor: '#38bdf8' },
-    { id: 'qualificado', label: 'Qualificado', cor: '#818cf8' },
-    { id: 'proposta', label: 'Proposta', cor: '#fbbf24' },
-    { id: 'negociacao', label: 'Negociação', cor: '#f97316' },
-    { id: 'fechado', label: 'Fechado', cor: '#34d399' }
-  ];
-
-  container.innerHTML = cols.map(c => {
-    const info = estagios[c.id] || { quantidade: 0, valor: 0 };
-    return `
-      <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px;">
-        <div style="font-size:11px; font-weight:700; color:${c.cor}; text-transform:uppercase; margin-bottom:4px;">
-          ${c.label} (${info.quantidade})
-        </div>
-        <div style="font-size:12px; font-weight:600; color:var(--text);">
-          ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(info.valor)}
-        </div>
-      </div>
-    `;
-  }).join('');
 }
 
 // ===== DASHBOARD SÉRIE TEMPORAL (PARTE 24) =====
@@ -5165,14 +5193,14 @@ async function visualizarConversaHistoricaChat(id) {
 
   const isBase = (c.fonte === 'base_conhecimento' || c.teve_contexto);
   const badgeFonte = isBase 
-    ? '<span class="contract-status-badge cs-signed" style="font-size:10px; margin-bottom:6px; display:inline-block;">✓ Base de Conhecimento Interna</span>'
-    : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
+    ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">✓ Base de Conhecimento Interna</span>'
+    : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">✦ Conhecimento Geral Corporativo</span>';
 
   const docsTexto = (c.documentos_consultados && c.documentos_consultados.length > 0)
-    ? `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${c.documentos_consultados.join(', ')}</strong></div>`
+    ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${c.documentos_consultados.join(', ')}</strong></div>`
     : '';
 
-  const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
+  const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
 
   const dataFmt = c.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(c.criado_em) : new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})) : 'Anterior';
 
@@ -5258,14 +5286,14 @@ async function enviarPerguntaRAG() {
 
     const isBase = (data.fonte === 'base_conhecimento');
     const badgeFonte = isBase 
-      ? '<span class="contract-status-badge cs-signed" style="font-size:10px; margin-bottom:6px; display:inline-block;">✓ Base de Conhecimento Interna</span>'
-      : '<span class="contract-status-badge cs-pending" style="font-size:10px; margin-bottom:6px; display:inline-block;">✦ Conhecimento Geral Corporativo</span>';
+      ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">✓ Base de Conhecimento Interna</span>'
+      : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">✦ Conhecimento Geral Corporativo</span>';
 
     const docsTexto = (data.documentos_consultados && data.documentos_consultados.length > 0)
-      ? `<div style="font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
+      ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
       : '';
 
-    const modeloTag = `<span class="contract-status-badge" style="font-size:10px; background:rgba(83,74,183,0.12); color:#534AB7; border:1px solid rgba(83,74,183,0.25); margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
+    const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
 
     if (loadEl) {
       loadEl.innerHTML = `

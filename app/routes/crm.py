@@ -2313,6 +2313,21 @@ def obter_metricas_dashboard(
         cursor.execute(f"SELECT COUNT(*) AS total FROM clientes WHERE empresa_id = {ph}", (target_empresa,))
         total_clientes = cursor.fetchone()["total"]
 
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total FROM clientes 
+            WHERE empresa_id = {ph} AND (LOWER(COALESCE(origem, '')) = 'telegram' OR (telegram_chat_id IS NOT NULL AND telegram_chat_id != ''))
+        """, (target_empresa,))
+        total_leads_telegram = cursor.fetchone()["total"]
+
+        cursor.execute(f"""
+            SELECT COUNT(DISTINCT chat_id) AS total FROM (
+                SELECT telegram_chat_id AS chat_id FROM historico_conversas WHERE empresa_id = {ph}
+                UNION
+                SELECT chat_id FROM conversas_telegram WHERE empresa_id = {ph}
+            ) c WHERE chat_id IS NOT NULL AND chat_id != ''
+        """, (target_empresa, target_empresa))
+        conversas_ativas = cursor.fetchone()["total"]
+
         cursor.execute(f"SELECT COUNT(*) AS total FROM negocios WHERE empresa_id = {ph}", (target_empresa,))
         total_negocios = cursor.fetchone()["total"]
 
@@ -2372,11 +2387,14 @@ def obter_metricas_dashboard(
         return {
             "empresa_id": target_empresa,
             "total_clientes": total_clientes,
+            "total_leads_telegram": total_leads_telegram,
+            "conversas_ativas": conversas_ativas,
             "total_negocios": total_negocios,
             "negocios_fechados": negocios_fechados,
             "negocios_perdidos": negocios_perdidos,
             "receita_pipeline": receita_pipeline,
             "receita_fechada": receita_fechada,
+            "receita_total": receita_pipeline + receita_fechada,
             "taxa_conversao": taxa_conversao,
             "estagios": estagios
         }

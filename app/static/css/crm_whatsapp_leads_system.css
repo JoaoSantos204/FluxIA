@@ -3259,3 +3259,96 @@ body.dark-mode .toast {
   color: #f8fafc;
   border: 1px solid var(--border-strong);
 }
+
+/* ===== BADGES DE CONHECIMENTO IA (RAG) & CHAT IA ===== */
+.kb-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.kb-badge-interna {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.kb-badge-geral {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.kb-badge-modelo {
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+}
+
+/* Modo Escuro para Badges IA */
+[data-theme="dark"] .kb-badge-interna,
+body.dark-mode .kb-badge-interna {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(52, 211, 153, 0.45) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .kb-badge-geral,
+body.dark-mode .kb-badge-geral {
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(251, 191, 36, 0.45) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .kb-badge-modelo,
+body.dark-mode .kb-badge-modelo {
+  background: rgba(139, 92, 246, 0.22) !important;
+  color: #c4b5fd !important;
+  border: 1px solid rgba(167, 139, 250, 0.45) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Modo Escuro para Bolhas do Chat IA (RAG) */
+[data-theme="dark"] #rag-chat-messages .msg-bubble.msg-bot,
+body.dark-mode #rag-chat-messages .msg-bubble.msg-bot {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] #rag-chat-messages .msg-bubble.msg-bot .msg-text,
+body.dark-mode #rag-chat-messages .msg-bubble.msg-bot .msg-text {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] #rag-chat-messages .msg-bubble.msg-bot .msg-time,
+body.dark-mode #rag-chat-messages .msg-bubble.msg-bot .msg-time {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] #rag-chat-messages .kb-sources,
+body.dark-mode #rag-chat-messages .kb-sources {
+  color: #94a3b8 !important;
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] #rag-chat-messages .kb-sources strong,
+body.dark-mode #rag-chat-messages .kb-sources strong {
+  color: #e2e8f0 !important;
+}
+
+/* Hover nos cards de conversas do dashboard */
+.dash-body .chat-item:hover {
+  background: var(--surface-hover) !important;
+  border-color: rgba(34, 158, 217, 0.4) !important;
+  transform: translateY(-1px);
+}
