@@ -283,6 +283,73 @@ class AgentOrchestrator:
         finally:
             conexao.close()
 
+    def eh_pergunta_processo_base(self, mensagem: str) -> bool:
+        """
+        Verifica se a mensagem é uma pergunta sobre processos operacionais e institucionais básicos da empresa:
+        - Horário de atendimento, funcionamento, expediente, que horas abre/fecha, se está aberto hoje/sábado/domingo.
+        - Localização, endereço, onde fica, onde vocês estão, como chegar, sede.
+        - Canais de contato, site, quem são vocês, sobre a empresa.
+        """
+        if not mensagem:
+            return False
+        msg = mensagem.strip().lower()
+
+        padroes = [
+            # Horário e funcionamento
+            r"\b(hor[aá]rio|expediente|funcionamento)\b",
+            r"\b(que\s+horas?\s+(?:voc[eê]s?\s+)?(?:abrem?|fecham?|atendem?|funcionam?))\b",
+            r"\b(abrem?\s+(?:que\s+horas?|hoje|s[aá]bado|domingo|amanh[aã]))\b",
+            r"\b(fecham?\s+(?:que\s+horas?|hoje|cedo))\b",
+            r"\b(aberto|abertos|fechado|fechados)\s+(?:hoje|agora|s[aá]bado|domingo|no\s+almo[cç]o)\b",
+            r"\b(est[aã]o|t[aã]o)\s+(?:abertos?|fechados?|atendendo)\b",
+            r"\b(funciona|funcionam|atende|atendem)\s+(?:hoje|agora|s[aá]bado|domingo|aos?\s+finais?)\b",
+            r"\b(atendimento\s+(?:hoje|presencial))\b",
+            # Localização e endereço
+            r"\b(onde\s+(?:fica|ficam|est[aã]o|voc[eê]s\s+est[aã]o|voc[eê]s\s+ficam|localiza))\b",
+            r"\b(qual\s+(?:o\s+)?(?:endere[cç]o|localiza[cç][aã]o|local))\b",
+            r"\b(como\s+(?:fa[cç]o\s+para\s+)?chegar)\b",
+            r"\b(qual\s+o\s+ponto\s+de\s+refer[eê]ncia)\b",
+            r"\b(endere[cç]o\s+(?:da\s+empresa|de\s+voc[eê]s|completo))\b",
+            r"\b(localiza[cç][aã]o\s+(?:da\s+empresa|de\s+voc[eê]s))\b",
+            # Institucional geral
+            r"\b(quem\s+s[aã]o\s+voc[eê]s)\b",
+            r"\b(sobre\s+a\s+empresa)\b",
+            r"\b(o\s+que\s+(?:a\s+empresa|voc[eê]s)\s+fazem?)\b",
+        ]
+
+        for padrao in padroes:
+            if re.search(padrao, msg):
+                return True
+
+        return False
+
+    def eh_saudacao_simples(self, mensagem: str) -> bool:
+        """Verifica se a mensagem é estritamente uma saudação inicial sem perguntas substantivas."""
+        if not mensagem:
+            return False
+        msg_limpa = mensagem.strip().lower()
+        msg_sem_pont = re.sub(r"[^\w\s]", "", msg_limpa).strip()
+
+        saudacoes = {
+            "oi", "ola", "olá", "oie", "bom dia", "boa tarde", "boa noite", "e ai", "e aí",
+            "tudo bem", "tudo bom", "ola tudo bem", "olá tudo bem", "oi tudo bem", "opa",
+            "opa tudo bem", "opa tudo bom", "olá como vai", "ola como vai", "como vai",
+            "bom dia tudo bem", "boa tarde tudo bem", "boa noite tudo bem",
+            "oi bom dia", "oi boa tarde", "oi boa noite", "ola bom dia", "ola boa tarde", "ola boa noite",
+            "salve", "fala aí", "fala ai", "hello", "hi", "hey"
+        }
+        if msg_sem_pont in saudacoes:
+            return True
+
+        padroes_saudacao = [
+            r"^(?:oi|ol[aá]|oie|bom dia|boa tarde|boa noite|opa|salve)(?:\s+(?:tudo\s+bem|tudo\s+bom|como\s+vai))?[\s!.]*$"
+        ]
+        for padrao in padroes_saudacao:
+            if re.match(padrao, msg_limpa):
+                return True
+
+        return False
+
     def classificar_intencao_gerente(
         self,
         mensagem: str,
@@ -319,14 +386,15 @@ class AgentOrchestrator:
             "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
             "pode encerrar", "encerrar", "obrigado tenha um bom dia", "obrigado boa tarde", "obrigado boa noite"
         }
-        if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in ["era só isso", "era so isso", "pode encerrar", "até mais", "ate mais", "muito obrigado por tudo"]):
+        termos_despedida = [
+            "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
+            "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
+            "pode encerrar", "encerrar atendimento", "muito obrigado por tudo", "muito obrigada por tudo"
+        ]
+        if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in termos_despedida):
             return {"intencao": "DESPEDIDA", "criterio": "Usuário encerrou o diálogo ou despediu-se cordialmente"}
 
-        # 3. Se a coleta obrigatória estiver ligada e faltar nome ou telefone:
-        coleta_obrigatoria = contexto["config_empresa"].get("ia_coletar_dados_obrigatorio", True)
-        ja_cadastrado = contexto["cadastrado_completo"]
-
-        # Se acabou de fornecer os dados faltantes nesta mensagem
+        # 3. Se acabou de fornecer os dados faltantes nesta mensagem
         if dados_contato_extraidos.get("tem_contato"):
             tem_nome_agora = bool(dados_contato_extraidos.get("nome") or contexto["tem_nome_valido"])
             tem_tel_agora = bool(dados_contato_extraidos.get("telefone") or contexto["tem_telefone_valido"])
@@ -352,25 +420,31 @@ class AgentOrchestrator:
                     return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Dados de contato fornecidos junto com dúvida"}
                 return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
 
-        if coleta_obrigatoria and not ja_cadastrado:
-            # Cliente não tem cadastro completo e não forneceu dados nesta mensagem
-            # Se a mensagem for só uma saudação ou dúvida, devemos solicitar os dados de contato primeiro!
-            return {"intencao": "COLETA_CONTATO", "criterio": "Cliente sem telefone/nome cadastrado e regra de contato obrigatório ativa"}
+        # 4. Saudação Simples (sem pergunta adicional): responde cordial com outra saudação, sem pedir número
+        if self.eh_saudacao_simples(mensagem):
+            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas adicionais"}
 
-        # 4. Saudação Simples (sem pergunta adicional)
-        saudacoes = {
-            "oi", "ola", "olá", "oie", "bom dia", "boa tarde", "boa noite", "e ai", "e aí",
-            "tudo bem", "tudo bom", "ola tudo bem", "olá tudo bem", "oi tudo bem", "opa"
-        }
-        if msg_sem_pont in saudacoes:
-            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas"}
+        # 5. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
+        eh_pergunta_processo = self.eh_pergunta_processo_base(mensagem)
+        if eh_pergunta_processo:
+            return {
+                "intencao": "PERGUNTA_CONHECIMENTO",
+                "criterio": "Pergunta sobre processo base da empresa (horário/localização/funcionamento) sem exigir telefone"
+            }
 
-        # 5. Consulta Comercial sobre negócio ou produto do cliente
+        # 6. Se ainda não possui telefone válido: qualquer dúvida sobre produtos, serviços, preços ou planos exige contato
+        if not contexto.get("tem_telefone_valido"):
+            return {
+                "intencao": "COLETA_CONTATO",
+                "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone"
+            }
+
+        # 7. Consulta Comercial sobre negócio ou produto do cliente (quando já possui telefone)
         termos_comerciais = ["minha proposta", "meu negócio", "meu negocio", "meu contrato", "andamento do meu", "status da proposta", "status do meu pedido", "status do negócio"]
         if any(t in msg_limpa for t in termos_comerciais):
             return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Consulta sobre histórico comercial do próprio cliente"}
 
-        # 6. Pergunta legítima para base de conhecimento
+        # 8. Pergunta legítima para base de conhecimento
         return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Pergunta substantiva direcionada à base de conhecimento da empresa"}
 
     def executar_orquestracao(
@@ -433,33 +507,27 @@ class AgentOrchestrator:
 
         # 4. Ações dos Subagentes
 
-        # --- AÇÃO: COLETA DE CONTATO OBRIGATÓRIA ---
+        # --- AÇÃO: COLETA DE CONTATO (NÚMERO DE TELEFONE) ---
         if intencao == "COLETA_CONTATO":
             # Marca aguardando_contato no cliente
             self.atualizar_dados_cliente(cliente_id=contexto["cliente_id"], aguardando=True)
 
-            precisa_nome = not contexto["tem_nome_valido"]
-            precisa_tel = not contexto["tem_telefone_valido"]
-
-            if precisa_nome and precisa_tel:
+            if nome_exibicao:
                 msg_coleta = (
-                    "👋 Olá! Seja muito bem-vindo ao atendimento da **FluxIA**.\n\n"
-                    "Para iniciarmos seu atendimento personalizado e podermos registrar suas solicitações no sistema, "
-                    "por favor me informe o seu **Nome Completo** e seu número de **WhatsApp/Telefone** com DDD."
-                )
-            elif precisa_tel:
-                msg_coleta = (
-                    f"👋 Olá, {nome_exibicao}! Para darmos continuidade ao seu atendimento personalizado, "
-                    "por favor me informe o seu número de **WhatsApp/Telefone com DDD** para contato."
+                    f"👋 Olá, {nome_exibicao}! Para te passar todas as informações detalhadas sobre nossos produtos, planos e condições personalizadas, "
+                    "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
                 )
             else:
                 msg_coleta = (
-                    "👋 Olá! Para podermos registrar seu atendimento, por favor me informe o seu **Nome Completo**."
+                    "👋 Olá! Seja muito bem-vindo ao nosso atendimento.\n\n"
+                    "Para te passar todas as informações detalhadas sobre nossos produtos, planos e condições personalizadas, "
+                    "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
                 )
 
             return msg_coleta, {
                 "intencao": "COLETA_CONTATO",
                 "cadastrado": False,
+                "exibir_botao_contato": True,
                 "documentos_usados": []
             }
 
@@ -474,6 +542,7 @@ class AgentOrchestrator:
             return msg_ok, {
                 "intencao": "CADASTRO_CONCLUIDO",
                 "cadastrado": True,
+                "remover_teclado": True,
                 "documentos_usados": []
             }
 
@@ -499,8 +568,8 @@ class AgentOrchestrator:
                 )
             else:
                 msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! Seja muito bem-vindo ao nosso atendimento.\n\n"
-                    "Como posso te ajudar hoje? Fique à vontade para tirar dúvidas sobre nossos produtos, soluções e planos!"
+                    f"👋 Olá{saudacao_nome}! Tudo bem? Seja muito bem-vindo ao nosso atendimento.\n\n"
+                    "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos horários de funcionamento, localização, produtos ou planos!"
                 )
 
             return msg_saudacao, {
@@ -623,15 +692,22 @@ class AgentOrchestrator:
             telemetria_id = 0
 
         # Se acabou de cadastrar dados nesta mensagem, prefixa uma confirmação amigável
-        if dados_contato.get("tem_contato") and dados_contato.get("nome"):
-            resposta_ia = f"Perfeito, {nome_exibicao}! Seus dados foram anotados com sucesso.\n\n" + resposta_ia
+        remover_teclado = False
+
+        if dados_contato.get("tem_contato"):
+            if dados_contato.get("nome"):
+                resposta_ia = f"Perfeito, {nome_exibicao}! Seus dados foram anotados com sucesso.\n\n" + resposta_ia
+            if contexto.get("tem_telefone_valido"):
+                remover_teclado = True
 
         return resposta_ia, {
             "intencao": "PERGUNTA_CONHECIMENTO",
             "cadastrado": contexto["cadastrado_completo"],
             "documentos_usados": docs_usados,
             "telemetria_id": telemetria_id,
-            "contexto_publico": contexto_publico
+            "contexto_publico": contexto_publico,
+            "exibir_botao_contato": False,
+            "remover_teclado": remover_teclado
         }
 
 

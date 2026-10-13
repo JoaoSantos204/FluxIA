@@ -12,7 +12,7 @@ from app.services.ai_service import AIService
 from app.services.embedding_service import gerar_embedding
 from app.services.history_service import salvar_interacao, obter_ultimas_interacoes, marcar_interacoes_como_lidas
 from app.services.company_service import obter_configuracao_empresa
-from app.services.agent_orchestrator import agent_orchestrator
+from app.services.agent_orchestrator import agent_orchestrator, formatar_telefone_br, is_nome_generico
 from app.database.database import conectar, _cursor, _placeholder
 from app.routes.analytics import registrar_pergunta_historico
 
@@ -143,8 +143,8 @@ def obter_token_bot_empresa(empresa_id: int | None = None, chat_id: str | None =
     return token if token else None
 
 
-def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = None):
-    """Envia uma mensagem de resposta via API do Telegram com validação explícita de bot próprio."""
+def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = None, reply_markup: dict | None = None):
+    """Envia uma mensagem de resposta via API do Telegram com validação explícita de bot próprio e suporte a teclado."""
     token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
     if not token:
         logger.warning(f"[Telegram] Bot do Telegram não configurado para a empresa {empresa_id}. Mensagem para chat {chat_id} não enviada.")
@@ -156,11 +156,13 @@ def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = 
         "text": texto,
         "parse_mode": "Markdown"
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
 
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 400 and "parse" in response.text.lower():
-            payload.pop("parse_mode")
+            payload.pop("parse_mode", None)
             requests.post(url, json=payload, timeout=10)
     except Exception as e:
         logger.error(f"[Telegram] Erro ao enviar mensagem para chat {chat_id}: {e}")
@@ -346,11 +348,16 @@ async def telegram_webhook(
         return {"status": "error", "message": "JSON inválido"}
 
     mensagem = dados.get("message") or dados.get("edited_message")
-    if not mensagem or "text" not in mensagem:
+    if not mensagem:
+        return {"status": "ok"}
+
+    contato_recebido = mensagem.get("contact")
+    texto_recebido = str(mensagem.get("text", "")).strip()
+
+    if not contato_recebido and not texto_recebido:
         return {"status": "ok"}
 
     chat_id = str(mensagem["chat"]["id"])
-    texto_recebido = str(mensagem.get("text", "")).strip()
 
     # Identificação por deep link (/start empresa_X ou /start emp_X)
     if texto_recebido.startswith("/start"):
@@ -420,6 +427,50 @@ async def telegram_webhook(
 
         cliente_id = cliente["id"]
 
+        # Se recebemos contato compartilhado nativamente pelo botão do Telegram:
+        if contato_recebido:
+            raw_phone = str(contato_recebido.get("phone_number") or "").strip()
+            tel_formatado = formatar_telefone_br(raw_phone) if raw_phone else raw_phone
+
+            c_fn = str(contato_recebido.get("first_name") or "").strip()
+            c_ln = str(contato_recebido.get("last_name") or "").strip()
+            c_nome = " ".join([p for p in [c_fn, c_ln] if p]).strip()
+
+            nome_final = (cliente.get("nome") or "").strip()
+            if (is_nome_generico(nome_final) or not nome_final) and c_nome and not is_nome_generico(c_nome):
+                nome_final = c_nome
+            elif (is_nome_generico(nome_final) or not nome_final) and nome_lead and not is_nome_generico(nome_lead):
+                nome_final = nome_lead
+
+            cursor.execute(
+                f"UPDATE clientes SET telefone = {ph}, nome = {ph}, aguardando_contato = {ph} WHERE id = {ph}",
+                (tel_formatado, nome_final, False, cliente_id)
+            )
+            conexao.commit()
+
+            saudacao_nome = f", {nome_final}" if (nome_final and not is_nome_generico(nome_final)) else ""
+            msg_confirmacao = (
+                f"✅ Muito obrigado{saudacao_nome}! Seu telefone ({tel_formatado}) foi registrado com sucesso.\n\n"
+                "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, serviços ou horários de funcionamento!"
+            )
+
+            enviar_mensagem_telegram(
+                chat_id=chat_id,
+                texto=msg_confirmacao,
+                empresa_id=empresa_id,
+                reply_markup={"remove_keyboard": True}
+            )
+
+            salvar_interacao(
+                telegram_chat_id=chat_id,
+                mensagem_usuario="[Contato compartilhado via botão]",
+                resposta_ia=msg_confirmacao,
+                lida=False,
+                empresa_id=empresa_id
+            )
+
+            return {"status": "ok", "tipo": "contato_recebido"}
+
         comando = texto_recebido.strip().lower()
 
         if comando in ["/perfil", "perfil"]:
@@ -460,7 +511,19 @@ async def telegram_webhook(
             return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
 
         if resposta_ia:
-            enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id)
+            reply_markup = None
+            if meta_exec.get("exibir_botao_contato"):
+                reply_markup = {
+                    "keyboard": [
+                        [{"text": "📱 Compartilhar Telefone / WhatsApp", "request_contact": True}]
+                    ],
+                    "resize_keyboard": True,
+                    "one_time_keyboard": True
+                }
+            elif meta_exec.get("remover_teclado"):
+                reply_markup = {"remove_keyboard": True}
+
+            enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id, reply_markup=reply_markup)
             salvar_interacao(
                 telegram_chat_id=chat_id,
                 mensagem_usuario=texto_recebido,
