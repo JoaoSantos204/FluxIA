@@ -111,6 +111,9 @@ class GerarPropostaRequest(BaseModel):
     validade_dias: int = 15
     enviar_email: bool = True
 
+class BaseConhecimentoToggleRequest(BaseModel):
+    adicionar: Optional[bool] = None
+
 class PropostaDirectCreate(BaseModel):
     empresa_id: int = 1
     cliente_id: Optional[int] = None
@@ -125,6 +128,7 @@ class PropostaDirectCreate(BaseModel):
     descricao_itens: Optional[str] = None
     enviar_email: bool = False
     usuario_id: Optional[int] = None
+    indexar_rag: bool = True
 
 class PropostaUpdate(BaseModel):
     valor: Optional[float] = None
@@ -1345,7 +1349,11 @@ def listar_contratos(request: Request = None, empresa_id: Optional[int] = Query(
     try:
         cursor.execute(f"""
             SELECT c.id, c.negocio_id, c.status, c.valor_contrato, c.data_assinatura, c.criado_em,
-                   n.estagio, n.empresa_id, cli.nome AS cliente_nome, p.nome AS produto_nome
+                   n.estagio, n.empresa_id, cli.nome AS cliente_nome, p.nome AS produto_nome,
+                   EXISTS (
+                       SELECT 1 FROM documentos d
+                       WHERE d.ref_tipo = 'contrato' AND d.ref_id = c.id AND d.empresa_id = n.empresa_id
+                   ) AS na_base_conhecimento
             FROM contratos c
             JOIN negocios n ON c.negocio_id = n.id
             JOIN clientes cli ON n.cliente_id = cli.id
@@ -1367,7 +1375,11 @@ def obter_contrato(negocio_id: int):
     try:
         cursor.execute(f"""
             SELECT c.id, c.negocio_id, c.status, c.valor_contrato, c.data_assinatura, c.criado_em,
-                   n.estagio, n.empresa_id, cli.nome AS cliente_nome, p.nome AS produto_nome
+                   n.estagio, n.empresa_id, cli.nome AS cliente_nome, p.nome AS produto_nome,
+                   EXISTS (
+                       SELECT 1 FROM documentos d
+                       WHERE d.ref_tipo = 'contrato' AND d.ref_id = c.id AND d.empresa_id = n.empresa_id
+                   ) AS na_base_conhecimento
             FROM contratos c
             JOIN negocios n ON c.negocio_id = n.id
             JOIN clientes cli ON n.cliente_id = cli.id
@@ -1602,6 +1614,117 @@ def excluir_contrato(contrato_id: int, request: Request = None, empresa_id: Opti
         conexao.close()
 
 
+@router.post("/contratos/{contrato_id}/base-conhecimento")
+def alternar_base_conhecimento_contrato(
+    contrato_id: int,
+    dados: Optional[BaseConhecimentoToggleRequest] = None,
+    request: Request = None,
+    empresa_id: Optional[int] = Query(None)
+):
+    """
+    Controla se o contrato comercial está indexado na Base de Conhecimento (RAG).
+    Apenas Administradores e perfil Master têm permissão.
+    Permite adicionar/reindexar (inclusive após deleção acidental na base) ou remover.
+    """
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT c.id, c.negocio_id, c.status, c.valor_contrato, c.data_assinatura,
+                   n.empresa_id, cli.nome AS cliente_nome, cli.email AS cliente_email,
+                   cli.telefone AS cliente_telefone, p.nome AS produto_nome,
+                   emp.nome AS empresa_nome
+            FROM contratos c
+            JOIN negocios n ON c.negocio_id = n.id
+            JOIN clientes cli ON n.cliente_id = cli.id
+            LEFT JOIN produtos p ON n.produto_id = p.id
+            LEFT JOIN empresas emp ON n.empresa_id = emp.id
+            WHERE c.id = {ph} AND n.empresa_id = {ph}
+        """, (contrato_id, target_empresa))
+        c = cursor.fetchone()
+        if not c:
+            raise HTTPException(status_code=404, detail="Contrato não encontrado.")
+
+        cursor.execute(f"""
+            SELECT id, nome_arquivo, caminho_arquivo
+            FROM documentos
+            WHERE ref_tipo = 'contrato' AND ref_id = {ph} AND empresa_id = {ph}
+        """, (contrato_id, target_empresa))
+        docs = cursor.fetchall()
+        esta_na_base = len(docs) > 0
+
+        deseja_adicionar = not esta_na_base if (dados is None or dados.adicionar is None) else bool(dados.adicionar)
+
+        if not deseja_adicionar:
+            doc_ids = [d["id"] for d in docs]
+            if doc_ids:
+                cursor.execute(f"DELETE FROM chunks WHERE documento_id = ANY({ph})", (doc_ids,))
+                for d in docs:
+                    if d.get("caminho_arquivo"):
+                        try:
+                            caminho = Path(d["caminho_arquivo"])
+                            if caminho.exists():
+                                caminho.unlink()
+                        except Exception:
+                            pass
+                cursor.execute(f"DELETE FROM documentos WHERE id = ANY({ph})", (doc_ids,))
+                conexao.commit()
+
+            return {
+                "sucesso": True,
+                "na_base_conhecimento": False,
+                "contrato_id": contrato_id,
+                "documento_id": None,
+                "mensagem": f"Contrato #{contrato_id} removido da Base de Conhecimento com sucesso."
+            }
+        else:
+            doc_ids = [d["id"] for d in docs]
+            if doc_ids:
+                cursor.execute(f"DELETE FROM chunks WHERE documento_id = ANY({ph})", (doc_ids,))
+                cursor.execute(f"DELETE FROM documentos WHERE id = ANY({ph})", (doc_ids,))
+                conexao.commit()
+
+            data_ref = c["data_assinatura"].strftime("%d/%m/%Y %H:%M") if c.get("data_assinatura") else datetime.now().strftime("%d/%m/%Y %H:%M")
+            texto_contrato = f"""TERMO E REGISTRO DE CONTRATO CORPORATIVO
+Identificador: Contrato #{c['id']}
+Status: {c.get('status') or 'assinado'}
+Data de Referência: {data_ref}
+Empresa Contratada: {c.get('empresa_nome') or 'FluxIA'} (Ambiente #{c['empresa_id']})
+Cliente Contratante: {c['cliente_nome']}
+E-mail: {c.get('cliente_email') or 'Não informado'}
+Telefone: {c.get('cliente_telefone') or 'Não informado'}
+Produto / Serviço Licenciado: {c.get('produto_nome') or 'Serviço Personalizado'}
+Valor Total Fechado: R$ {float(c['valor_contrato'] or 0):,.2f}
+Referência CRM: Negócio #{c['negocio_id']}
+Condições: Contrato registrado formalmente na base corporativa."""
+
+            nome_doc = f"Contrato_{contrato_id}_{re.sub(r'[^a-zA-Z0-9]', '_', str(c['cliente_nome']))}.txt"
+            doc_id = salvar_e_indexar_documento_texto(
+                empresa_id=target_empresa,
+                nome_arquivo=nome_doc,
+                conteudo_texto=texto_contrato,
+                tipo_arquivo=".txt",
+                nivel_acesso="interno",
+                origem="sistema",
+                ref_tipo="contrato",
+                ref_id=contrato_id
+            )
+
+            return {
+                "sucesso": True,
+                "na_base_conhecimento": True,
+                "contrato_id": contrato_id,
+                "documento_id": doc_id,
+                "mensagem": f"Contrato #{contrato_id} incluído e indexado na Base de Conhecimento com sucesso!"
+            }
+    finally:
+        conexao.close()
+
+
 # ============================================================================
 # ENDPOINTS: PROPOSTAS COMERCIAIS (PARTE 27)
 # ============================================================================
@@ -1781,7 +1904,12 @@ def listar_propostas_negocio(negocio_id: int):
             SELECT p.id, p.negocio_id, p.empresa_id, p.cliente_id, p.produto_id, p.valor,
                    p.condicoes_pagamento, p.validade_dias, p.status_envio, p.email_destinatario,
                    p.documento_id, p.criado_em,
-                   cli.nome AS cliente_nome, prod.nome AS produto_nome
+                   cli.nome AS cliente_nome, prod.nome AS produto_nome,
+                   EXISTS (
+                       SELECT 1 FROM documentos d 
+                       WHERE ((d.ref_tipo = 'proposta' AND d.ref_id = p.id) OR (p.documento_id IS NOT NULL AND d.id = p.documento_id))
+                         AND d.empresa_id = p.empresa_id
+                   ) AS na_base_conhecimento
             FROM propostas p
             JOIN clientes cli ON p.cliente_id = cli.id
             LEFT JOIN produtos prod ON p.produto_id = prod.id
@@ -1816,7 +1944,12 @@ def listar_todas_propostas(request: Request = None, empresa_id: Optional[int] = 
                    p.documento_id, p.criado_em, p.descricao_itens,
                    cli.nome AS cliente_nome, cli.telefone AS cliente_telefone,
                    prod.nome AS produto_nome,
-                   n.estagio AS negocio_estagio
+                   n.estagio AS negocio_estagio,
+                   EXISTS (
+                       SELECT 1 FROM documentos d 
+                       WHERE ((d.ref_tipo = 'proposta' AND d.ref_id = p.id) OR (p.documento_id IS NOT NULL AND d.id = p.documento_id))
+                         AND d.empresa_id = p.empresa_id
+                   ) AS na_base_conhecimento
             FROM propostas p
             JOIN clientes cli ON p.cliente_id = cli.id
             LEFT JOIN produtos prod ON p.produto_id = prod.id
@@ -2019,10 +2152,12 @@ def criar_proposta_direta(dados: PropostaDirectCreate, request: Request = None):
             proposta_id=proposta_id
         )
 
-        # 7. Salvar e indexar como documento interno no RAG / Base de Conhecimento
+        # 7. Salvar e indexar como documento interno no RAG / Base de Conhecimento se solicitado
         doc_id = None
-        try:
-            texto_rag = f"""PROPOSTA COMERCIAL #{proposta_id}
+        deve_indexar = getattr(dados, "indexar_rag", True)
+        if deve_indexar:
+            try:
+                texto_rag = f"""PROPOSTA COMERCIAL #{proposta_id}
 Cliente: {cliente_nome}
 Email: {cliente_email or 'Não informado'}
 Telefone: {cliente_telefone or 'Não informado'}
@@ -2034,21 +2169,21 @@ Validade: {dados.validade_dias} dias
 Empresa Emissora: {empresa_nome}
 Status: Proposta Oficial Gerada"""
 
-            nome_arquivo_doc = f"Proposta_{proposta_id}_{re.sub(r'[^a-zA-Z0-9]', '_', cliente_nome)}.html"
-            doc_id = salvar_e_indexar_documento_texto(
-                empresa_id=target_empresa,
-                nome_arquivo=nome_arquivo_doc,
-                conteudo_texto=texto_rag,
-                tipo_arquivo=".html",
-                nivel_acesso="interno",
-                origem="sistema",
-                ref_tipo="proposta",
-                ref_id=proposta_id
-            )
-            cursor.execute(f"UPDATE propostas SET documento_id = {ph} WHERE id = {ph}", (doc_id, proposta_id))
-            conexao.commit()
-        except Exception as e:
-            logger.error(f"[Propostas] Falha ao indexar proposta no RAG: {e}")
+                nome_arquivo_doc = f"Proposta_{proposta_id}_{re.sub(r'[^a-zA-Z0-9]', '_', cliente_nome)}.html"
+                doc_id = salvar_e_indexar_documento_texto(
+                    empresa_id=target_empresa,
+                    nome_arquivo=nome_arquivo_doc,
+                    conteudo_texto=texto_rag,
+                    tipo_arquivo=".html",
+                    nivel_acesso="interno",
+                    origem="sistema",
+                    ref_tipo="proposta",
+                    ref_id=proposta_id
+                )
+                cursor.execute(f"UPDATE propostas SET documento_id = {ph} WHERE id = {ph}", (doc_id, proposta_id))
+                conexao.commit()
+            except Exception as e:
+                logger.error(f"[Propostas] Falha ao indexar proposta no RAG: {e}")
 
         # 8. Envio opcional por e-mail se solicitado
         email_sucesso = False
@@ -2288,6 +2423,120 @@ def excluir_proposta(
         conexao.commit()
 
         return {"sucesso": True, "mensagem": f"Proposta #{proposta_id} excluída com sucesso."}
+    finally:
+        conexao.close()
+
+
+@router.post("/propostas/{proposta_id}/base-conhecimento")
+def alternar_base_conhecimento_proposta(
+    proposta_id: int,
+    dados: Optional[BaseConhecimentoToggleRequest] = None,
+    request: Request = None,
+    empresa_id: Optional[int] = Query(None)
+):
+    """
+    Controla se a proposta comercial está indexada na Base de Conhecimento (RAG).
+    Apenas Administradores e perfil Master têm permissão.
+    Permite adicionar/reindexar (inclusive após deleção acidental na base) ou remover.
+    """
+    operador = exigir_perfil(request, empresa_id, ["admin", "master"])
+    target_empresa = operador["empresa_id"] if operador["perfil"] != "master" else (empresa_id or 1)
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT p.id, p.empresa_id, p.valor, p.condicoes_pagamento, p.validade_dias,
+                   p.descricao_itens, p.documento_id,
+                   cli.nome AS cliente_nome, cli.email AS cliente_email, cli.telefone AS cliente_telefone,
+                   prod.nome AS produto_nome, prod.descricao AS produto_descricao,
+                   emp.nome AS empresa_nome
+            FROM propostas p
+            JOIN clientes cli ON p.cliente_id = cli.id
+            LEFT JOIN produtos prod ON p.produto_id = prod.id
+            LEFT JOIN empresas emp ON p.empresa_id = emp.id
+            WHERE p.id = {ph} AND p.empresa_id = {ph}
+        """, (proposta_id, target_empresa))
+        p = cursor.fetchone()
+        if not p:
+            raise HTTPException(status_code=404, detail="Proposta não encontrada.")
+
+        cursor.execute(f"""
+            SELECT id, nome_arquivo, caminho_arquivo
+            FROM documentos
+            WHERE ((ref_tipo = 'proposta' AND ref_id = {ph}) OR (id = {ph}))
+              AND empresa_id = {ph}
+        """, (proposta_id, p.get("documento_id") or 0, target_empresa))
+        docs = cursor.fetchall()
+        esta_na_base = len(docs) > 0
+
+        deseja_adicionar = not esta_na_base if (dados is None or dados.adicionar is None) else bool(dados.adicionar)
+
+        if not deseja_adicionar:
+            doc_ids = [d["id"] for d in docs]
+            if doc_ids:
+                cursor.execute(f"DELETE FROM chunks WHERE documento_id = ANY({ph})", (doc_ids,))
+                for d in docs:
+                    if d.get("caminho_arquivo"):
+                        try:
+                            caminho = Path(d["caminho_arquivo"])
+                            if caminho.exists():
+                                caminho.unlink()
+                        except Exception:
+                            pass
+                cursor.execute(f"DELETE FROM documentos WHERE id = ANY({ph})", (doc_ids,))
+
+            cursor.execute(f"UPDATE propostas SET documento_id = NULL WHERE id = {ph} AND empresa_id = {ph}", (proposta_id, target_empresa))
+            conexao.commit()
+            return {
+                "sucesso": True,
+                "na_base_conhecimento": False,
+                "proposta_id": proposta_id,
+                "documento_id": None,
+                "mensagem": f"Proposta #{proposta_id} removida da Base de Conhecimento com sucesso."
+            }
+        else:
+            doc_ids = [d["id"] for d in docs]
+            if doc_ids:
+                cursor.execute(f"DELETE FROM chunks WHERE documento_id = ANY({ph})", (doc_ids,))
+                cursor.execute(f"DELETE FROM documentos WHERE id = ANY({ph})", (doc_ids,))
+                conexao.commit()
+
+            texto_rag = f"""PROPOSTA COMERCIAL #{proposta_id}
+Cliente: {p['cliente_nome']}
+Email: {p.get('cliente_email') or 'Não informado'}
+Telefone: {p.get('cliente_telefone') or 'Não informado'}
+Produto / Solução: {p.get('produto_nome') or 'Solução Personalizada'}
+Descrição / Escopo: {p.get('descricao_itens') or p.get('produto_descricao') or 'Conforme detalhamento comercial'}
+Valor Proposto: R$ {float(p['valor'] or 0):,.2f}
+Condições de Pagamento: {p.get('condicoes_pagamento') or 'À vista'}
+Validade: {p.get('validade_dias') or 15} dias
+Empresa Emissora: {p.get('empresa_nome') or 'FluxIA'}
+Status: Proposta Oficial na Base de Conhecimento"""
+
+            nome_arquivo_doc = f"Proposta_{proposta_id}_{re.sub(r'[^a-zA-Z0-9]', '_', str(p['cliente_nome']))}.html"
+            doc_id = salvar_e_indexar_documento_texto(
+                empresa_id=target_empresa,
+                nome_arquivo=nome_arquivo_doc,
+                conteudo_texto=texto_rag,
+                tipo_arquivo=".html",
+                nivel_acesso="interno",
+                origem="sistema",
+                ref_tipo="proposta",
+                ref_id=proposta_id
+            )
+
+            cursor.execute(f"UPDATE propostas SET documento_id = {ph} WHERE id = {ph} AND empresa_id = {ph}", (doc_id, proposta_id, target_empresa))
+            conexao.commit()
+
+            return {
+                "sucesso": True,
+                "na_base_conhecimento": True,
+                "proposta_id": proposta_id,
+                "documento_id": doc_id,
+                "mensagem": f"Proposta #{proposta_id} incluída e indexada na Base de Conhecimento com sucesso!"
+            }
     finally:
         conexao.close()
 

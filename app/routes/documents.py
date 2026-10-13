@@ -357,6 +357,7 @@ def deletar_documento(
             caminho.unlink()
 
         cursor.execute(f"DELETE FROM chunks WHERE documento_id = {ph}", (documento_id,))
+        cursor.execute(f"UPDATE propostas SET documento_id = NULL WHERE documento_id = {ph}", (documento_id,))
         cursor.execute(f"DELETE FROM documentos WHERE id = {ph}", (documento_id,))
 
         conexao.commit()

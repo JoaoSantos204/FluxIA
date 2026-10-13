@@ -759,11 +759,12 @@
                 <th>Validade</th>
                 <th>Data Emissão</th>
                 <th>Envio E-mail</th>
+                <th>Base IA (RAG)</th>
                 <th style="text-align:right;">Ações</th>
               </tr>
             </thead>
             <tbody id="tabela-propostas-corpo">
-              <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
+              <tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>
             </tbody>
           </table>
         </div>
@@ -917,6 +918,13 @@
               <input type="checkbox" id="tela-prop-enviar-email-chk" style="cursor:pointer; width:16px; height:16px;" />
               <label for="tela-prop-enviar-email-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
                 Disparar cópia oficial por e-mail para o cliente imediatamente após gerar a proposta
+              </label>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; margin-top:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+              <input type="checkbox" id="tela-prop-indexar-rag-chk" checked style="cursor:pointer; width:16px; height:16px;" />
+              <label for="tela-prop-indexar-rag-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
+                🧠 Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
               </label>
             </div>
           </div>
@@ -3517,14 +3525,14 @@ async function carregarPropostasCRM() {
   if (!corpo) return;
 
   try {
-    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:30px;">Carregando propostas...</td></tr>`;
     const res = await apiFetch(`/propostas?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao listar propostas');
     const data = await res.json();
     propostasCache = data.propostas || [];
     renderizarTabelaPropostas(propostasCache);
   } catch (err) {
-    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#ef4444; padding:30px;">Erro: ${err.message}</td></tr>`;
   }
 }
 
@@ -3533,7 +3541,7 @@ function renderizarTabelaPropostas(propostas) {
   if (!corpo) return;
 
   if (propostas.length === 0) {
-    corpo.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhuma proposta gerada ainda. Clique em "Nova Proposta" para emitir uma.</td></tr>`;
+    corpo.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:30px;">Nenhuma proposta gerada ainda. Clique em "Nova Proposta" para emitir uma.</td></tr>`;
     return;
   }
 
@@ -3550,13 +3558,33 @@ function renderizarTabelaPropostas(propostas) {
       <td style="color:var(--text-muted); font-size:11px;">${formatarData(p.criado_em)}</td>
       <td>
         <span class="badge-status ${p.status_envio === 'enviado' ? 'badge-active' : 'badge-default'}">
-          ${p.status_envio === 'enviado' ? '✓ Enviado' : 'Gerada (RAG)'}
+          ${p.status_envio === 'enviado' ? '✓ Enviado' : 'Pendente'}
         </span>
+      </td>
+      <td>
+        ${p.na_base_conhecimento ? `
+          <span class="badge-status badge-active" style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25);" title="Documento indexado no RAG para respostas da IA">
+            ✓ Na Base IA
+          </span>
+        ` : `
+          <span class="badge-status badge-default" style="color:var(--text-muted); opacity:0.85;" title="Não indexada na base de conhecimento">
+            Fora da Base
+          </span>
+        `}
       </td>
       <td style="text-align:right;">
         <div style="display:inline-flex; gap:6px; justify-content:flex-end; align-items:center;">
           <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">👁 Ver</button>
           ${isAdmin ? `
+            ${p.na_base_conhecimento ? `
+              <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171; border-color:rgba(248,113,113,0.3);" title="Remover da Base de Conhecimento (RAG)" onclick="alternarBaseConhecimentoProposta(${p.id}, false)">
+                🧠 Remover da Base
+              </button>
+            ` : `
+              <button class="btn-green" style="padding:4px 8px; font-size:11px;" title="Adicionar / Reindexar na Base de Conhecimento (RAG)" onclick="alternarBaseConhecimentoProposta(${p.id}, true)">
+                🧠 + Adicionar à Base
+              </button>
+            `}
             <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarProposta(${p.id})">✏️ Editar</button>
             <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="excluirPropostaCRM(${p.id})">🗑️ Excluir</button>
           ` : ''}
@@ -3782,6 +3810,7 @@ function obterDadosFormularioPropostaTela() {
   const condicoes = document.getElementById('tela-prop-condicoes') ? document.getElementById('tela-prop-condicoes').value.trim() : '';
   const descricao = document.getElementById('tela-prop-descricao') ? document.getElementById('tela-prop-descricao').value.trim() : '';
   const enviarEmail = document.getElementById('tela-prop-enviar-email-chk') ? document.getElementById('tela-prop-enviar-email-chk').checked : false;
+  const indexarRag = document.getElementById('tela-prop-indexar-rag-chk') ? document.getElementById('tela-prop-indexar-rag-chk').checked : true;
 
   return {
     empresa_id: empresaId,
@@ -3795,7 +3824,8 @@ function obterDadosFormularioPropostaTela() {
     validade_dias: validadeDias,
     condicoes_pagamento: condicoes || 'À vista via PIX',
     descricao_itens: descricao || null,
-    enviar_email: enviarEmail
+    enviar_email: enviarEmail,
+    indexar_rag: indexarRag
   };
 }
 
@@ -3920,6 +3950,7 @@ function obterDadosFormularioProposta() {
   const condicoes = document.getElementById('proposta-condicoes').value.trim();
   const descricao = document.getElementById('proposta-descricao').value.trim();
   const enviarEmail = document.getElementById('proposta-enviar-email-chk') ? document.getElementById('proposta-enviar-email-chk').checked : false;
+  const indexarRag = document.getElementById('proposta-indexar-rag-chk') ? document.getElementById('proposta-indexar-rag-chk').checked : true;
 
   return {
     empresa_id: empresaId,
@@ -3933,7 +3964,8 @@ function obterDadosFormularioProposta() {
     validade_dias: validadeDias,
     condicoes_pagamento: condicoes || 'À vista via PIX',
     descricao_itens: descricao || null,
-    enviar_email: enviarEmail
+    enviar_email: enviarEmail,
+    indexar_rag: indexarRag
   };
 }
 
@@ -4085,14 +4117,26 @@ async function carregarContratosCRM() {
           </div>
         </div>
         <div style="display:flex; align-items:center; gap:12px;">
-          <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor || 0)}</div>
+          <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_contrato || c.valor || 0)}</div>
           <span class="contract-status-badge ${c.status === 'assinado' ? 'cs-signed' : 'cs-draft'}">
-            ${c.status === 'assinado' ? '✓ Assinado (RAG)' : 'Minuta'}
+            ${c.status === 'assinado' ? '✓ Assinado' : 'Minuta'}
+          </span>
+          <span class="contract-status-badge ${c.na_base_conhecimento ? 'cs-signed' : 'cs-draft'}" style="${c.na_base_conhecimento ? '' : 'color:var(--text-muted); opacity:0.8;'}" title="${c.na_base_conhecimento ? 'Indexado na base corporativa' : 'Não indexado na base'}">
+            ${c.na_base_conhecimento ? '🧠 Na Base IA' : 'Fora da Base'}
           </span>
           ${c.status !== 'assinado' ? `
-            <button class="btn-green" style="font-size:11px; padding:4px 10px;" onclick="assinarContratoCRM(${c.id})">Assinar & Indexar</button>
+            <button class="btn-green" style="font-size:11px; padding:4px 10px;" onclick="assinarContratoCRM(${c.id})">Assinar</button>
           ` : ''}
           ${isAdmin ? `
+            ${c.na_base_conhecimento ? `
+              <button class="btn-secondary" style="font-size:11px; padding:4px 10px; color:#f87171; border-color:rgba(248,113,113,0.3);" title="Remover este contrato da Base de Conhecimento" onclick="alternarBaseConhecimentoContrato(${c.id}, false)">
+                🧠 Remover da Base
+              </button>
+            ` : `
+              <button class="btn-green" style="font-size:11px; padding:4px 10px;" title="Adicionar / Reindexar contrato na Base de Conhecimento" onclick="alternarBaseConhecimentoContrato(${c.id}, true)">
+                🧠 + Adicionar à Base
+              </button>
+            `}
             <button class="btn-secondary" style="font-size:11px; padding:4px 10px; color:#f87171;" onclick="excluirContratoCRM(${c.id})">Excluir</button>
           ` : ''}
         </div>
@@ -4118,6 +4162,44 @@ async function assinarContratoCRM(contratoId) {
     carregarDocumentos();
   } catch (e) {
     alert('Erro: ' + e.message);
+  }
+}
+
+async function alternarBaseConhecimentoProposta(propostaId, adicionar) {
+  const acaoTexto = adicionar ? 'adicionar esta proposta à' : 'remover esta proposta da';
+  if (!confirm(`Deseja realmente ${acaoTexto} Base de Conhecimento (RAG)?`)) return;
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/propostas/${propostaId}/base-conhecimento?empresa_id=${empresaId}`, {
+      method: 'POST',
+      body: JSON.stringify({ adicionar: Boolean(adicionar) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao atualizar base de conhecimento');
+    mostrarToast(data.mensagem || 'Base de conhecimento atualizada com sucesso!', 'success');
+    await carregarPropostasCRM();
+    if (typeof carregarDocumentos === 'function') carregarDocumentos();
+  } catch (err) {
+    mostrarToast('Erro: ' + err.message, 'error');
+  }
+}
+
+async function alternarBaseConhecimentoContrato(contratoId, adicionar) {
+  const acaoTexto = adicionar ? 'adicionar este contrato à' : 'remover este contrato da';
+  if (!confirm(`Deseja realmente ${acaoTexto} Base de Conhecimento (RAG)?`)) return;
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await apiFetch(`/contratos/${contratoId}/base-conhecimento?empresa_id=${empresaId}`, {
+      method: 'POST',
+      body: JSON.stringify({ adicionar: Boolean(adicionar) })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao atualizar base de conhecimento');
+    mostrarToast(data.mensagem || 'Base de conhecimento atualizada com sucesso!', 'success');
+    await carregarContratosCRM();
+    if (typeof carregarDocumentos === 'function') carregarDocumentos();
+  } catch (err) {
+    mostrarToast('Erro: ' + err.message, 'error');
   }
 }
 
@@ -6288,6 +6370,13 @@ document.addEventListener('DOMContentLoaded', () => {
         <input type="checkbox" id="proposta-enviar-email-chk" style="cursor:pointer; width:16px; height:16px;" />
         <label for="proposta-enviar-email-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
           Disparar cópia automática por e-mail para o cliente após gerar a proposta
+        </label>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-top:6px; padding:6px 4px;">
+        <input type="checkbox" id="proposta-indexar-rag-chk" checked style="cursor:pointer; width:16px; height:16px;" />
+        <label for="proposta-indexar-rag-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
+          🧠 Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
         </label>
       </div>
 
