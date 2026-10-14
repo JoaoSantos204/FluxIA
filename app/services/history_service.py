@@ -28,6 +28,29 @@ def salvar_interacao(telegram_chat_id: str, mensagem_usuario: str, resposta_ia: 
     finally:
         conexao.close()
 
+def atualizar_resposta_interacao(interacao_id: int, resposta_ia: str) -> bool:
+    """
+    Atualiza a resposta da IA de uma interação já existente no histórico.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"""
+            UPDATE historico_conversas
+            SET resposta_ia = {ph}
+            WHERE id = {ph}
+        """, (resposta_ia, interacao_id))
+        conexao.commit()
+        return True
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[HistoryService] Erro ao atualizar resposta da interação {interacao_id}: {e}")
+        return False
+    finally:
+        conexao.close()
+
 
 def marcar_interacoes_como_lidas(telegram_chat_id: str) -> int:
     """

@@ -1854,7 +1854,7 @@ function iniciarPollingConversaAtiva() {
     if (!screenChat || !screenChat.classList.contains('active')) return;
     if (!conversaAtivaChatId) return;
     await carregarMensagensTelegram(conversaAtivaChatId, true);
-  }, 3500);
+  }, 1800);
 }
 
 async function carregarConversasTelegram() {
@@ -5959,8 +5959,8 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarSerieTemporalDashboard();
   carregarPipelinesKanban();
 
-  // Polling automático de conversas
-  setInterval(carregarConversasTelegram, 15000);
+  // Polling automático de conversas (frequência otimizada para atualização instantânea)
+  setInterval(carregarConversasTelegram, 3000);
 });
 </script>
 

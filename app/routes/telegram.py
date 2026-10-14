@@ -10,7 +10,7 @@ import re
 
 from app.services.ai_service import AIService
 from app.services.embedding_service import gerar_embedding
-from app.services.history_service import salvar_interacao, obter_ultimas_interacoes, marcar_interacoes_como_lidas
+from app.services.history_service import salvar_interacao, obter_ultimas_interacoes, marcar_interacoes_como_lidas, atualizar_resposta_interacao
 from app.services.company_service import obter_configuracao_empresa
 from app.services.agent_orchestrator import agent_orchestrator, formatar_telefone_br, is_nome_generico
 from app.database.database import conectar, _cursor, _placeholder
@@ -246,6 +246,86 @@ def classificar_estagio_e_produto(pergunta: str, resposta: str, produtos: list[d
     except Exception as e:
         logger.warning(f"[Classificador CRM] Falha ao classificar estágio: {e}")
         return {"estagio": estagio_atual, "produto_provavel": None, "houve_proposta": False}
+
+
+def processar_qualificacao_crm_background(cliente_id: int, empresa_id: int, texto_recebido: str, resposta_ia: str):
+    """
+    Executa a qualificação comercial e avanço de funil do lead no CRM em segundo plano,
+    liberando a resposta imediata do webhook para evitar timeouts e atrasos do Telegram.
+    """
+    try:
+        conexao = conectar()
+        cursor = _cursor(conexao)
+        ph = _placeholder()
+
+        cursor.execute(f"""
+            SELECT id, estagio, produto_id, valor_estimado, proposta_enviada
+            FROM negocios
+            WHERE cliente_id = {ph} AND estagio NOT IN ('fechado', 'perdido')
+            ORDER BY id DESC LIMIT 1
+        """, (cliente_id,))
+        negocio = cursor.fetchone()
+
+        if not negocio:
+            cursor.execute(f"""
+                INSERT INTO negocios (empresa_id, cliente_id, estagio)
+                VALUES ({ph}, {ph}, 'novo')
+                RETURNING id
+            """, (empresa_id, cliente_id))
+            negocio_id = cursor.fetchone()["id"]
+            estagio_atual = "novo"
+            produto_atual_id = None
+        else:
+            negocio_id = negocio["id"]
+            estagio_atual = negocio["estagio"]
+            produto_atual_id = negocio["produto_id"]
+
+        cursor.execute(f"SELECT id, nome FROM produtos WHERE empresa_id = {ph} AND ativo = {ph}", (empresa_id, True))
+        produtos_empresa = [dict(p) for p in cursor.fetchall()]
+
+        classificacao = classificar_estagio_e_produto(
+            pergunta=texto_recebido,
+            resposta=resposta_ia,
+            produtos=produtos_empresa,
+            estagio_atual=estagio_atual
+        )
+
+        novo_estagio = classificacao.get("estagio", estagio_atual)
+        produto_provavel_nome = classificacao.get("produto_provavel")
+        houve_proposta = classificacao.get("houve_proposta", False)
+
+        ordem_atual = ORDEM_ESTAGIOS.get(estagio_atual, 1)
+        ordem_nova = ORDEM_ESTAGIOS.get(novo_estagio, 1)
+        estagio_final = novo_estagio if ordem_nova > ordem_atual else estagio_atual
+
+        novo_produto_id = produto_atual_id
+        if produto_provavel_nome:
+            for p in produtos_empresa:
+                if p["nome"].lower() in produto_provavel_nome.lower() or produto_provavel_nome.lower() in p["nome"].lower():
+                    novo_produto_id = p["id"]
+                    break
+
+        cursor.execute(f"""
+            UPDATE negocios
+            SET estagio = {ph},
+                produto_id = COALESCE({ph}, produto_id),
+                proposta_enviada = CASE WHEN {ph} THEN TRUE ELSE proposta_enviada END,
+                ultima_interacao_em = CURRENT_TIMESTAMP
+            WHERE id = {ph}
+        """, (estagio_final, novo_produto_id, houve_proposta, negocio_id))
+
+        if estagio_final == "fechado":
+            val_est = (negocio["valor_estimado"] if negocio and negocio.get("valor_estimado") else 0.0)
+            cursor.execute(f"""
+                INSERT INTO contratos (negocio_id, status, valor_contrato)
+                VALUES ({ph}, 'pendente', {ph})
+                ON CONFLICT (negocio_id) DO NOTHING
+            """, (negocio_id, val_est))
+
+        conexao.commit()
+        conexao.close()
+    except Exception as e:
+        logger.error(f"[Telegram Background CRM] Falha ao processar CRM em background: {e}")
 
 
 # ============================================================================
@@ -509,6 +589,17 @@ async def telegram_webhook(
             salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False, empresa_id=empresa_id)
             return {"status": "ok"}
 
+        # 0.1 Salva imediatamente a mensagem do usuário no histórico para refletir no portal em tempo real
+        interacao_id = None
+        if texto_recebido:
+            interacao_id = salvar_interacao(
+                telegram_chat_id=chat_id,
+                mensagem_usuario=texto_recebido,
+                resposta_ia="",
+                lida=False,
+                empresa_id=empresa_id
+            )
+
         # Execução orquestrada pelo Agente Gerente
         resposta_ia, meta_exec = agent_orchestrator.executar_orquestracao(
             mensagem=texto_recebido,
@@ -519,10 +610,6 @@ async def telegram_webhook(
 
         if meta_exec.get("modo") == "humano":
             cursor.execute(f"UPDATE clientes SET aguardando_contato = {ph} WHERE id = {ph}", (False, cliente_id))
-            cursor.execute(f"""
-                INSERT INTO historico_conversas (telegram_chat_id, mensagem_usuario, resposta_ia, lida, empresa_id)
-                VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
-            """, (chat_id, texto_recebido, "", False, empresa_id))
             conexao.commit()
             return {"status": "ok", "modo": "humano", "mensagem": "Mensagem salva para o atendente"}
 
@@ -540,13 +627,16 @@ async def telegram_webhook(
                 reply_markup = {"remove_keyboard": True}
 
             enviar_mensagem_telegram(chat_id, resposta_ia, empresa_id=empresa_id, reply_markup=reply_markup)
-            salvar_interacao(
-                telegram_chat_id=chat_id,
-                mensagem_usuario=texto_recebido,
-                resposta_ia=resposta_ia,
-                lida=False,
-                empresa_id=empresa_id
-            )
+            if interacao_id:
+                atualizar_resposta_interacao(interacao_id, resposta_ia)
+            else:
+                salvar_interacao(
+                    telegram_chat_id=chat_id,
+                    mensagem_usuario=texto_recebido,
+                    resposta_ia=resposta_ia,
+                    lida=False,
+                    empresa_id=empresa_id
+                )
 
         telemetria_id = meta_exec.get("telemetria_id", 0)
         docs_usados = meta_exec.get("documentos_usados", [])
@@ -565,7 +655,8 @@ async def telegram_webhook(
             )
 
         if meta_exec.get("intencao") == "PERGUNTA_CONHECIMENTO":
-            registrar_pergunta_historico(
+            background_tasks.add_task(
+                registrar_pergunta_historico,
                 canal="telegram",
                 empresa_id=empresa_id,
                 pergunta=texto_recebido,
@@ -576,77 +667,16 @@ async def telegram_webhook(
                 fonte_resposta="base_conhecimento"
             )
 
-        # B. Busca ou cria negócio em andamento para este cliente
-        cursor.execute(f"""
-            SELECT id, estagio, produto_id, valor_estimado, proposta_enviada
-            FROM negocios
-            WHERE cliente_id = {ph} AND estagio NOT IN ('fechado', 'perdido')
-            ORDER BY id DESC LIMIT 1
-        """, (cliente_id,))
-        negocio = cursor.fetchone()
-
-        if not negocio:
-            cursor.execute(f"""
-                INSERT INTO negocios (empresa_id, cliente_id, estagio)
-                VALUES ({ph}, {ph}, 'novo')
-                RETURNING id
-            """, (empresa_id, cliente_id))
-            negocio_id = cursor.fetchone()["id"]
-            estagio_atual = "novo"
-            produto_atual_id = None
-        else:
-            negocio_id = negocio["id"]
-            estagio_atual = negocio["estagio"]
-            produto_atual_id = negocio["produto_id"]
-
-        # C. Qualificação Inteligente via Gemini
-        cursor.execute(f"SELECT id, nome FROM produtos WHERE empresa_id = {ph} AND ativo = {ph}", (empresa_id, True))
-        produtos_empresa = [dict(p) for p in cursor.fetchall()]
-
-        classificacao = classificar_estagio_e_produto(
-            pergunta=texto_recebido,
-            resposta=resposta_ia,
-            produtos=produtos_empresa,
-            estagio_atual=estagio_atual
+        # Move a qualificação comercial e atualização do funil de vendas para background task
+        # evitando timeouts HTTP da API do Telegram (que causavam atraso e retransmissões com backoff)
+        background_tasks.add_task(
+            processar_qualificacao_crm_background,
+            cliente_id=cliente_id,
+            empresa_id=empresa_id,
+            texto_recebido=texto_recebido,
+            resposta_ia=resposta_ia
         )
 
-        novo_estagio = classificacao.get("estagio", estagio_atual)
-        produto_provavel_nome = classificacao.get("produto_provavel")
-        houve_proposta = classificacao.get("houve_proposta", False)
-
-        # Regra de ouro: Só AVANÇAR estágio no funil, nunca retroceder
-        ordem_atual = ORDEM_ESTAGIOS.get(estagio_atual, 1)
-        ordem_nova = ORDEM_ESTAGIOS.get(novo_estagio, 1)
-        estagio_final = novo_estagio if ordem_nova > ordem_atual else estagio_atual
-
-        # Identifica se produto_provavel corresponde a um produto cadastrado
-        novo_produto_id = produto_atual_id
-        if produto_provavel_nome:
-            for p in produtos_empresa:
-                if p["nome"].lower() in produto_provavel_nome.lower() or produto_provavel_nome.lower() in p["nome"].lower():
-                    novo_produto_id = p["id"]
-                    break
-
-        # Atualiza o negócio
-        cursor.execute(f"""
-            UPDATE negocios
-            SET estagio = {ph},
-                produto_id = COALESCE({ph}, produto_id),
-                proposta_enviada = CASE WHEN {ph} THEN TRUE ELSE proposta_enviada END,
-                ultima_interacao_em = CURRENT_TIMESTAMP
-            WHERE id = {ph}
-        """, (estagio_final, novo_produto_id, houve_proposta, negocio_id))
-
-        # D. Se o estágio virou 'fechado', gera automaticamente registro em 'contratos'
-        if estagio_final == "fechado":
-            val_est = (negocio["valor_estimado"] if negocio and negocio.get("valor_estimado") else 0.0)
-            cursor.execute(f"""
-                INSERT INTO contratos (negocio_id, status, valor_contrato)
-                VALUES ({ph}, 'pendente', {ph})
-                ON CONFLICT (negocio_id) DO NOTHING
-            """, (negocio_id, val_est))
-
-        conexao.commit()
         return {"status": "ok"}
 
     except Exception as e:
