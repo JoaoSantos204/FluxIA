@@ -449,10 +449,26 @@ async def telegram_webhook(
             conexao.commit()
 
             saudacao_nome = f", {nome_final}" if (nome_final and not is_nome_generico(nome_final)) else ""
-            msg_confirmacao = (
-                f"✅ Muito obrigado{saudacao_nome}! Seu telefone ({tel_formatado}) foi registrado com sucesso.\n\n"
-                "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, serviços ou horários de funcionamento!"
-            )
+
+            # Verifica se havia uma pergunta pendente que aguardava o contato
+            pergunta_anterior = agent_orchestrator.obter_pergunta_anterior(chat_id=chat_id, empresa_id=empresa_id)
+            if pergunta_anterior:
+                logger.info(f"[Telegram] Respondendo pergunta anterior pós-contato via botão: '{pergunta_anterior}'")
+                resposta_pendente, meta_pendente = agent_orchestrator.executar_orquestracao(
+                    mensagem=pergunta_anterior,
+                    chat_id=chat_id,
+                    empresa_id=empresa_id,
+                    nome_telegram=nome_final
+                )
+                msg_confirmacao = (
+                    f"✅ Muito obrigado{saudacao_nome}! Registrei seu WhatsApp com sucesso.\n\n"
+                    f"Respondendo à sua dúvida anterior:\n\n{resposta_pendente}"
+                )
+            else:
+                msg_confirmacao = (
+                    f"✅ Muito obrigado{saudacao_nome}! Seu telefone ({tel_formatado}) foi registrado com sucesso.\n\n"
+                    "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, propostas ou serviços!"
+                )
 
             enviar_mensagem_telegram(
                 chat_id=chat_id,

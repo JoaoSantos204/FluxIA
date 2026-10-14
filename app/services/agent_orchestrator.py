@@ -152,6 +152,35 @@ class AgentOrchestrator:
                 if not negocio_ativo and item["estagio"] not in ["fechado", "perdido"]:
                     negocio_ativo = item
 
+            # 2.1. Busca propostas formais do cliente
+            cursor.execute(f"""
+                SELECT p.id, p.valor, p.condicoes_pagamento, p.validade_dias, p.status_envio,
+                       p.descricao_itens, p.criado_em, COALESCE(prod.nome, prod_n.nome) AS produto_nome, n.estagio AS negocio_estagio
+                FROM propostas p
+                LEFT JOIN produtos prod ON p.produto_id = prod.id
+                LEFT JOIN negocios n ON p.negocio_id = n.id
+                LEFT JOIN produtos prod_n ON n.produto_id = prod_n.id
+                WHERE (p.cliente_id = {ph} OR n.cliente_id = {ph}) AND (p.empresa_id = {ph} OR p.empresa_id IS NULL)
+                ORDER BY p.id DESC
+                LIMIT 5
+            """, (cliente_id, cliente_id, empresa_id))
+            propostas_linhas = cursor.fetchall()
+            propostas = [dict(pr) for pr in propostas_linhas]
+
+            # 2.2. Busca contratos do cliente
+            cursor.execute(f"""
+                SELECT c.id, c.status, c.valor_contrato, c.data_assinatura, c.criado_em,
+                       n.id AS negocio_id, n.estagio AS negocio_estagio, prod.nome AS produto_nome
+                FROM contratos c
+                JOIN negocios n ON c.negocio_id = n.id
+                LEFT JOIN produtos prod ON n.produto_id = prod.id
+                WHERE n.cliente_id = {ph} AND (n.empresa_id = {ph} OR n.empresa_id IS NULL)
+                ORDER BY c.id DESC
+                LIMIT 5
+            """, (cliente_id, empresa_id))
+            contratos_linhas = cursor.fetchall()
+            contratos = [dict(ct) for ct in contratos_linhas]
+
             # 3. Status de atendimento (bot vs humano)
             cursor.execute(
                 f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)",
@@ -174,6 +203,8 @@ class AgentOrchestrator:
                 "cadastrado_completo": cadastrado_completo,
                 "aguardando_contato": bool(cliente.get("aguardando_contato")),
                 "negocios": negocios,
+                "propostas": propostas,
+                "contratos": contratos,
                 "negocio_ativo": negocio_ativo,
                 "produtos_vinculados": produtos_vinculados,
                 "status_atendimento": conv_status.get("status") if conv_status else "bot",
@@ -283,6 +314,106 @@ class AgentOrchestrator:
         finally:
             conexao.close()
 
+    def formatar_dossie_comercial_cliente(self, contexto: dict) -> str:
+        """
+        Formata um dossiê estruturado com as propostas, contratos e oportunidades no CRM do cliente,
+        permitindo que a IA responda perguntas em primeira pessoa com segurança, precisão e fluidez.
+        """
+        blocos = []
+        nome = contexto.get("nome") or "Cliente"
+        blocos.append(f"=== DOSSIÊ COMERCIAL DE: {nome.upper()} ===")
+
+        propostas = contexto.get("propostas") or []
+        if propostas:
+            blocos.append(f"PROPOSTAS DO CLIENTE ({len(propostas)} encontrada(s)):")
+            for p in propostas:
+                val = f"R$ {float(p.get('valor') or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                prod = p.get("produto_nome") or "Geral"
+                status = p.get("status_envio") or "Registrada"
+                cond = p.get("condicoes_pagamento") or "Conforme negociação"
+                validade = f"{p.get('validade_dias')} dias" if p.get("validade_dias") else "Não informada"
+                dt = str(p.get("criado_em") or "")[:10]
+                itens = f" | Descrição: {p.get('descricao_itens')}" if p.get("descricao_itens") else ""
+                blocos.append(f"- Proposta #{p.get('id')}: Produto: {prod} | Valor: {val} | Status: {status} | Pagamento: {cond} | Validade: {validade} | Data: {dt}{itens}")
+        else:
+            blocos.append("PROPOSTAS: Nenhuma proposta formal registrada para este cliente no momento.")
+
+        contratos = contexto.get("contratos") or []
+        if contratos:
+            blocos.append(f"CONTRATOS DO CLIENTE ({len(contratos)} encontrado(s)):")
+            for c in contratos:
+                val = f"R$ {float(c.get('valor_contrato') or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                status = c.get("status") or "Ativo"
+                prod = c.get("produto_nome") or "Serviço Contratado"
+                dt_ass = str(c.get("data_assinatura") or "")[:10]
+                blocos.append(f"- Contrato #{c.get('id')}: Serviço: {prod} | Valor: {val} | Status: {status} | Assinatura: {dt_ass or 'Pendente'}")
+        else:
+            blocos.append("CONTRATOS: Nenhum contrato ativo registrado para este cliente no momento.")
+
+        negocios = contexto.get("negocios") or []
+        if negocios:
+            blocos.append(f"OPORTUNIDADES / NEGOCIAÇÕES NO CRM ({len(negocios)}):")
+            for n in negocios[:3]:
+                val = f"R$ {float(n.get('valor_estimado') or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                blocos.append(f"- Negócio #{n.get('id')}: Produto: {n.get('produto_nome') or 'Diversos'} | Estágio: {n.get('estagio')} | Valor Estimado: {val}")
+
+        return "\n".join(blocos)
+
+    def obter_pergunta_anterior(self, chat_id: str, empresa_id: int = 1) -> Optional[str]:
+        """
+        Recupera a última pergunta ou solicitação legítima do usuário enviada antes
+        do pedido de compartilhamento de contato.
+        Isso garante que, assim que o usuário informa o WhatsApp/telefone, o assistente
+        já responda imediatamente a dúvida anterior, sem obrigá-lo a perguntar de novo.
+        """
+        conexao = conectar()
+        cursor = _cursor(conexao)
+        ph = _placeholder()
+        try:
+            cursor.execute(f"""
+                SELECT mensagem_usuario, resposta_ia
+                FROM historico_conversas
+                WHERE telegram_chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)
+                ORDER BY id DESC
+                LIMIT 6
+            """, (str(chat_id), empresa_id))
+            linhas = cursor.fetchall()
+            if not linhas:
+                return None
+
+            for row in linhas:
+                msg = (row.get("mensagem_usuario") or "").strip()
+                resp = (row.get("resposta_ia") or "").strip().lower()
+
+                # Ignora mensagens de sistema, botões e comandos
+                if not msg or msg.startswith("[") or msg.startswith("/"):
+                    continue
+                # Se for apenas um número de telefone recém enviado, continua buscando
+                digitos = re.sub(r"\D", "", msg)
+                if len(digitos) >= 8 and len(digitos) / max(len(msg), 1) > 0.5:
+                    continue
+                # Se for apenas saudação simples
+                if self.eh_saudacao_simples(msg):
+                    continue
+
+                # É uma pergunta válida se a resposta da IA anterior pediu contato ou se a mensagem tem conteúdo
+                pediu_contato = (
+                    "compartilhe seu número" in resp or
+                    "whatsapp/telefone" in resp or
+                    "botão abaixo" in resp or
+                    "cadastrado" in resp or
+                    "contato" in resp
+                )
+                if pediu_contato or len(msg.split()) >= 2:
+                    return msg
+
+            return None
+        except Exception as e:
+            logger.warning(f"[Orquestrador] Erro ao recuperar pergunta anterior: {e}")
+            return None
+        finally:
+            conexao.close()
+
     def eh_pergunta_processo_base(self, mensagem: str) -> bool:
         """
         Verifica se a mensagem é uma pergunta sobre processos operacionais e institucionais básicos da empresa:
@@ -359,11 +490,11 @@ class AgentOrchestrator:
         """
         Agente Gerente: Analisa a mensagem com base em critérios operacionais e decide a ação a ser tomada.
         Critérios:
-        - COLETA_CONTATO: Cliente ainda não possui cadastro completo (nome e telefone) e a regra obrigatória está ativa.
-        - DESPEDIDA: Encerramento ou agradecimento final (tchau, até mais, obrigado por tudo, era só isso).
+        - COLETA_CONTATO: Cliente ainda não possui cadastro completo (nome e telefone) e a pergunta exige contato prévio.
+        - DESPEDIDA: Encerramento ou agradecimento final (tchau, até mais, obrigado por tudo, era só isso, pode encerrar).
         - SAUDACAO: Apenas saudação inicial (oi, olá, bom dia) sem pergunta substantiva.
         - TRANSBORDO_HUMANO: Solicitação explícita de atendente/suporte humano.
-        - CONSULTA_COMERCIAL: Dúvida sobre status de negócio, proposta em andamento ou produtos contratados.
+        - CONSULTA_COMERCIAL: Dúvida em primeira pessoa sobre propostas, contratos, negócios em andamento ou produtos contratados.
         - PERGUNTA_CONHECIMENTO: Pergunta legítima sobre produtos, serviços, preços, regras ou informações corporativas.
         """
         msg_limpa = mensagem.strip().lower()
@@ -379,37 +510,57 @@ class AgentOrchestrator:
         if any(t in msg_limpa for t in termos_transbordo):
             return {"intencao": "TRANSBORDO_HUMANO", "criterio": "Solicitação explícita de atendente/suporte humano"}
 
-        # 2. Despedida / Fechamento de conversa
+        # 2. Despedida / Fechamento de conversa / Encerramento
         despedidas_exatas = {
             "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
             "valeu", "valeu!", "valeu obrigado", "muito obrigado por tudo", "muito obrigada por tudo",
             "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
-            "pode encerrar", "encerrar", "obrigado tenha um bom dia", "obrigado boa tarde", "obrigado boa noite"
+            "pode encerrar", "encerrar", "obrigado tenha um bom dia", "obrigado boa tarde", "obrigado boa noite",
+            "nao preciso de mais nada", "não preciso de mais nada", "finalizar", "pode finalizar", "encerrar atendimento",
+            "fim", "fechar", "ok obrigado tchau", "obrigado tchau", "valeu tchau", "só isso", "so isso",
+            "tudo certo obrigado", "tudo certo obrigada"
         }
         termos_despedida = [
             "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
             "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
-            "pode encerrar", "encerrar atendimento", "muito obrigado por tudo", "muito obrigada por tudo"
+            "pode encerrar", "encerrar atendimento", "muito obrigado por tudo", "muito obrigada por tudo",
+            "não preciso de mais nada", "nao preciso de mais nada", "pode finalizar", "finalizar atendimento",
+            "fechar atendimento", "encerrar a conversa", "pode encerrar a conversa", "por hoje era só"
         ]
         if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in termos_despedida):
             return {"intencao": "DESPEDIDA", "criterio": "Usuário encerrou o diálogo ou despediu-se cordialmente"}
 
-        # 3. Se acabou de fornecer os dados faltantes nesta mensagem
+        # 3. Termos comerciais e de primeira pessoa (propostas, contratos, negócios)
+        termos_comerciais = [
+            "minha proposta", "minhas propostas", "quais propostas", "qual proposta", "tenho proposta",
+            "possuo proposta", "proposta que tenho", "propostas que tenho", "propostas possuo",
+            "meu contrato", "meus contratos", "qual o contrato", "quais contratos", "tenho contrato",
+            "possuo contrato", "contrato que tenho", "contratos que tenho", "valor do contrato",
+            "valor do meu contrato", "qual o valor do contrato", "qual o valor do contrato que tenho",
+            "meu negócio", "meu negocio", "andamento do meu", "status da proposta", "status do meu pedido",
+            "status do negócio", "o que eu contratei", "o que contratei", "meu plano contratado",
+            "segunda via do contrato", "quais propostas possuo com vocês", "quais contratos possuo com vocês"
+        ]
+        eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais)
+
+        # 4. Se acabou de fornecer os dados faltantes nesta mensagem
         if dados_contato_extraidos.get("tem_contato"):
             tem_nome_agora = bool(dados_contato_extraidos.get("nome") or contexto["tem_nome_valido"])
             tem_tel_agora = bool(dados_contato_extraidos.get("telefone") or contexto["tem_telefone_valido"])
             if tem_nome_agora and tem_tel_agora:
-                # Remove os dados de contato e saudações/introduções comuns para ver se restou uma dúvida
+                # Remove os dados de contato e saudações comuns para ver se restou uma dúvida
                 msg_resto = msg_limpa
                 if dados_contato_extraidos.get("nome"):
                     msg_resto = msg_resto.replace(dados_contato_extraidos["nome"].lower(), "")
                 if dados_contato_extraidos.get("telefone"):
                     digitos_tel = re.sub(r"\D", "", dados_contato_extraidos["telefone"])
                     msg_resto = msg_resto.replace(dados_contato_extraidos["telefone"].lower(), "").replace(digitos_tel, "")
-                # remove termos comuns de apresentação
                 msg_resto = re.sub(r"(?i)(me chamo|meu nome [eé]|sou o|sou a|whats(?:app)?|zap|celular|telefone|fone|contato|olá|ola|oi|bom dia|boa tarde|boa noite)", "", msg_resto)
                 msg_resto = re.sub(r"[^\w\s]", "", msg_resto).strip()
                 palavras_resto = msg_resto.split()
+
+                if eh_consulta_comercial:
+                    return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Dados de contato fornecidos junto com consulta comercial"}
 
                 tem_pergunta = (
                     "?" in mensagem or
@@ -420,31 +571,37 @@ class AgentOrchestrator:
                     return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Dados de contato fornecidos junto com dúvida"}
                 return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
 
-        # 4. Saudação Simples (sem pergunta adicional): responde cordial com outra saudação, sem pedir número
+        # 5. Saudação Simples (sem pergunta adicional): responde cordial com outra saudação, sem pedir número
         if self.eh_saudacao_simples(mensagem):
             return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas adicionais"}
 
-        # 5. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
-        eh_pergunta_processo = self.eh_pergunta_processo_base(mensagem)
-        if eh_pergunta_processo:
+        # 6. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
+        if self.eh_pergunta_processo_base(mensagem):
             return {
                 "intencao": "PERGUNTA_CONHECIMENTO",
                 "criterio": "Pergunta sobre processo base da empresa (horário/localização/funcionamento) sem exigir telefone"
             }
 
-        # 6. Se ainda não possui telefone válido: qualquer dúvida sobre produtos, serviços, preços ou planos exige contato
+        # 7. Se for consulta comercial (propostas, contratos) e cliente ainda não tem telefone:
+        # solicita contato para identificar com segurança seus registros
+        if eh_consulta_comercial and not contexto.get("tem_telefone_valido"):
+            return {
+                "intencao": "COLETA_CONTATO",
+                "criterio": "Consulta de propostas/contratos pessoais exigindo telefone/WhatsApp para localização segura"
+            }
+
+        # 8. Se ainda não possui telefone válido: qualquer dúvida sobre produtos, serviços, preços ou planos exige contato
         if not contexto.get("tem_telefone_valido"):
             return {
                 "intencao": "COLETA_CONTATO",
                 "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone"
             }
 
-        # 7. Consulta Comercial sobre negócio ou produto do cliente (quando já possui telefone)
-        termos_comerciais = ["minha proposta", "meu negócio", "meu negocio", "meu contrato", "andamento do meu", "status da proposta", "status do meu pedido", "status do negócio"]
-        if any(t in msg_limpa for t in termos_comerciais):
-            return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Consulta sobre histórico comercial do próprio cliente"}
+        # 9. Consulta Comercial sobre negócio, proposta ou contrato do cliente (quando já possui telefone)
+        if eh_consulta_comercial:
+            return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Consulta sobre histórico comercial, propostas ou contratos do próprio cliente"}
 
-        # 8. Pergunta legítima para base de conhecimento
+        # 10. Pergunta legítima para base de conhecimento
         return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Pergunta substantiva direcionada à base de conhecimento da empresa"}
 
     def executar_orquestracao(
@@ -456,10 +613,10 @@ class AgentOrchestrator:
     ) -> Tuple[str, dict]:
         """
         Executa o pipeline completo de orquestração do Agente Gerente:
-        1. Carrega contexto do cliente, negócios e produtos.
+        1. Carrega contexto do cliente, negócios, propostas e contratos.
         2. Extrai possíveis dados de contato na mensagem.
         3. Classifica a intenção com base nos critérios estabelecidos.
-        4. Despacha para o subagente especializado (Coleta, Saudação, Despedida, Comercial, Transbordo ou RAG).
+        4. Despacha para o subagente especializado de forma dinâmica e moderna (estilo ChatGPT/Claude).
         5. Retorna (texto_resposta, metadados_execucao).
         """
         # 1. Contexto do cliente
@@ -485,7 +642,6 @@ class AgentOrchestrator:
                 email=novo_email,
                 aguardando=False
             )
-            # Atualiza o contexto em memória
             if novo_nome:
                 contexto["nome"] = novo_nome
                 contexto["tem_nome_valido"] = True
@@ -509,10 +665,21 @@ class AgentOrchestrator:
 
         # --- AÇÃO: COLETA DE CONTATO (NÚMERO DE TELEFONE) ---
         if intencao == "COLETA_CONTATO":
-            # Marca aguardando_contato no cliente
             self.atualizar_dados_cliente(cliente_id=contexto["cliente_id"], aguardando=True)
 
-            if nome_exibicao:
+            eh_comercial = "proposta" in mensagem.lower() or "contrato" in mensagem.lower() or "negócio" in mensagem.lower()
+            if eh_comercial:
+                if nome_exibicao:
+                    msg_coleta = (
+                        f"👋 Olá, {nome_exibicao}! Para eu localizar suas **propostas e contratos** com total sigilo e precisão no sistema, "
+                        "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
+                    )
+                else:
+                    msg_coleta = (
+                        "👋 Olá! Para eu localizar suas **propostas e contratos** com total sigilo e precisão no sistema, "
+                        "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
+                    )
+            elif nome_exibicao:
                 msg_coleta = (
                     f"👋 Olá, {nome_exibicao}! Para te passar todas as informações detalhadas sobre nossos produtos, planos e condições personalizadas, "
                     "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
@@ -533,11 +700,33 @@ class AgentOrchestrator:
 
         # --- AÇÃO: CADASTRO CONCLUÍDO NESSA MENSAGEM ---
         if intencao == "CADASTRO_CONCLUIDO":
+            # Verifica se há pergunta anterior que ficou aguardando o contato
+            pergunta_ant = self.obter_pergunta_anterior(chat_id=chat_id, empresa_id=empresa_id)
+            if pergunta_ant:
+                logger.info(f"[Orquestrador] Respondendo pergunta anterior pós-cadastro: '{pergunta_ant}'")
+                resposta_pendente, meta_pendente = self.executar_orquestracao(
+                    mensagem=pergunta_ant,
+                    chat_id=chat_id,
+                    empresa_id=empresa_id,
+                    nome_telegram=contexto["nome"]
+                )
+                msg_ok = (
+                    f"✅ Perfeito, {nome_exibicao}! Seu WhatsApp foi registrado com sucesso.\n\n"
+                    f"Respondendo à sua dúvida anterior:\n\n{resposta_pendente}"
+                )
+                return msg_ok, {
+                    "intencao": "CADASTRO_CONCLUIDO",
+                    "cadastrado": True,
+                    "remover_teclado": True,
+                    "documentos_usados": meta_pendente.get("documentos_usados", []),
+                    "telemetria_id": meta_pendente.get("telemetria_id", 0)
+                }
+
             tel_fmt = contexto.get("telefone") or dados_contato.get("telefone") or ""
             msg_ok = (
                 f"✅ Perfeito, {nome_exibicao}! Seu cadastro foi concluído com sucesso"
                 f"{f' (WhatsApp: {tel_fmt})' if tel_fmt else ''}.\n\n"
-                "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos e serviços!"
+                "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, propostas e serviços!"
             )
             return msg_ok, {
                 "intencao": "CADASTRO_CONCLUIDO",
@@ -550,15 +739,34 @@ class AgentOrchestrator:
         if intencao == "SAUDACAO":
             saudacao_nome = f", {nome_exibicao}" if nome_exibicao else ""
 
-            # Verifica se tem negócio ativo ou produtos vinculados para personalizar
+            # Personaliza a saudação se o cliente tiver propostas ou contratos
+            propostas_cliente = contexto.get("propostas") or []
+            contratos_cliente = contexto.get("contratos") or []
             neg_ativo = contexto.get("negocio_ativo")
-            if neg_ativo and neg_ativo.get("produto_nome"):
+
+            if contratos_cliente:
+                c_top = contratos_cliente[0]
+                servico = c_top.get("produto_nome") or "Serviço"
+                msg_saudacao = (
+                    f"👋 Olá{saudacao_nome}! Que bom falar com você novamente.\n\n"
+                    f"Vejo aqui o seu contrato ativo de **{servico}**. "
+                    "Em que posso te ajudar hoje? Deseja consultar detalhes contratuais, propostas ou tirar alguma dúvida?"
+                )
+            elif propostas_cliente:
+                p_top = propostas_cliente[0]
+                prod = p_top.get("produto_nome") or "Solução"
+                msg_saudacao = (
+                    f"👋 Olá{saudacao_nome}! É um prazer falar com você novamente.\n\n"
+                    f"Temos registrada a sua proposta para **{prod}**. "
+                    "Como posso te ajudar hoje? Gostaria de rever valores, condições ou tirar alguma dúvida?"
+                )
+            elif neg_ativo and neg_ativo.get("produto_nome"):
                 prod = neg_ativo["produto_nome"]
                 estagio = neg_ativo["estagio"]
                 msg_saudacao = (
                     f"👋 Olá{saudacao_nome}! É um prazer falar com você novamente.\n\n"
-                    f"Vejo aqui que temos em andamento o seu interesse no produto **{prod}** (estágio: *{estagio}*). "
-                    "Como posso te ajudar hoje? Gostaria de tirar dúvidas sobre a proposta ou precisa de alguma nova informação?"
+                    f"Vejo que temos em andamento o seu interesse em **{prod}** (estágio: *{estagio}*). "
+                    "Como posso te ajudar hoje?"
                 )
             elif contexto.get("produtos_vinculados"):
                 prods_str = ", ".join(contexto["produtos_vinculados"][:2])
@@ -568,8 +776,8 @@ class AgentOrchestrator:
                 )
             else:
                 msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! Tudo bem? Seja muito bem-vindo ao nosso atendimento.\n\n"
-                    "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos horários de funcionamento, localização, produtos ou planos!"
+                    f"👋 Olá{saudacao_nome}! Tudo bem? Seja muito bem-vindo.\n\n"
+                    "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, propostas, horários ou localização!"
                 )
 
             return msg_saudacao, {
@@ -578,23 +786,47 @@ class AgentOrchestrator:
                 "documentos_usados": []
             }
 
-        # --- AÇÃO: DESPEDIDA / ENCERRAMENTO ---
+        # --- AÇÃO: DESPEDIDA / ENCERRAMENTO DINÂMICO ---
         if intencao == "DESPEDIDA":
-            desp_nome = f", {nome_exibicao}" if nome_exibicao else ""
-            msg_despedida = (
-                f"Foi um prazer falar com você{desp_nome}! 😊\n\n"
-                "Caso precise de qualquer outra informação ou deseje dar andamento ao seu pedido, "
-                "basta me chamar a qualquer momento. Tenha um excelente dia!"
+            # Desativa flag de aguardando contato
+            self.atualizar_dados_cliente(cliente_id=contexto["cliente_id"], aguardando=False)
+
+            historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=2, empresa_id=empresa_id)
+            prompt_despedida = (
+                f"O usuário {nome_exibicao or 'Cliente'} está se despedindo/encerrando a conversa com: '{mensagem}'. "
+                "Responda com uma despedida elegante, simpática, moderna e calorosa no estilo ChatGPT/Claude. "
+                "Agradeça pelo contato e se coloque à disposição para quando ele precisar. "
+                "NÃO faça novas perguntas nem pergunte 'posso ajudar em algo mais?'."
             )
+            try:
+                from app.services.ai_engine_service import ai_engine
+                msg_despedida, _ = ai_engine.gerar_resposta_orquestrada(
+                    pergunta=prompt_despedida,
+                    contexto="",
+                    historico=historico_recente,
+                    config_suporte=config_empresa,
+                    empresa_id=empresa_id,
+                    canal="telegram",
+                    session_id=chat_id
+                )
+            except Exception:
+                desp_nome = f", {nome_exibicao}" if nome_exibicao else ""
+                msg_despedida = (
+                    f"Foi um prazer falar com você{desp_nome}! 😊\n\n"
+                    "Quando precisar de qualquer informação ou dar andamento ao seu projeto, basta me chamar por aqui. "
+                    "Tenha um excelente dia e até breve!"
+                )
+
             return msg_despedida, {
                 "intencao": "DESPEDIDA",
                 "cadastrado": contexto["cadastrado_completo"],
+                "conversa_encerrada": True,
+                "remover_teclado": True,
                 "documentos_usados": []
             }
 
         # --- AÇÃO: TRANSBORDO HUMANO ---
         if intencao == "TRANSBORDO_HUMANO":
-            # Atualiza status no banco para humano
             conexao = conectar()
             cursor = _cursor(conexao)
             ph = _placeholder()
@@ -623,57 +855,78 @@ class AgentOrchestrator:
                 "documentos_usados": []
             }
 
-        # --- AÇÃO: CONSULTA COMERCIAL (STATUS DE NEGÓCIO/PROPOSTA) ---
+        # --- AÇÃO: CONSULTA COMERCIAL (PROPOSTAS, CONTRATOS E STATUS DO CLIENTE) ---
         if intencao == "CONSULTA_COMERCIAL":
-            neg_ativo = contexto.get("negocio_ativo")
-            if neg_ativo:
-                prod = neg_ativo.get("produto_nome") or "Produto/Solução em negociação"
-                estagio = neg_ativo.get("estagio") or "em andamento"
-                valor = neg_ativo.get("valor_estimado") or 0.0
-                proposta = "Sim" if neg_ativo.get("proposta_enviada") else "Em elaboração"
+            dossie = self.formatar_dossie_comercial_cliente(contexto)
+            from app.routes.telegram import buscar_contexto_relevante
+            contexto_publico, docs_usados = buscar_contexto_relevante(pergunta=mensagem, empresa_id=empresa_id)
+            contexto_total = f"{dossie}\n\n[INFORMAÇÕES ADICIONAIS DA BASE DE CONHECIMENTO]:\n{contexto_publico}" if contexto_publico else dossie
 
-                msg_comercial = (
-                    f"📋 {nome_exibicao + ', ' if nome_exibicao else ''}aqui estão os detalhes do seu atendimento comercial:\n\n"
-                    f"• **Produto de Interesse:** {prod}\n"
-                    f"• **Estágio Atual:** {estagio.upper()}\n"
-                    f"• **Valor Estimado:** R$ {valor:,.2f}\n"
-                    f"• **Proposta Comercial:** {proposta}\n\n"
-                    "Gostaria de tirar alguma dúvida sobre estes valores ou prefere que um consultor entre em contato para formalizar?"
+            historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
+
+            prefixo_cliente = (
+                f"Cliente em atendimento: {nome_exibicao or 'Cliente'}. "
+                "Responda diretamente em primeira pessoa com simpatia, naturalidade e precisão absoluta. "
+                "Informe os números, valores, produtos e status das propostas e contratos dele conforme o dossiê fornecido.\n"
+            )
+
+            try:
+                from app.services.ai_engine_service import ai_engine
+                resposta_ia, telemetria_id = ai_engine.gerar_resposta_orquestrada(
+                    pergunta=prefixo_cliente + mensagem,
+                    contexto=contexto_total,
+                    historico=historico_recente,
+                    config_suporte=config_empresa,
+                    empresa_id=empresa_id,
+                    canal="telegram",
+                    session_id=chat_id
                 )
-            else:
-                msg_comercial = (
-                    f"{nome_exibicao + ', ' if nome_exibicao else ''}não encontrei nenhuma negociação em aberto no momento em seu cadastro. "
-                    "Gostaria de solicitar uma proposta comercial ou conhecer os produtos disponíveis?"
+            except Exception as e:
+                logger.warning(f"[Orquestrador] Fallback no ai_engine comercial: {e}")
+                resposta_ia = self.ai_service.gerar_resposta(
+                    pergunta=prefixo_cliente + mensagem,
+                    contexto=contexto_total,
+                    historico=historico_recente,
+                    config_suporte=config_empresa,
+                    empresa_id=empresa_id
                 )
-            return msg_comercial, {
+                telemetria_id = 0
+
+            return resposta_ia, {
                 "intencao": "CONSULTA_COMERCIAL",
                 "cadastrado": contexto["cadastrado_completo"],
-                "documentos_usados": []
+                "documentos_usados": docs_usados,
+                "telemetria_id": telemetria_id,
+                "contexto_publico": contexto_total
             }
 
-        # --- AÇÃO: PERGUNTA LEGÍTIMA (RAG DA BASE DE CONHECIMENTO) ---
+        # --- AÇÃO: PERGUNTA LEGÍTIMA (RAG DA BASE DE CONHECIMENTO + CONTEXTO CLIENTE) ---
         from app.routes.telegram import buscar_contexto_relevante
         contexto_publico, docs_usados = buscar_contexto_relevante(pergunta=mensagem, empresa_id=empresa_id)
 
+        # Se o cliente já tem propostas ou contratos, enriquece o contexto com o dossiê dele
+        if contexto.get("propostas") or contexto.get("contratos") or contexto.get("negocio_ativo"):
+            dossie = self.formatar_dossie_comercial_cliente(contexto)
+            contexto_total = f"{dossie}\n\n[INFORMAÇÕES DA EMPRESA]:\n{contexto_publico}" if contexto_publico else dossie
+        else:
+            contexto_total = contexto_publico
+
         historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
 
-        # Monta prompt customizado da empresa se configurado
         prompt_custom = config_empresa.get("ia_prompt_sistema")
         if prompt_custom and prompt_custom.strip():
-            # Injeta diretriz personalizada no config_suporte
             config_suporte = config_empresa.copy()
             config_suporte["mensagem_suporte"] = f"{config_empresa.get('mensagem_suporte', '')}\nDiretriz Adicional: {prompt_custom}"
         else:
             config_suporte = config_empresa
 
-        # Se temos o nome real do cliente, instruímos o gerador a ser cordial
         prefixo_cliente = f"Cliente atendido: {nome_exibicao}. Chame-o pelo nome cordialmente.\n" if nome_exibicao else ""
 
         try:
             from app.services.ai_engine_service import ai_engine
             resposta_ia, telemetria_id = ai_engine.gerar_resposta_orquestrada(
                 pergunta=prefixo_cliente + mensagem,
-                contexto=contexto_publico,
+                contexto=contexto_total,
                 historico=historico_recente,
                 config_suporte=config_suporte,
                 empresa_id=empresa_id,
@@ -684,16 +937,14 @@ class AgentOrchestrator:
             logger.warning(f"[Orquestrador] Fallback no ai_engine: {e}")
             resposta_ia = self.ai_service.gerar_resposta(
                 pergunta=prefixo_cliente + mensagem,
-                contexto=contexto_publico,
+                contexto=contexto_total,
                 historico=historico_recente,
                 config_suporte=config_suporte,
                 empresa_id=empresa_id
             )
             telemetria_id = 0
 
-        # Se acabou de cadastrar dados nesta mensagem, prefixa uma confirmação amigável
         remover_teclado = False
-
         if dados_contato.get("tem_contato"):
             if dados_contato.get("nome"):
                 resposta_ia = f"Perfeito, {nome_exibicao}! Seus dados foram anotados com sucesso.\n\n" + resposta_ia
@@ -705,7 +956,7 @@ class AgentOrchestrator:
             "cadastrado": contexto["cadastrado_completo"],
             "documentos_usados": docs_usados,
             "telemetria_id": telemetria_id,
-            "contexto_publico": contexto_publico,
+            "contexto_publico": contexto_total,
             "exibir_botao_contato": False,
             "remover_teclado": remover_teclado
         }
