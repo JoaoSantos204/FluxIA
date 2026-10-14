@@ -185,7 +185,13 @@ class MultiVendorAIEngine:
             callbacks=[callback_obs]
         )
 
-        prompt_sistema = montar_system_prompt(config_suporte)
+        from app.services.ai_service import montar_system_prompt, montar_system_prompt_interno
+
+        if canal == "portal":
+            prompt_sistema = montar_system_prompt_interno(config_suporte)
+        else:
+            prompt_sistema = montar_system_prompt(config_suporte)
+
         mensagens: List[BaseMessage] = [SystemMessage(content=prompt_sistema)]
 
         # Monta contexto e histórico nas mensagens

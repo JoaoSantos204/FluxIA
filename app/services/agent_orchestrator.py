@@ -357,6 +357,27 @@ class AgentOrchestrator:
                 val = f"R$ {float(n.get('valor_estimado') or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                 blocos.append(f"- Negócio #{n.get('id')}: Produto: {n.get('produto_nome') or 'Diversos'} | Estágio: {n.get('estagio')} | Valor Estimado: {val}")
 
+        # Seção explícita consolidando exclusivamente os itens em aberto do cliente
+        itens_abertos = []
+        for p in propostas:
+            st = (p.get("status_envio") or "").lower()
+            if st not in ["recusada", "cancelada"]:
+                itens_abertos.append(f"• Proposta em Aberto #{p.get('id')}: {p.get('produto_nome') or 'Solução'} (Valor: R$ {float(p.get('valor') or 0):,.2f}, Status: {p.get('status_envio') or 'Registrada'})")
+        for ct in contratos:
+            st = (ct.get("status") or "").lower()
+            if st not in ["cancelado", "rescindido"]:
+                itens_abertos.append(f"• Contrato Vigente #{ct.get('id')}: {ct.get('produto_nome') or 'Serviço'} (Valor: R$ {float(ct.get('valor_contrato') or 0):,.2f}, Status: {ct.get('status') or 'Ativo'})")
+        for n in negocios:
+            st = (n.get("estagio") or "").lower()
+            if st not in ["fechado", "perdido"]:
+                itens_abertos.append(f"• Oportunidade em Andamento #{n.get('id')}: {n.get('produto_nome') or 'Diversos'} (Estágio no Funil: {n.get('estagio')})")
+
+        blocos.append("\n=== SEUS ITENS EM ABERTO CONOSCO ===")
+        if itens_abertos:
+            blocos.extend(itens_abertos)
+        else:
+            blocos.append("• Você não possui nenhuma pendência, proposta em aberto ou contrato no momento.")
+
         return "\n".join(blocos)
 
     def obter_pergunta_anterior(self, chat_id: str, empresa_id: int = 1) -> Optional[str]:
@@ -481,6 +502,28 @@ class AgentOrchestrator:
 
         return False
 
+    def eh_tentativa_consulta_terceiros(self, mensagem: str) -> bool:
+        """
+        Verifica se o usuário no Telegram está tentando obter dados confidenciais de outros clientes,
+        empresas terceiras ou da carteira geral de clientes da empresa (salvaguarda estrita de privacidade / LGPD).
+        """
+        if not mensagem:
+            return False
+        msg = mensagem.strip().lower()
+        padroes = [
+            r"\b(outros?\s+clientes?|outras?\s+empresas?|demais\s+clientes?)\b",
+            r"\b(todos\s+os\s+clientes?|listar?\s+clientes?|lista\s+de\s+clientes?|carteira\s+de\s+clientes)\b",
+            r"\b(proposta\s+d[oe]\s+outro|propostas\s+d[oe]\s+outros?|contrato\s+d[oe]\s+outro|contratos\s+d[oe]\s+outros?)\b",
+            r"\b(dados\s+d[oe]\s+outro\s+cliente|informa[cç][oõ]es\s+de\s+outro\s+cliente)\b",
+            r"\b(quanto\s+(?:o\s+)?outro\s+cliente|quem\s+mais\s+(?:comprou|contratou|assinou))\b",
+            r"\b(quanto\s+fulano|proposta\s+d[oe]\s+[A-Za-zÀ-ÿ]+|contrato\s+d[oe]\s+[A-Za-zÀ-ÿ]+)\b",
+            r"\b(quais\s+clientes\s+voc[eê]s\s+t[eê]m|quem\s+s[aã]o\s+os\s+clientes)\b",
+        ]
+        for p in padroes:
+            if re.search(p, msg):
+                return True
+        return False
+
     def classificar_intencao_gerente(
         self,
         mensagem: str,
@@ -490,15 +533,23 @@ class AgentOrchestrator:
         """
         Agente Gerente: Analisa a mensagem com base em critérios operacionais e decide a ação a ser tomada.
         Critérios:
+        - BLOQUEIO_PRIVACIDADE: Tentativa de obter dados de outros clientes ou carteira geral (LGPD estrita).
         - COLETA_CONTATO: Cliente ainda não possui cadastro completo (nome e telefone) e a pergunta exige contato prévio.
         - DESPEDIDA: Encerramento ou agradecimento final (tchau, até mais, obrigado por tudo, era só isso, pode encerrar).
         - SAUDACAO: Apenas saudação inicial (oi, olá, bom dia) sem pergunta substantiva.
         - TRANSBORDO_HUMANO: Solicitação explícita de atendente/suporte humano.
-        - CONSULTA_COMERCIAL: Dúvida em primeira pessoa sobre propostas, contratos, negócios em andamento ou produtos contratados.
+        - CONSULTA_COMERCIAL: Dúvida em primeira pessoa sobre itens em aberto, propostas, contratos, negócios em andamento.
         - PERGUNTA_CONHECIMENTO: Pergunta legítima sobre produtos, serviços, preços, regras ou informações corporativas.
         """
         msg_limpa = mensagem.strip().lower()
         msg_sem_pont = re.sub(r"[^\w\s]", "", msg_limpa).strip()
+
+        # 0. Salvaguarda de Privacidade Estrita (Nenhum cliente consulta dados de outro)
+        if self.eh_tentativa_consulta_terceiros(mensagem):
+            return {
+                "intencao": "BLOQUEIO_PRIVACIDADE",
+                "criterio": "Tentativa de consulta a dados de outros clientes ou carteira de clientes (LGPD)"
+            }
 
         # 1. Comandos Diretos e Transbordo Humano
         termos_transbordo = [
@@ -530,7 +581,7 @@ class AgentOrchestrator:
         if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in termos_despedida):
             return {"intencao": "DESPEDIDA", "criterio": "Usuário encerrou o diálogo ou despediu-se cordialmente"}
 
-        # 3. Termos comerciais e de primeira pessoa (propostas, contratos, negócios)
+        # 3. Termos comerciais, itens em aberto e de primeira pessoa (propostas, contratos, negócios)
         termos_comerciais = [
             "minha proposta", "minhas propostas", "quais propostas", "qual proposta", "tenho proposta",
             "possuo proposta", "proposta que tenho", "propostas que tenho", "propostas possuo",
@@ -539,9 +590,24 @@ class AgentOrchestrator:
             "valor do meu contrato", "qual o valor do contrato", "qual o valor do contrato que tenho",
             "meu negócio", "meu negocio", "andamento do meu", "status da proposta", "status do meu pedido",
             "status do negócio", "o que eu contratei", "o que contratei", "meu plano contratado",
-            "segunda via do contrato", "quais propostas possuo com vocês", "quais contratos possuo com vocês"
+            "segunda via do contrato", "quais propostas possuo com vocês", "quais contratos possuo com vocês",
+            # Consultas específicas sobre itens em aberto e pendências
+            "itens em aberto", "item em aberto", "o que tenho em aberto", "o que está em aberto", "tenho em aberto",
+            "itens abertos", "meus itens em aberto", "quais itens tenho em aberto", "quais itens possuo em aberto",
+            "itens que tenho em aberto", "o que tenho pendente", "minhas pendências", "quais pendências",
+            "meus processos em aberto", "o que está pendente no meu atendimento", "negócios em andamento"
         ]
-        eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais)
+        padroes_comerciais_regex = [
+            r"\b(minha|minhas|meu|meus|qual|quais|tenho|possuo|algum|alguma)\s+.*?\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\b",
+            r"\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\s+.*?\b(que\s+tenho|que\s+possuo|em\s+aberto|abertos?|ativo|ativos|vigente|vigentes|pendente|pendentes|meu|minha|meus|minhas)\b",
+            r"\b(itens?|item)\s+.*?\b(em\s+aberto|abertos?|pendentes?)\b",
+            r"\b(o\s+que\s+(?:eu\s+)?tenho\s+(?:em\s+aberto|pendente))\b",
+            r"\b(minhas?\s+pend[eê]ncias?)\b",
+            r"\b(status\s+d[oa]\s+(?:proposta|pedido|neg[oó]cio|contrato))\b",
+            r"\b(valor\s+d[oa]\s+(?:meu\s+|minha\s+)?(?:contrato|proposta))\b",
+            r"\b(o\s+que\s+(?:eu\s+)?contratei)\b",
+        ]
+        eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais) or any(re.search(p, msg_limpa) for p in padroes_comerciais_regex)
 
         # 4. Se acabou de fornecer os dados faltantes nesta mensagem
         if dados_contato_extraidos.get("tem_contato"):
@@ -575,19 +641,23 @@ class AgentOrchestrator:
         if self.eh_saudacao_simples(mensagem):
             return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas adicionais"}
 
-        # 6. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
+        # 6. Consulta Comercial e Itens em Aberto do próprio cliente
+        if eh_consulta_comercial:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Consulta de itens em aberto, propostas ou contratos exigindo telefone/WhatsApp para identificação segura"
+                }
+            return {
+                "intencao": "CONSULTA_COMERCIAL",
+                "criterio": "Consulta sobre histórico comercial, itens em aberto, propostas ou contratos do próprio cliente"
+            }
+
+        # 7. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
         if self.eh_pergunta_processo_base(mensagem):
             return {
                 "intencao": "PERGUNTA_CONHECIMENTO",
                 "criterio": "Pergunta sobre processo base da empresa (horário/localização/funcionamento) sem exigir telefone"
-            }
-
-        # 7. Se for consulta comercial (propostas, contratos) e cliente ainda não tem telefone:
-        # solicita contato para identificar com segurança seus registros
-        if eh_consulta_comercial and not contexto.get("tem_telefone_valido"):
-            return {
-                "intencao": "COLETA_CONTATO",
-                "criterio": "Consulta de propostas/contratos pessoais exigindo telefone/WhatsApp para localização segura"
             }
 
         # 8. Se ainda não possui telefone válido: qualquer dúvida sobre produtos, serviços, preços ou planos exige contato
@@ -597,11 +667,7 @@ class AgentOrchestrator:
                 "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone"
             }
 
-        # 9. Consulta Comercial sobre negócio, proposta ou contrato do cliente (quando já possui telefone)
-        if eh_consulta_comercial:
-            return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Consulta sobre histórico comercial, propostas ou contratos do próprio cliente"}
-
-        # 10. Pergunta legítima para base de conhecimento
+        # 9. Pergunta legítima para base de conhecimento
         return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Pergunta substantiva direcionada à base de conhecimento da empresa"}
 
     def executar_orquestracao(
@@ -662,6 +728,20 @@ class AgentOrchestrator:
         nome_exibicao = contexto["nome"] if contexto["tem_nome_valido"] else ""
 
         # 4. Ações dos Subagentes
+
+        # --- AÇÃO: BLOQUEIO DE PRIVACIDADE / PROTEÇÃO LGPD ---
+        if intencao == "BLOQUEIO_PRIVACIDADE":
+            msg_bloqueio = (
+                f"🔒 {nome_exibicao + ', ' if nome_exibicao else ''}por motivos de segurança, sigilo profissional e "
+                "proteção à privacidade de dados (LGPD), você possui acesso estritamente às suas próprias informações, propostas e contratos.\n\n"
+                "Não compartilhamos dados cadastrais, comerciais ou contratuais de outros clientes ou terceiros. "
+                "Se desejar consultar os seus próprios itens em aberto, propostas ou contratos, basta me perguntar!"
+            )
+            return msg_bloqueio, {
+                "intencao": "BLOQUEIO_PRIVACIDADE",
+                "cadastrado": contexto["cadastrado_completo"],
+                "documentos_usados": []
+            }
 
         # --- AÇÃO: COLETA DE CONTATO (NÚMERO DE TELEFONE) ---
         if intencao == "COLETA_CONTATO":
