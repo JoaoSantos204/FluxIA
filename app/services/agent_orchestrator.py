@@ -515,12 +515,41 @@ class AgentOrchestrator:
 
         return False
 
+    def eh_pergunta_comercial_ou_produtos(self, mensagem: str) -> bool:
+        """
+        Verifica se a mensagem é sobre produtos, serviços, preços, planos, valores,
+        propostas, orçamentos, contratos ou contratação comercial.
+        """
+        if not mensagem:
+            return False
+        msg = mensagem.strip().lower()
+
+        padroes = [
+            # Produtos, serviços e catálogo
+            r"\b(produto|produtos|servi[cç]o|servi[cç]os|solu[cç][aã]o|solu[cç][oõ]es|cat[aá]logo|portfolio|portf[oó]lio)\b",
+            # Preços, valores e planos
+            r"\b(pre[cç]o|pre[cç]os|valor|valores|quanto\s+custa|tabela|investimento|mensalidade|tarifa|taxa|custo)\b",
+            r"\b(plano|planos|pacote|pacotes)\b",
+            # Propostas e orçamentos
+            r"\b(proposta|propostas|or[cç]amento|or[cç]amentos|cota[cç][aã]o|cota[cç][oõ]es)\b",
+            # Contratos e contratação
+            r"\b(contrato|contratos|contratar|contrata[cç][aã]o|comprar|ades[aã]o|assinar|adquirir)\b",
+            # Interesse em saber mais sobre serviços/produtos
+            r"\b(saber\s+mais\s+sobre\s+(?:os\s+|as\s+)?(?:produtos|servi[cç]os|solu[cç][oõ]es|planos))\b",
+            r"\b(conhecer\s+(?:os\s+|as\s+)?(?:produtos|servi[cç]os|solu[cç][oõ]es|planos))\b"
+        ]
+        return any(re.search(p, msg) for p in padroes)
+
     def eh_saudacao_simples(self, mensagem: str) -> bool:
         """Verifica se a mensagem é estritamente uma saudação inicial sem perguntas substantivas."""
         if not mensagem:
             return False
         msg_limpa = mensagem.strip().lower()
         msg_sem_pont = re.sub(r"[^\w\s]", "", msg_limpa).strip()
+
+        # Comandos e inícios de conversa no Telegram
+        if msg_limpa.startswith("/start") or msg_limpa in ["start", "/inicio", "inicio", "/comecar", "comecar"]:
+            return True
 
         saudacoes = {
             "oi", "ola", "olá", "oie", "bom dia", "boa tarde", "boa noite", "e ai", "e aí",
@@ -534,7 +563,8 @@ class AgentOrchestrator:
             return True
 
         padroes_saudacao = [
-            r"^(?:oi|ol[aá]|oie|bom dia|boa tarde|boa noite|opa|salve)(?:\s+(?:tudo\s+bem|tudo\s+bom|como\s+vai))?[\s!.]*$"
+            r"^(?:oi|ol[aá]|oie|bom dia|boa tarde|boa noite|opa|salve)(?:[,\s]+(?:tudo\s+bem|tudo\s+bom|como\s+vai|como\s+est[aá]|boa\s+tarde|bom\s+dia|boa\s+noite))?[\s!.]*$",
+            r"^(?:tudo\s+bem|tudo\s+bom|como\s+vai)[\s!.]*$"
         ]
         for padrao in padroes_saudacao:
             if re.match(padrao, msg_limpa):
@@ -830,6 +860,11 @@ class AgentOrchestrator:
             empresa_id=contexto.get("empresa_id", 1)
         )
         if eh_prop_neg:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": f"Solicitação de {tipo_prop_neg} formal exigindo WhatsApp/telefone para contato e elaboração"
+                }
             return {
                 "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
                 "tipo_ticket": tipo_prop_neg,
@@ -871,11 +906,18 @@ class AgentOrchestrator:
                     return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Dados de contato fornecidos junto com dúvida"}
                 return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
 
-        # 5. Saudação Simples (sem pergunta adicional): responde cordial com outra saudação, sem pedir número
+        # 5. Saudação Simples e Início de Conversa (/start, oi, olá, boa tarde): responde cordial sem pedir número
         if self.eh_saudacao_simples(mensagem):
-            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas adicionais"}
+            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial ou comando de início sem perguntas adicionais"}
 
-        # 6. Consulta Comercial e Itens em Aberto do próprio cliente
+        # 6. Processos base da empresa (horário de funcionamento, localização, endereço, sobre a empresa, etc.): responde direto sem exigir número
+        if self.eh_pergunta_processo_base(mensagem):
+            return {
+                "intencao": "PERGUNTA_CONHECIMENTO",
+                "criterio": "Pergunta sobre processo base da empresa (horário/localização/endereço/funcionamento) respondida livremente"
+            }
+
+        # 7. Consulta Comercial e Itens em Aberto do próprio cliente (propostas e contratos existentes)
         if eh_consulta_comercial:
             if not contexto.get("tem_telefone_valido"):
                 return {
@@ -887,22 +929,24 @@ class AgentOrchestrator:
                 "criterio": "Consulta sobre histórico comercial, itens em aberto, propostas ou contratos do próprio cliente"
             }
 
-        # 7. Processos base da empresa (horário de funcionamento, localização, se estão abertos hoje, etc.): responde direto sem exigir número
-        if self.eh_pergunta_processo_base(mensagem):
+        # 8. Dúvidas sobre produtos, serviços, preços, planos, valores ou contratação (fora do institucional básico)
+        # Solicita o telefone/WhatsApp somente após o cliente manifestar interesse em produtos/serviços/comercial
+        if self.eh_pergunta_comercial_ou_produtos(mensagem):
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone para atendimento comercial personalizado"
+                }
             return {
                 "intencao": "PERGUNTA_CONHECIMENTO",
-                "criterio": "Pergunta sobre processo base da empresa (horário/localização/funcionamento) sem exigir telefone"
+                "criterio": "Apresentação de produtos e soluções do catálogo para cliente já identificado"
             }
 
-        # 8. Se ainda não possui telefone válido: qualquer dúvida sobre produtos, serviços, preços ou planos exige contato
-        if not contexto.get("tem_telefone_valido"):
-            return {
-                "intencao": "COLETA_CONTATO",
-                "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone"
-            }
-
-        # 9. Pergunta legítima para base de conhecimento
-        return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Pergunta substantiva direcionada à base de conhecimento da empresa"}
+        # 9. Perguntas gerais ou institucionais para a base de conhecimento: responde diretamente sem exigir telefone
+        return {
+            "intencao": "PERGUNTA_CONHECIMENTO",
+            "criterio": "Pergunta substantiva respondida pela base de conhecimento da empresa sem exigir telefone"
+        }
 
     def executar_orquestracao(
         self,
@@ -1055,12 +1099,13 @@ class AgentOrchestrator:
 
             primeiro_nome = nome_exibicao.split()[0] if nome_exibicao else ""
             prompt_saudacao = (
-                f"O usuário {nome_exibicao or 'Cliente'} iniciou o atendimento com a saudação: '{mensagem}'.\n"
+                f"O usuário {nome_exibicao or 'Cliente'} iniciou o atendimento com a saudação ou início de conversa: '{mensagem}'.\n"
                 "Sua missão é responder com um cumprimento extremamente humano, educado, caloroso, simpático e natural (estilo ChatGPT/Claude).\n"
                 "DIRETRIZES CRÍTICAS:\n"
                 f"- Se o nome estiver disponível ({primeiro_nome or nome_exibicao}), cumprimente-o cordialmente pelo primeiro nome.\n"
-                "- Ofereça ajuda com simpatia, naturalidade e presteza para o que ele precisar hoje.\n"
-                "- NUNCA mencione de forma robótica contratos, propostas ou serviços ativos logo no 'olá/boa tarde'. O cliente já sabe o que tem e não quer ouvir repetições sobre contratos toda vez que cumprimenta.\n"
+                "- Apresente-se brevemente como assistente virtual da empresa e pergunte em que pode ajudar hoje.\n"
+                "- NUNCA solicite número de telefone ou WhatsApp nesta saudação inicial. O atendimento deve ser receptivo, livre e acolhedor.\n"
+                "- NUNCA mencione de forma robótica contratos, propostas ou serviços ativos logo no cumprimento inicial.\n"
                 "- Seja conciso, caloroso e acolhedor (1 a 2 frases curtas e diretas, sem enrolação).\n"
                 "- Varie o estilo da saudação para não soar mecânico ou repetitivo."
             )
