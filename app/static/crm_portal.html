@@ -162,6 +162,38 @@
       width: auto !important;
       min-width: max-content !important;
     }
+    /* CORREÇÃO DO FUNDO DOS DROPDOWNS E SELECT OPTIONS NO MODO CLARO E ESCURO */
+    select,
+    select option {
+      background-color: var(--surface) !important;
+      color: var(--text) !important;
+    }
+    body.dark-mode select,
+    body.dark-mode select option,
+    [data-theme="dark"] select,
+    [data-theme="dark"] select option {
+      background-color: #1e293b !important;
+      color: #f1f5f9 !important;
+    }
+    body:not(.dark-mode) select,
+    body:not(.dark-mode) select option,
+    [data-theme="light"] select,
+    [data-theme="light"] select option {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+    #select-pipeline-kanban,
+    #select-pipeline-kanban option {
+      background-color: var(--surface) !important;
+      color: var(--text) !important;
+    }
+    body.dark-mode #select-pipeline-kanban,
+    body.dark-mode #select-pipeline-kanban option,
+    [data-theme="dark"] #select-pipeline-kanban,
+    [data-theme="dark"] #select-pipeline-kanban option {
+      background-color: #1e293b !important;
+      color: #f8fafc !important;
+    }
 
     /* KANBAN CRM ESTILOS */
     .kanban-board {
@@ -774,7 +806,7 @@
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <div style="display:flex; align-items:center; gap:6px; background:var(--surface); padding:4px 10px; border-radius:8px; border:1px solid var(--border);">
             <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase;">Pipeline:</span>
-            <select id="select-pipeline-kanban" style="background:transparent; border:none; color:var(--text); font-size:12px; font-weight:600; outline:none; cursor:pointer;" onchange="aoMudarPipelineKanban(this.value)">
+            <select id="select-pipeline-kanban" style="background:var(--surface); border:none; color:var(--text); font-size:12px; font-weight:600; outline:none; cursor:pointer; padding:2px 4px; border-radius:4px;" onchange="aoMudarPipelineKanban(this.value)">
               <option value="">Carregando pipelines...</option>
             </select>
           </div>
@@ -3076,13 +3108,13 @@ async function carregarPipelinesKanban() {
     pipelinesCache = data.pipelines || [];
 
     if (pipelinesCache.length === 0) {
-      select.innerHTML = '<option value="">Nenhum pipeline disponível</option>';
+      select.innerHTML = '<option value="" style="background:var(--surface); color:var(--text);">Nenhum pipeline disponível</option>';
       document.getElementById('kanban-board-container').innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhum pipeline configurado para esta empresa. Crie um em "Pipelines".</div>';
       return;
     }
 
     select.innerHTML = pipelinesCache.map(p => `
-      <option value="${p.id}" ${p.id === pipelineAtivoId || (!pipelineAtivoId && p.padrao) ? 'selected' : ''}>
+      <option value="${p.id}" class="opt-pipeline" style="background:var(--surface); color:var(--text);" ${p.id === pipelineAtivoId || (!pipelineAtivoId && p.padrao) ? 'selected' : ''}>
         ${escapeHtml(p.nome)} ${p.padrao ? '(Padrão)' : ''} ${p.produto_nome ? `[${escapeHtml(p.produto_nome)}]` : ''}
       </option>
     `).join('');
@@ -6787,28 +6819,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <!-- MODAL PRODUTO (PARTE 23) -->
 <div class="modal-overlay" id="modal-produto" style="display:none; align-items:center; justify-content:center; z-index:9999;">
-  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:480px;">
+  <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:92%; max-width:640px;">
     <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
       <div class="modal-title" id="modal-produto-titulo" style="font-weight:700; font-family:'Syne',sans-serif;">Novo Produto</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalProduto()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px;">
       <input type="hidden" id="modal-produto-id" />
-      <div class="config-field" style="margin-bottom:14px;">
+      <div class="config-field" style="margin-bottom:14px; width:100%;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Nome do Produto / Serviço *</div>
-        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-nome" placeholder="Ex: Consultoria em IA Enterprise" required />
+        <input class="login-input" style="width:100%; box-sizing:border-box; padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;" id="modal-produto-nome" placeholder="Ex: Consultoria em IA Enterprise" required />
       </div>
-      <div class="config-field" style="margin-bottom:14px;">
+      <div class="config-field" style="margin-bottom:14px; width:100%;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Descrição</div>
-        <textarea class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); height:70px; resize:none;" id="modal-produto-descricao" placeholder="Breve resumo das entregas e benefícios..."></textarea>
+        <textarea class="login-input" style="width:100% !important; box-sizing:border-box !important; padding:12px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; min-height:120px; resize:vertical; font-family:inherit; font-size:13px; line-height:1.5; display:block;" id="modal-produto-descricao" placeholder="Breve resumo das entregas e benefícios..."></textarea>
       </div>
-      <div class="config-field" style="margin-bottom:14px;">
+      <div class="config-field" style="margin-bottom:14px; width:100%;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Preço Base (R$)</div>
-        <input class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-preco" type="number" step="0.01" placeholder="Ex: 2500.00" />
+        <input class="login-input" style="width:100%; box-sizing:border-box; padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;" id="modal-produto-preco" type="number" step="0.01" placeholder="Ex: 2500.00" />
       </div>
-      <div class="config-field" style="margin-bottom:14px;">
+      <div class="config-field" style="margin-bottom:14px; width:100%;">
         <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Funil de Vendas (Pipeline) Associado</div>
-        <select class="login-input" style="padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="modal-produto-pipeline-id">
+        <select class="login-input" style="width:100%; box-sizing:border-box; padding:10px 14px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px;" id="modal-produto-pipeline-id">
           <option value="">-- Padrão (Primeiro Funil da Empresa) --</option>
         </select>
         <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Negócios deste produto serão direcionados a este funil automaticamente.</div>
