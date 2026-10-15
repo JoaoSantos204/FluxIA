@@ -1722,6 +1722,38 @@ function escapeHtml(texto) {
   return div.innerHTML;
 }
 
+function formatarMarkdownParaHtml(texto) {
+  if (!texto) return '';
+  let html = String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Bloco de código ```
+  html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.25); padding:10px; border-radius:6px; font-family:monospace; font-size:12px; margin:6px 0; overflow-x:auto;"><code>$1</code></pre>');
+  // Código inline `
+  html = html.replace(/`([^`\n]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:2px 5px; border-radius:4px; font-family:monospace; font-size:11px; color:#38bdf8;">$1</code>');
+  // Negrito **texto** ou __texto__
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:inherit; font-weight:700;">$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong style="color:inherit; font-weight:700;">$1</strong>');
+  // Itálico *texto* ou _texto_
+  html = html.replace(/(^|[^*])\*([^*\n]+)\*([^*]|$)/g, '$1<em>$2</em>$3');
+  html = html.replace(/(^|[^_])_([^_\n]+)_([^_]|$)/g, '$1<em>$2</em>$3');
+  // Quebras de linha
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function limparMarkdown(texto) {
+  if (!texto) return '';
+  return String(texto)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+}
+
 function obterFusoAtivo() {
   if (fusoHorarioEmpresa && fusoHorarioEmpresa !== 'auto') {
     return fusoHorarioEmpresa;
@@ -2037,7 +2069,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
             <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
           </div>
           <div class="ci-msg" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px;">
-            ${c.ultima_mensagem || 'Iniciou interação'}
+            ${escapeHtml(limparMarkdown(c.ultima_mensagem)) || 'Iniciou interação'}
           </div>
           <div style="margin-top:4px;">
             <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 6px;">
@@ -2074,7 +2106,7 @@ function renderizarDashboardConversasTelegram() {
                 <span style="font-weight:600; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nomeExibicao}</span>
                 <span style="font-size:10px; color:var(--text-muted); flex-shrink:0; margin-left:6px;">${hora}</span>
               </div>
-              <div class="ci-msg" style="color:var(--text-muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:6px;">${c.ultima_mensagem || 'Sem mensagens'}</div>
+              <div class="ci-msg" style="color:var(--text-muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:6px;">${escapeHtml(limparMarkdown(c.ultima_mensagem)) || 'Sem mensagens'}</div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 7px;">
                   ${isHuman ? '🧑 Atendente Humano' : '🤖 Assistente IA'}
@@ -2220,15 +2252,9 @@ async function carregarMensagensTelegram(chatId, silencioso = false) {
 
     container.innerHTML = msgs.map(m => {
       const isUser = m.remetente === 'usuario';
-      const textoSeguro = (m.texto || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\n/g, '<br>');
-
       return `
         <div class="msg-bubble ${isUser ? 'msg-user' : 'msg-bot'}" style="${!isUser ? 'border-left: 3px solid #229ED9;' : ''}">
-          <div class="msg-text">${textoSeguro}</div>
+          <div class="msg-text">${formatarMarkdownParaHtml(m.texto || '')}</div>
           <div class="msg-time" title="${m.data_hora || ''}">${formatarHoraConversa(m.data_hora || m.hora)}</div>
         </div>
       `;
@@ -6012,14 +6038,14 @@ function renderizarTicketsIA(tickets) {
           <div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
             <span>✦</span> Resumo Inteligente da Conversa (Ambientação para o Atendente)
           </div>
-          <div style="font-size:13px; line-height:1.6; color:var(--text); white-space:pre-wrap;">${t.resumo_conversa || 'Sem resumo disponível'}</div>
+          <div style="font-size:13px; line-height:1.7; color:var(--text);">${formatarMarkdownParaHtml(t.resumo_conversa || 'Sem resumo disponível')}</div>
         </div>
 
         <!-- Última Mensagem do Cliente -->
         ${t.ultima_mensagem_cliente ? `
         <div style="background:rgba(255,255,255,0.03); border-left:3px solid #229ED9; padding:10px 14px; border-radius:0 8px 8px 0; font-size:12px;">
           <span style="color:var(--text-muted); font-weight:600;">Última mensagem enviada pelo cliente no Telegram:</span>
-          <div style="color:var(--text); margin-top:4px; font-style:italic; font-size:13px;">"${t.ultima_mensagem_cliente}"</div>
+          <div style="color:var(--text); margin-top:4px; font-style:italic; font-size:13px;">"${formatarMarkdownParaHtml(t.ultima_mensagem_cliente)}"</div>
         </div>` : ''}
 
         <!-- Histórico da Última Resposta do Operador (se já respondeu) -->
@@ -6028,7 +6054,7 @@ function renderizarTicketsIA(tickets) {
           <div style="color:#10b981; font-weight:700; display:flex; justify-content:space-between;">
             <span>✓ Última resposta enviada pelo atendente (${t.atendente_nome || 'Operador'}):</span>
           </div>
-          <div style="color:var(--text); margin-top:4px; font-size:13px; white-space:pre-wrap;">${t.resposta_atendente}</div>
+          <div style="color:var(--text); margin-top:4px; font-size:13px;">${formatarMarkdownParaHtml(t.resposta_atendente)}</div>
         </div>` : ''}
 
         <!-- Seção de Ação e Resposta Direta pelo Operador -->

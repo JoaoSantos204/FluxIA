@@ -143,25 +143,60 @@ def obter_token_bot_empresa(empresa_id: int | None = None, chat_id: str | None =
     return token if token else None
 
 
+def converter_markdown_para_telegram_html(texto: str) -> str:
+    """
+    Converte markdown comum (**negrito**, *itálico*, `código`, ```bloco```)
+    para tags HTML compatíveis nativamente com a API do Telegram (<b>, <i>, <code>, <pre>).
+    Isso garante que textos fiquem em negrito sem exibir os caracteres de asterisco *.
+    """
+    if not texto:
+        return ""
+
+    # 1. Escapa caracteres de controle HTML para não corromper entidades
+    t = texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    # 2. Blocos de código ```linguagem\nbloco```
+    t = re.sub(r"```(?:[a-zA-Z0-9_\-]+)?\n?([\s\S]*?)```", r"<pre><code>\1</code></pre>", t)
+
+    # 3. Código inline `codigo`
+    t = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", t)
+
+    # 4. Negrito **texto** ou __texto__
+    t = re.sub(r"\*\*([^\*\n]+)\*\*", r"<b>\1</b>", t)
+    t = re.sub(r"__([^_\n]+)__", r"<b>\1</b>", t)
+
+    # 5. Itálico *texto* ou _texto_
+    t = re.sub(r"(?<![a-zA-Z0-9<])\*([^\*\n]+)\*(?![a-zA-Z0-9>])", r"<i>\1</i>", t)
+    t = re.sub(r"(?<![a-zA-Z0-9<])_([^_\n]+)_(?![a-zA-Z0-9>])", r"<i>\1</i>", t)
+
+    return t
+
+
 def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = None, reply_markup: dict | None = None):
-    """Envia uma mensagem de resposta via API do Telegram com validação explícita de bot próprio e suporte a teclado."""
+    """Envia uma mensagem de resposta via API do Telegram com suporte a formatação HTML nativa e teclado."""
     token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
     if not token:
         logger.warning(f"[Telegram] Bot do Telegram não configurado para a empresa {empresa_id}. Mensagem para chat {chat_id} não enviada.")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    texto_html = converter_markdown_para_telegram_html(texto)
     payload = {
         "chat_id": chat_id,
-        "text": texto,
-        "parse_mode": "Markdown"
+        "text": texto_html,
+        "parse_mode": "HTML"
     }
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
 
     try:
         response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 400 and "parse" in response.text.lower():
+        # Se ocorrer erro de parsing na API do Telegram, faz fallback removendo os asteriscos e tags
+        if response.status_code == 400 and ("parse" in response.text.lower() or "entity" in response.text.lower()):
+            texto_limpo = re.sub(r"\*\*([^\*]+)\*\*", r"\1", texto)
+            texto_limpo = re.sub(r"__([^_\n]+)__", r"\1", texto_limpo)
+            texto_limpo = re.sub(r"(?<![a-zA-Z0-9])\*([^\*\n]+)\*(?![a-zA-Z0-9])", r"\1", texto_limpo)
+            payload["text"] = texto_limpo
             payload.pop("parse_mode", None)
             requests.post(url, json=payload, timeout=10)
     except Exception as e:
