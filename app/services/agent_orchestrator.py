@@ -591,6 +591,10 @@ class AgentOrchestrator:
         if any(t in msg for t in termos_consulta_existente) and not any(p in msg for p in ["nova proposta", "novo orçamento", "outro contrato", "desconto", "negociar", "fechar", "prosseguir", "avançar", "continuidade"]):
             return False, ""
 
+        # Se for pedido de envio/entrega de proposta já existente, por número ou em PDF, não é solicitação para elaborar nova
+        if self.eh_pedido_pdf_proposta(mensagem, contexto=None):
+            return False, ""
+
         # 0. Verificação de resposta afirmativa ao convite comercial (CTA) da IA na mensagem anterior
         if chat_id:
             try:
@@ -669,24 +673,49 @@ class AgentOrchestrator:
 
         return False, ""
 
-    def eh_pedido_pdf_proposta(self, mensagem: str) -> bool:
+    def eh_pedido_pdf_proposta(self, mensagem: str, contexto: Optional[dict] = None) -> bool:
         """
-        Verifica se o cliente está solicitando o envio do documento PDF da proposta comercial.
+        Verifica se o cliente está solicitando o envio do documento PDF da proposta comercial,
+        ou o envio/encaminhamento de uma proposta comercial já existente no sistema (ex: "Pode me enviar a proposta 18?").
         """
         if not mensagem:
             return False
         msg = mensagem.strip().lower()
 
         tem_pdf = "pdf" in msg
-        tem_doc = any(t in msg for t in ["documento", "arquivo", "baixar"])
-        tem_proposta = "proposta" in msg or "orçamento" in msg or "orcamento" in msg or "contrato" in msg
+        tem_doc = any(t in msg for t in ["documento", "arquivo", "baixar", "download", "link"])
+        tem_proposta = any(t in msg for t in ["proposta", "orçamento", "orcamento", "cotação", "cotacao"])
 
-        # Se citar expressamente "pdf" com intenção de receber/ver/mandar
-        if tem_pdf and any(v in msg for v in ["manda", "envia", "mandar", "enviar", "quero", "gostaria", "ver", "tem", "pode", "passa", "consegue", "baixa"]):
+        verbos_envio = [
+            "envia", "envie", "enviar", "manda", "mande", "mandar", "passa", "passe", "passar",
+            "encaminha", "encaminhar", "receber", "quero", "gostaria", "ver", "tem como", "pode mandar",
+            "pode enviar", "consegue enviar", "consegue mandar", "me manda", "me envia", "me passa"
+        ]
+        tem_verbo_envio = any(v in msg for v in verbos_envio)
+
+        # 1. Se citar expressamente "pdf" com intenção de receber/ver/mandar
+        if tem_pdf and (tem_verbo_envio or any(v in msg for v in ["tem", "pode", "consegue", "baixa"])):
             return True
 
-        if tem_doc and tem_proposta and any(v in msg for v in ["manda", "envia", "mandar", "enviar", "quero", "gostaria", "ver", "tem", "pode", "passa"]):
+        # 2. Se citar "documento" / "arquivo" / "baixar" da proposta
+        if tem_doc and tem_proposta and (tem_verbo_envio or any(v in msg for v in ["tem", "pode", "consegue"])):
             return True
+
+        # 3. Se citar número ou identificador de proposta (ex: "proposta 18", "proposta #18", "proposta n 18", "orçamento 18")
+        padrao_proposta_com_numero = re.search(r"\b(?:proposta|or[cç]amento|cota[cç][aã]o)\s*(?:n[ºo°#]?\s*|\s*#\s*)?(\d+)\b", msg)
+        if padrao_proposta_com_numero and tem_verbo_envio:
+            return True
+
+        # Se citar expressamente número de proposta com termo de proposta na frase
+        if tem_proposta and re.search(r"\b#?\d+\b", msg) and tem_verbo_envio:
+            return True
+
+        # 4. Se o cliente já possui propostas cadastradas e pede o envio de "a proposta" / "minha proposta"
+        # Ex: "pode me enviar a proposta?", "me envia a proposta", "manda a proposta", "quero a proposta"
+        propostas_cadastradas = (contexto.get("propostas") or []) if contexto else []
+        if propostas_cadastradas and tem_proposta and tem_verbo_envio:
+            if not any(palavra_nova in msg for palavra_nova in ["nova proposta", "novo orçamento", "outra proposta", "outro orçamento", "elaborar nova", "fazer outra"]):
+                return True
 
         padroes = [
             r"\b(proposta\s+em\s+pdf|pdf\s+da\s+proposta|enviar\s+pdf|mandar\s+pdf|manda\s+o\s+pdf|envia\s+o\s+pdf)\b",
@@ -722,11 +751,11 @@ class AgentOrchestrator:
                 "criterio": "Tentativa de consulta a dados de outros clientes ou carteira de clientes (LGPD)"
             }
 
-        # 0.1 Solicitação de Envio do Documento da Proposta em PDF
-        if self.eh_pedido_pdf_proposta(mensagem):
+        # 0.1 Solicitação de Envio do Documento da Proposta em PDF ou Envio de Proposta Existente
+        if self.eh_pedido_pdf_proposta(mensagem, contexto=contexto):
             return {
                 "intencao": "ENVIO_PDF_PROPOSTA",
-                "criterio": "Cliente solicitou envio do documento em PDF da proposta comercial"
+                "criterio": "Cliente solicitou envio da proposta comercial em PDF ou envio de proposta já cadastrada"
             }
 
         # 1. Comandos Diretos e Transbordo Humano
@@ -1103,14 +1132,61 @@ class AgentOrchestrator:
             primeiro_nome = nome_exibicao.split()[0] if nome_exibicao else ""
             saudacao = f"{primeiro_nome}, " if primeiro_nome else ""
 
-            if propostas_cliente:
-                # Tenta identificar se o usuário citou o ID de uma proposta específica (ex: "proposta 23" ou "23")
-                proposta_alvo = propostas_cliente[0]
+            # Extrai ID numérico específico citado na mensagem (ex: "proposta 18", "#18", "a 18")
+            match_num = re.search(r"(?:proposta|or[cç]amento)?\s*(?:n[ºo°#]?\s*|\s*#\s*)?(\d+)", mensagem, re.IGNORECASE)
+            id_citado = int(match_num.group(1)) if match_num else None
+
+            proposta_alvo = None
+
+            if id_citado:
+                # 1. Procura na lista recente do cliente
                 for pr in propostas_cliente:
-                    if str(pr.get("id")) in mensagem:
+                    if pr.get("id") == id_citado:
                         proposta_alvo = pr
                         break
 
+                # 2. Se não estiver no cache recente de 5, busca diretamente no banco de dados para este cliente/empresa
+                if not proposta_alvo:
+                    conexao = conectar()
+                    cursor = _cursor(conexao)
+                    ph = _placeholder()
+                    try:
+                        cursor.execute(f"""
+                            SELECT p.id, p.valor, p.condicoes_pagamento, p.validade_dias, p.status_envio,
+                                   p.descricao_itens, p.criado_em, COALESCE(prod.nome, prod_n.nome) AS produto_nome
+                            FROM propostas p
+                            LEFT JOIN produtos prod ON p.produto_id = prod.id
+                            LEFT JOIN negocios n ON p.negocio_id = n.id
+                            LEFT JOIN produtos prod_n ON n.produto_id = prod_n.id
+                            WHERE p.id = {ph} AND (p.empresa_id = {ph} OR p.empresa_id IS NULL)
+                        """, (id_citado, empresa_id))
+                        row = cursor.fetchone()
+                        if row:
+                            proposta_alvo = dict(row)
+                    finally:
+                        conexao.close()
+
+                # Se o usuário citou um ID específico que realmente não existe ou não pertence a ele:
+                if not proposta_alvo:
+                    props_disponiveis = [f"• Proposta #{p['id']}: {p.get('produto_nome') or 'Solução'}" for p in propostas_cliente]
+                    lista_txt = "\n".join(props_disponiveis) if props_disponiveis else "Você ainda não possui propostas formais registradas."
+                    msg_nao_encontrada = (
+                        f"Não encontrei a Proposta Comercial #{id_citado} vinculada ao seu cadastro.\n\n"
+                        f"Propostas disponíveis no seu histórico:\n{lista_txt}\n\n"
+                        "Gostaria que eu envie o PDF de alguma delas, ou prefere falar com um consultor?"
+                    )
+                    return msg_nao_encontrada, {
+                        "intencao": "ENVIO_PDF_PROPOSTA",
+                        "cadastrado": contexto["cadastrado_completo"],
+                        "documento_enviado": False,
+                        "documentos_usados": []
+                    }
+            else:
+                # Se não citou número, seleciona a proposta mais recente do cliente
+                if propostas_cliente:
+                    proposta_alvo = propostas_cliente[0]
+
+            if proposta_alvo:
                 id_especifico = proposta_alvo.get("id")
                 prod_alvo = proposta_alvo.get("produto_nome") or "Solução Especializada"
                 val_alvo = float(proposta_alvo.get("valor") or 0.0)
@@ -1128,8 +1204,13 @@ class AgentOrchestrator:
                         empresa_id=empresa_id
                     )
                     if enviou:
+                        nota_outras = ""
+                        if not id_citado and len(propostas_cliente) > 1:
+                            outras_props = [f"#{p['id']}" for p in propostas_cliente if p['id'] != id_especifico]
+                            nota_outras = f"\n\n*(Você também possui a(s) proposta(s) {', '.join(outras_props)}. Se desejar o PDF de alguma delas, basta me pedir pelo número!)*"
+
                         msg_resposta = (
-                            f"📄 {saudacao}acabei de te enviar o documento em PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) logo acima!\n\n"
+                            f"📄 {saudacao}acabei de te enviar o documento em PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) logo acima!{nota_outras}\n\n"
                             "Você pode baixar e visualizar todo o detalhamento do escopo, investimento e condições oficiais.\n\n"
                             "Se desejar tirar qualquer dúvida, solicitar algum ajuste ou aprovar a proposta, basta me responder por aqui mesmo!"
                         )
@@ -1138,6 +1219,20 @@ class AgentOrchestrator:
                             "proposta_id": id_especifico,
                             "cadastrado": contexto["cadastrado_completo"],
                             "documento_enviado": True,
+                            "documentos_usados": []
+                        }
+                    else:
+                        logger.error(f"[Orquestrador] Falha ao enviar documento da proposta #{id_especifico} no Telegram.")
+                        msg_falha = (
+                            f"📄 {saudacao}o PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) foi gerado com sucesso, "
+                            "mas houve uma oscilação na entrega do arquivo pelo Telegram.\n\n"
+                            "Por favor, tente solicitar novamente em alguns instantes."
+                        )
+                        return msg_falha, {
+                            "intencao": "ENVIO_PDF_PROPOSTA",
+                            "proposta_id": id_especifico,
+                            "cadastrado": contexto["cadastrado_completo"],
+                            "documento_enviado": False,
                             "documentos_usados": []
                         }
 

@@ -25,13 +25,16 @@ def buscar_dados_proposta(proposta_id: int, empresa_id: int) -> Optional[Dict[st
             SELECT 
                 p.id, p.valor, p.condicoes_pagamento, p.validade_dias, p.descricao_itens, p.criado_em,
                 cl.nome AS cliente_nome, cl.email AS cliente_email, cl.telefone AS cliente_telefone,
-                prod.nome AS produto_nome, prod.descricao AS produto_descricao,
+                COALESCE(prod.nome, prod_n.nome, 'Solução Especializada') AS produto_nome,
+                COALESCE(prod.descricao, prod_n.descricao, 'Solução e assessoria sob medida.') AS produto_descricao,
                 e.nome AS empresa_nome
             FROM propostas p
             JOIN empresas e ON p.empresa_id = e.id
             LEFT JOIN clientes cl ON p.cliente_id = cl.id
             LEFT JOIN produtos prod ON p.produto_id = prod.id
-            WHERE p.id = {ph} AND p.empresa_id = {ph}
+            LEFT JOIN negocios n ON p.negocio_id = n.id
+            LEFT JOIN produtos prod_n ON n.produto_id = prod_n.id
+            WHERE p.id = {ph} AND (p.empresa_id = {ph} OR p.empresa_id IS NULL)
         """, (proposta_id, empresa_id))
         row = cursor.fetchone()
         return dict(row) if row else None
