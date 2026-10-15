@@ -984,54 +984,45 @@ class AgentOrchestrator:
                 "documentos_usados": []
             }
 
-        # --- AÇÃO: SAUDAÇÃO INTELIGENTE COM CONTEXTO ---
+        # --- AÇÃO: SAUDAÇÃO INTELIGENTE, HUMANA E DINÂMICA ---
         if intencao == "SAUDACAO":
-            saudacao_nome = f", {nome_exibicao}" if nome_exibicao else ""
+            historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=2, empresa_id=empresa_id)
 
-            # Personaliza a saudação se o cliente tiver propostas ou contratos
-            propostas_cliente = contexto.get("propostas") or []
-            contratos_cliente = contexto.get("contratos") or []
-            neg_ativo = contexto.get("negocio_ativo")
-
-            if contratos_cliente:
-                c_top = contratos_cliente[0]
-                servico = c_top.get("produto_nome") or "Serviço"
-                msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! Que bom falar com você novamente.\n\n"
-                    f"Vejo aqui o seu contrato ativo de **{servico}**. "
-                    "Em que posso te ajudar hoje? Deseja consultar detalhes contratuais, propostas ou tirar alguma dúvida?"
+            primeiro_nome = nome_exibicao.split()[0] if nome_exibicao else ""
+            prompt_saudacao = (
+                f"O usuário {nome_exibicao or 'Cliente'} iniciou o atendimento com a saudação: '{mensagem}'.\n"
+                "Sua missão é responder com um cumprimento extremamente humano, educado, caloroso, simpático e natural (estilo ChatGPT/Claude).\n"
+                "DIRETRIZES CRÍTICAS:\n"
+                f"- Se o nome estiver disponível ({primeiro_nome or nome_exibicao}), cumprimente-o cordialmente pelo primeiro nome.\n"
+                "- Ofereça ajuda com simpatia, naturalidade e presteza para o que ele precisar hoje.\n"
+                "- NUNCA mencione de forma robótica contratos, propostas ou serviços ativos logo no 'olá/boa tarde'. O cliente já sabe o que tem e não quer ouvir repetições sobre contratos toda vez que cumprimenta.\n"
+                "- Seja conciso, caloroso e acolhedor (1 a 2 frases curtas e diretas, sem enrolação).\n"
+                "- Varie o estilo da saudação para não soar mecânico ou repetitivo."
+            )
+            try:
+                from app.services.ai_engine_service import ai_engine
+                msg_saudacao, telemetria_id = ai_engine.gerar_resposta_orquestrada(
+                    pergunta=prompt_saudacao,
+                    contexto="",
+                    historico=historico_recente,
+                    config_suporte=config_empresa,
+                    empresa_id=empresa_id,
+                    canal="telegram",
+                    session_id=chat_id
                 )
-            elif propostas_cliente:
-                p_top = propostas_cliente[0]
-                prod = p_top.get("produto_nome") or "Solução"
+            except Exception as e:
+                logger.warning(f"[Orquestrador] Fallback em saudação IA: {e}")
+                saudacao_nome = f", {primeiro_nome}" if primeiro_nome else ""
                 msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! É um prazer falar com você novamente.\n\n"
-                    f"Temos registrada a sua proposta para **{prod}**. "
-                    "Como posso te ajudar hoje? Gostaria de rever valores, condições ou tirar alguma dúvida?"
-                )
-            elif neg_ativo and neg_ativo.get("produto_nome"):
-                prod = neg_ativo["produto_nome"]
-                estagio = neg_ativo["estagio"]
-                msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! É um prazer falar com você novamente.\n\n"
-                    f"Vejo que temos em andamento o seu interesse em **{prod}** (estágio: *{estagio}*). "
+                    f"👋 Olá{saudacao_nome}! Tudo bem? Que bom falar com você.\n\n"
                     "Como posso te ajudar hoje?"
                 )
-            elif contexto.get("produtos_vinculados"):
-                prods_str = ", ".join(contexto["produtos_vinculados"][:2])
-                msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! Que bom ter você por aqui.\n\n"
-                    f"Em que posso te auxiliar hoje em relação a {prods_str} ou outros serviços da empresa?"
-                )
-            else:
-                msg_saudacao = (
-                    f"👋 Olá{saudacao_nome}! Tudo bem? Seja muito bem-vindo.\n\n"
-                    "Como posso te ajudar hoje? Fique à vontade para me perguntar sobre nossos produtos, planos, propostas, horários ou localização!"
-                )
+                telemetria_id = 0
 
             return msg_saudacao, {
                 "intencao": "SAUDACAO",
                 "cadastrado": contexto["cadastrado_completo"],
+                "telemetria_id": telemetria_id,
                 "documentos_usados": []
             }
 
