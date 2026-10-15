@@ -325,9 +325,10 @@
           Conversas Telegram
           <span class="nav-badge" id="badge-total-conversas">0</span>
         </div>
-        <div class="nav-item" onclick="switchTab('resumos', this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Resumos IA
+        <div class="nav-item" onclick="switchTab('resumos', this)" id="nav-item-tickets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="m9 14 2 2 4-4"/></svg>
+          Tickets & Tarefas IA
+          <span class="nav-badge" id="badge-total-tickets" style="background:#ef4444; color:white; display:none;">0</span>
         </div>
       </div>
 
@@ -602,22 +603,72 @@
       </div>
     </div>
 
-    <!-- RESUMOS IA -->
+    <!-- TICKETS & TAREFAS IA (screen-resumos) -->
     <div class="screen" id="screen-resumos">
-      <div class="flow-header">
+      <div class="dash-header" style="flex-wrap:wrap; gap:16px; margin-bottom:14px;">
         <div>
-          <div class="page-title">Resumos Gerados por IA</div>
-          <div class="page-sub">Insights automáticos das interações do Telegram</div>
-        </div>
-        <button class="btn-green" onclick="gerarNovoResumoIA()">+ Gerar Novo Resumo</button>
-      </div>
-      <div class="dash-body" style="grid-template-columns: 1fr; margin-top:20px;">
-        <div class="metric-card" style="padding:24px;">
-          <div id="container-resumos-ia">
-            <div style="text-align:center; padding:40px; color:var(--text-muted); font-size:13px;">
-              Clique no botão acima para consolidar as conversas recentes do Telegram em um resumo executivo gerado por IA.
-            </div>
+          <div class="page-title" style="display:flex; align-items:center; gap:10px;">
+            <span>🎫 Fila de Tickets & Tarefas IA</span>
+            <span id="header-badge-tickets" class="contract-status-badge cs-pending" style="font-size:11px;">0 Pendentes</span>
           </div>
+          <div class="page-sub">Chamados gerados automaticamente pela IA para elaboração de propostas comerciais, negociação de contratos e transbordo humano</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn-secondary" onclick="carregarTicketsIA()" style="font-size:12px; display:flex; align-items:center; gap:6px;">
+            <span>🔄</span> Atualizar Fila
+          </button>
+        </div>
+      </div>
+
+      <!-- Métricas / Contadores no topo -->
+      <div class="dash-body" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin: 0 24px 20px 24px; padding:0;">
+        <div class="metric-card" style="padding:16px 20px; border-left:4px solid #ef4444; cursor:pointer;" onclick="filtrarTicketsPorStatus('aberto')">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); font-weight:600;">Abertos / Pendentes</div>
+          <div style="font-size:26px; font-weight:800; color:#ef4444; margin-top:4px;" id="count-tickets-abertos">0</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Aguardando ação humana</div>
+        </div>
+        <div class="metric-card" style="padding:16px 20px; border-left:4px solid #38bdf8; cursor:pointer;" onclick="filtrarTicketsPorStatus('em_atendimento')">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); font-weight:600;">Em Atendimento</div>
+          <div style="font-size:26px; font-weight:800; color:#38bdf8; margin-top:4px;" id="count-tickets-atendimento">0</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Com operador em contato</div>
+        </div>
+        <div class="metric-card" style="padding:16px 20px; border-left:4px solid #10b981; cursor:pointer;" onclick="filtrarTicketsPorStatus('resolvido')">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); font-weight:600;">Resolvidos / Concluídos</div>
+          <div style="font-size:26px; font-weight:800; color:#10b981; margin-top:4px;" id="count-tickets-resolvidos">0</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Demandas finalizadas</div>
+        </div>
+        <div class="metric-card" style="padding:16px 20px; border-left:4px solid #a855f7; cursor:pointer;" onclick="filtrarTicketsPorStatus('todos')">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); font-weight:600;">Total de Chamados</div>
+          <div style="font-size:26px; font-weight:800; color:#a855f7; margin-top:4px;" id="count-tickets-total">0</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Histórico acumulado</div>
+        </div>
+      </div>
+
+      <!-- Filtros e Barra de Ações -->
+      <div style="padding: 0 24px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="btn-group" id="filtros-status-tickets" style="display:flex; background:rgba(255,255,255,0.05); padding:3px; border-radius:8px; border:1px solid var(--border);">
+            <button class="btn-filtro-ticket active" id="btn-filtro-status-todos" onclick="filtrarTicketsPorStatus('todos', this)" style="padding:6px 14px; font-size:12px; border-radius:6px; border:none; background:var(--primary); color:white; cursor:pointer;">Todos</button>
+            <button class="btn-filtro-ticket" id="btn-filtro-status-aberto" onclick="filtrarTicketsPorStatus('aberto', this)" style="padding:6px 14px; font-size:12px; border-radius:6px; border:none; background:transparent; color:var(--text-muted); cursor:pointer;">Pendentes</button>
+            <button class="btn-filtro-ticket" id="btn-filtro-status-em_atendimento" onclick="filtrarTicketsPorStatus('em_atendimento', this)" style="padding:6px 14px; font-size:12px; border-radius:6px; border:none; background:transparent; color:var(--text-muted); cursor:pointer;">Em Atendimento</button>
+            <button class="btn-filtro-ticket" id="btn-filtro-status-resolvido" onclick="filtrarTicketsPorStatus('resolvido', this)" style="padding:6px 14px; font-size:12px; border-radius:6px; border:none; background:transparent; color:var(--text-muted); cursor:pointer;">Resolvidos</button>
+          </div>
+
+          <select class="cf-input" id="filtro-tipo-ticket" onchange="carregarTicketsIA()" style="max-width:200px; padding:6px 12px; font-size:12px;">
+            <option value="todos">Todos os Tipos</option>
+            <option value="proposta">📄 Propostas Comerciais</option>
+            <option value="negociacao">🤝 Negociações de Contrato</option>
+            <option value="suporte">🛠️ Transbordo / Suporte</option>
+          </select>
+        </div>
+
+        <input class="login-input" id="busca-tickets-input" placeholder="Buscar por cliente, telefone, resumo..." style="max-width:320px; padding:8px 14px; font-size:12px; background:var(--surface); border:1px solid var(--border);" oninput="pesquisarTickets(this.value)" />
+      </div>
+
+      <!-- Container da Lista de Tickets -->
+      <div style="padding: 0 24px 30px 24px; display:flex; flex-direction:column; flex:1;">
+        <div id="container-tickets-ia" style="display:flex; flex-direction:column; gap:16px;">
+          <!-- Preenchido dinamicamente via carregarTicketsIA() -->
         </div>
       </div>
     </div>
@@ -1801,6 +1852,7 @@ function switchTab(tabId, navEl) {
   }
   if (tabId === 'analytics') carregarAnalytics();
   if (tabId === 'observabilidade') carregarObservabilidadeEEvaluation();
+  if (tabId === 'resumos') carregarTicketsIA();
 }
 
 function obterEmpresaAtivaId() {
@@ -5790,33 +5842,321 @@ async function removerMembroEquipe(usuarioId) {
   }
 }
 
-// ===== RESUMO IA =====
-async function gerarNovoResumoIA() {
-  const container = document.getElementById('container-resumos-ia');
-  container.innerHTML = `<div style="text-align:center; padding:30px; color:#0284c7;">✦ Consolidando conversas do Telegram e gerando insights com Gemini...</div>`;
+// ===== GESTÃO DE TICKETS & TAREFAS IA (HUMAN IN THE LOOP) =====
+let filtroStatusTicketAtual = 'todos';
+let filtroTipoTicketAtual = 'todos';
+let termoBuscaTicketAtual = '';
+let listaTicketsAtual = [];
+let debounceBuscaTickets = null;
+
+async function carregarMetricasTickets() {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await fetch(`/tickets/metricas?empresa_id=${empresaId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const elAbertos = document.getElementById('count-tickets-abertos');
+    const elAtend = document.getElementById('count-tickets-atendimento');
+    const elResolv = document.getElementById('count-tickets-resolvidos');
+    const elTotal = document.getElementById('count-tickets-total');
+    const badgeSidebar = document.getElementById('badge-total-tickets');
+    const badgeHeader = document.getElementById('header-badge-tickets');
+
+    if (elAbertos) elAbertos.textContent = data.abertos || 0;
+    if (elAtend) elAtend.textContent = data.em_atendimento || 0;
+    if (elResolv) elResolv.textContent = data.resolvidos || 0;
+    if (elTotal) elTotal.textContent = data.total || 0;
+
+    if (badgeSidebar) {
+      const abertos = data.abertos || 0;
+      badgeSidebar.textContent = abertos;
+      badgeSidebar.style.display = abertos > 0 ? 'inline-block' : 'none';
+    }
+
+    if (badgeHeader) {
+      const abertos = data.abertos || 0;
+      badgeHeader.textContent = `${abertos} Pendente${abertos === 1 ? '' : 's'}`;
+      badgeHeader.className = abertos > 0 ? 'contract-status-badge cs-pending' : 'contract-status-badge cs-signed';
+    }
+  } catch (e) {
+    console.debug('Erro ao carregar métricas de tickets:', e);
+  }
+}
+
+async function carregarTicketsIA() {
+  const container = document.getElementById('container-tickets-ia');
+  if (!container) return;
+
+  const empresaId = obterEmpresaAtivaId();
+  const selectTipo = document.getElementById('filtro-tipo-ticket');
+  if (selectTipo) filtroTipoTicketAtual = selectTipo.value || 'todos';
+
+  container.innerHTML = `
+    <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px;">
+      <div style="width:32px; height:32px; border:3px solid rgba(34,158,217,0.2); border-top-color:#229ED9; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px;"></div>
+      <div>Carregando fila de tickets e tarefas de atendimento...</div>
+    </div>
+  `;
 
   try {
-    const res = await fetch(`/chat/`, {
+    carregarMetricasTickets();
+
+    let url = `/tickets?empresa_id=${empresaId}&limite=50`;
+    if (filtroStatusTicketAtual && filtroStatusTicketAtual !== 'todos') {
+      url += `&status=${encodeURIComponent(filtroStatusTicketAtual)}`;
+    }
+    if (filtroTipoTicketAtual && filtroTipoTicketAtual !== 'todos') {
+      url += `&tipo=${encodeURIComponent(filtroTipoTicketAtual)}`;
+    }
+    if (termoBuscaTicketAtual && termoBuscaTicketAtual.trim()) {
+      url += `&busca=${encodeURIComponent(termoBuscaTicketAtual.trim())}`;
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Falha ao consultar fila de tickets');
+    const data = await res.json();
+    listaTicketsAtual = data.tickets || [];
+    renderizarTicketsIA(listaTicketsAtual);
+
+  } catch (e) {
+    console.error('Erro ao listar tickets:', e);
+    container.innerHTML = `
+      <div style="padding:40px; text-align:center; color:#ef4444; font-size:13px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:10px;">
+        ⚠️ Erro ao carregar tickets: ${e.message}
+      </div>
+    `;
+  }
+}
+
+function renderizarTicketsIA(tickets) {
+  const container = document.getElementById('container-tickets-ia');
+  if (!container) return;
+
+  if (!tickets || tickets.length === 0) {
+    container.innerHTML = `
+      <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; background:var(--surface); border:1px dashed var(--border); border-radius:12px;">
+        <div style="font-size:36px; margin-bottom:10px;">🎫</div>
+        <strong style="color:var(--text);">Nenhum ticket encontrado</strong><br>
+        <span style="font-size:12px; margin-top:4px; display:inline-block;">Quando clientes solicitarem propostas personalizadas, negociações de contrato ou apoio humano, a IA gerará os chamados automaticamente aqui com resumo completo da conversa.</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = tickets.map(t => {
+    const nomeCliente = t.cliente_nome || ('Usuário #' + (t.telegram_chat_id ? String(t.telegram_chat_id).slice(-4) : t.id));
+    const iniciais = nomeCliente.replace('@', '').substring(0, 2).toUpperCase() || 'TG';
+    const telCliente = t.cliente_telefone || '';
+
+    // Badges de Status
+    let statusBadge = '<span class="contract-status-badge cs-pending" style="font-size:11px;">🔴 Pendente</span>';
+    if (t.status === 'em_atendimento') {
+      statusBadge = '<span class="contract-status-badge" style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); font-size:11px;">🟡 Em Atendimento</span>';
+    } else if (t.status === 'resolvido') {
+      statusBadge = '<span class="contract-status-badge cs-signed" style="font-size:11px;">🟢 Resolvido</span>';
+    }
+
+    // Tipo de demanda
+    let tipoTexto = '📄 Proposta Comercial';
+    let tipoCor = '#38bdf8';
+    if (t.tipo === 'negociacao') {
+      tipoTexto = '🤝 Negociação de Contrato';
+      tipoCor = '#f59e0b';
+    } else if (t.tipo === 'suporte') {
+      tipoTexto = '🛠️ Suporte / Transbordo';
+      tipoCor = '#a855f7';
+    }
+
+    const dataCriacao = formatarDataFuso(t.criado_em);
+
+    return `
+      <div class="ticket-card" id="card-ticket-${t.id}" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:14px; transition:border-color 0.2s, box-shadow 0.2s;">
+        <!-- Topo do Card -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${statusBadge}
+            <span style="background:rgba(255,255,255,0.05); color:${tipoCor}; border:1px solid rgba(255,255,255,0.1); font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px;">${tipoTexto}</span>
+            <span style="font-size:12px; font-weight:700; color:var(--text-muted);">Ticket #${t.id}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted);">
+            Aberto em: <strong>${dataCriacao}</strong>
+          </div>
+        </div>
+
+        <!-- Dados do Cliente e Ação Rápida -->
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:12px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:38px; height:38px; border-radius:50%; background:#229ED9; color:white; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;">${iniciais}</div>
+            <div>
+              <div style="font-weight:700; font-size:14px; color:var(--text);">${nomeCliente}</div>
+              <div style="font-size:12px; color:var(--text-muted); display:flex; gap:12px; margin-top:2px; flex-wrap:wrap;">
+                <span>📱 ${telCliente || 'Telefone não informado'}</span>
+                <span>✈️ Chat ID: <code style="font-family:monospace; color:#38bdf8;">${t.telegram_chat_id || '-'}</code></span>
+              </div>
+            </div>
+          </div>
+          ${t.telegram_chat_id ? `
+          <button class="btn-secondary" onclick="abrirChatDoTicket('${t.telegram_chat_id}')" style="font-size:11px; padding:6px 12px; display:flex; align-items:center; gap:6px;">
+            <span>💬</span> Abrir Chat Completo
+          </button>` : ''}
+        </div>
+
+        <!-- Título do Chamado -->
+        <div style="font-size:15px; font-weight:700; color:var(--text);">
+          ${t.titulo}
+        </div>
+
+        <!-- Resumo IA da Conversa (Ambientação do Atendente) -->
+        <div style="background:linear-gradient(135deg, rgba(34,158,217,0.08) 0%, rgba(168,85,247,0.08) 100%); border:1px solid rgba(34,158,217,0.25); border-radius:10px; padding:16px;">
+          <div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+            <span>✦</span> Resumo Inteligente da Conversa (Ambientação para o Atendente)
+          </div>
+          <div style="font-size:13px; line-height:1.6; color:var(--text); white-space:pre-wrap;">${t.resumo_conversa || 'Sem resumo disponível'}</div>
+        </div>
+
+        <!-- Última Mensagem do Cliente -->
+        ${t.ultima_mensagem_cliente ? `
+        <div style="background:rgba(255,255,255,0.03); border-left:3px solid #229ED9; padding:10px 14px; border-radius:0 8px 8px 0; font-size:12px;">
+          <span style="color:var(--text-muted); font-weight:600;">Última mensagem enviada pelo cliente no Telegram:</span>
+          <div style="color:var(--text); margin-top:4px; font-style:italic; font-size:13px;">"${t.ultima_mensagem_cliente}"</div>
+        </div>` : ''}
+
+        <!-- Histórico da Última Resposta do Operador (se já respondeu) -->
+        ${t.resposta_atendente ? `
+        <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); padding:10px 14px; border-radius:8px; font-size:12px;">
+          <div style="color:#10b981; font-weight:700; display:flex; justify-content:space-between;">
+            <span>✓ Última resposta enviada pelo atendente (${t.atendente_nome || 'Operador'}):</span>
+          </div>
+          <div style="color:var(--text); margin-top:4px; font-size:13px; white-space:pre-wrap;">${t.resposta_atendente}</div>
+        </div>` : ''}
+
+        <!-- Seção de Ação e Resposta Direta pelo Operador -->
+        <div style="margin-top:4px; border-top:1px solid var(--border); padding-top:14px; display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:12px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center;">
+            <span>Responder ao cliente pelo Telegram através deste ticket:</span>
+            <span style="font-size:11px; color:#38bdf8;">Envia mensagem imediata e atualiza o ticket</span>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+            <textarea class="cf-input" id="resp-ticket-${t.id}" rows="2" placeholder="Digite a proposta, condições negociadas ou esclarecimento para enviar ao cliente..." style="flex:1; min-width:260px; resize:vertical; font-size:13px; padding:10px;"></textarea>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <button class="btn-green" onclick="responderTicketPeloCard(${t.id})" style="padding:10px 18px; font-size:12px; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:6px;">
+                <span>📤</span> Enviar no Telegram
+              </button>
+              <div style="display:flex; gap:6px;">
+                ${t.status !== 'resolvido' ? `
+                <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'resolvido')" style="flex:1; font-size:11px; padding:5px 8px; color:#10b981;" title="Marcar como Concluído">
+                  ✓ Marcar Resolvido
+                </button>` : `
+                <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'aberto')" style="flex:1; font-size:11px; padding:5px 8px; color:#ef4444;" title="Reabrir Chamado">
+                  ↺ Reabrir
+                </button>`}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filtrarTicketsPorStatus(status, btnEl) {
+  filtroStatusTicketAtual = status;
+  document.querySelectorAll('#filtros-status-tickets .btn-filtro-ticket').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = 'transparent';
+    b.style.color = 'var(--text-muted)';
+  });
+  if (btnEl) {
+    btnEl.classList.add('active');
+    btnEl.style.background = 'var(--primary)';
+    btnEl.style.color = 'white';
+  } else {
+    const btnAlvo = document.getElementById(`btn-filtro-status-${status}`);
+    if (btnAlvo) {
+      btnAlvo.classList.add('active');
+      btnAlvo.style.background = 'var(--primary)';
+      btnAlvo.style.color = 'white';
+    }
+  }
+  carregarTicketsIA();
+}
+
+function pesquisarTickets(termo) {
+  termoBuscaTicketAtual = termo || '';
+  if (debounceBuscaTickets) clearTimeout(debounceBuscaTickets);
+  debounceBuscaTickets = setTimeout(() => {
+    carregarTicketsIA();
+  }, 350);
+}
+
+async function responderTicketPeloCard(ticketId) {
+  const textarea = document.getElementById(`resp-ticket-${ticketId}`);
+  if (!textarea) return;
+  const texto = textarea.value.trim();
+  if (!texto) {
+    alert('Por favor, digite uma resposta para o cliente antes de enviar.');
+    return;
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  const atendenteId = (usuarioAtual && usuarioAtual.id) ? usuarioAtual.id : 1;
+
+  try {
+    const res = await fetch(`/tickets/${ticketId}/responder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mensagem: "Gere um resumo executivo estruturado com os principais tópicos, dúvidas frequentes de clientes e oportunidades comerciais identificadas.",
-        empresa_id: obterEmpresaAtivaId()
+        texto: texto,
+        atendente_id: atendenteId,
+        empresa_id: empresaId,
+        novo_status: 'em_atendimento'
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao enviar resposta');
+
+    mostrarToast('✓ Mensagem enviada com sucesso ao Telegram do cliente!', 'success');
+    textarea.value = '';
+    carregarTicketsIA();
+  } catch (e) {
+    alert('Erro ao responder ticket: ' + e.message);
+  }
+}
+
+async function alterarStatusTicket(ticketId, novoStatus) {
+  const empresaId = obterEmpresaAtivaId();
+  const atendenteId = (usuarioAtual && usuarioAtual.id) ? usuarioAtual.id : 1;
+
+  try {
+    const res = await fetch(`/tickets/${ticketId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: novoStatus,
+        atendente_id: atendenteId,
+        empresa_id: empresaId
       })
     });
     const data = await res.json();
-    container.innerHTML = `
-      <div style="line-height:1.6; color:var(--text); font-size:13px;">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px;">
-          <strong style="color:#229ED9;">Síntese Executiva Gerada por IA</strong>
-          <span style="font-size:11px; color:var(--text-muted);">${new Date().toLocaleDateString('pt-BR')}</span>
-        </div>
-        ${formatarMarkdownParaHtml(data.resposta)}
-      </div>
-    `;
+    if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar status');
+
+    mostrarToast(`Status atualizado para: ${novoStatus}!`, 'success');
+    carregarTicketsIA();
   } catch (e) {
-    container.innerHTML = `<div style="color:#ef4444;">Erro ao gerar resumo: ${e.message}</div>`;
+    alert('Erro: ' + e.message);
   }
+}
+
+function abrirChatDoTicket(chatId) {
+  if (!chatId) return;
+  // Muda para a aba de conversas do Telegram
+  const navChat = document.querySelectorAll('.sidebar-nav .nav-item')[1];
+  switchTab('chat', navChat);
+  setTimeout(() => {
+    selecionarConversaTelegram(chatId);
+  }, 100);
 }
 
 // ===== AUTENTICAÇÃO E SESSÃO =====
@@ -5958,9 +6298,11 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarDashboardMetricas();
   carregarSerieTemporalDashboard();
   carregarPipelinesKanban();
+  carregarMetricasTickets();
 
-  // Polling automático de conversas (frequência otimizada para atualização instantânea)
+  // Polling automático de conversas e métricas de tickets (atualização em tempo real)
   setInterval(carregarConversasTelegram, 3000);
+  setInterval(carregarMetricasTickets, 5000);
 });
 </script>
 

@@ -319,6 +319,27 @@ def _criar_banco_postgres(cursor):
         )
     """)
 
+    # 16. Tickets e Tarefas de Atendimento Humano (Gerados pela IA para Propostas/Negociações)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tickets (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+            telegram_chat_id TEXT,
+            titulo VARCHAR(255) NOT NULL,
+            tipo VARCHAR(50) DEFAULT 'proposta',
+            status VARCHAR(50) DEFAULT 'aberto',
+            prioridade VARCHAR(20) DEFAULT 'alta',
+            resumo_conversa TEXT NOT NULL,
+            ultima_mensagem_cliente TEXT,
+            atendente_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            resposta_atendente TEXT,
+            canal VARCHAR(50) DEFAULT 'telegram',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Migrações idempotentes para colunas de bancos já existentes
     cursor.execute("""
         DO $$

@@ -242,8 +242,9 @@ class AgentOrchestrator:
                 texto_limpo = texto_limpo.replace(email_match.group(0), "")
             if phone_match:
                 texto_limpo = texto_limpo.replace(phone_match.group(0), "")
-            texto_limpo = re.sub(r"(?i)(e-mail:?|email:?|telefone:?|tel:?|cel:?|whatsapp:?|zap:?)", "", texto_limpo)
-            texto_limpo = re.sub(r"[,;\n\r\t]+", " ", texto_limpo).strip()
+            texto_limpo = re.sub(r"(?i)\b(e-mail|email|telefone|tel|cel|whatsapp|whats|zap|meu|minha|meus|é|eh|o|a|os|as|número|numero|contato|segue|aqui|me|chamo|sou)\b:?", " ", texto_limpo)
+            texto_limpo = re.sub(r"[,;\n\r\t\.\-\:\/]+", " ", texto_limpo).strip()
+            texto_limpo = re.sub(r"\s+", " ", texto_limpo).strip()
             palavras = texto_limpo.split()
             if 1 <= len(palavras) <= 4 and len(texto_limpo) >= 2 and not is_nome_generico(texto_limpo):
                 nome = texto_limpo
@@ -524,6 +525,94 @@ class AgentOrchestrator:
                 return True
         return False
 
+    def eh_solicitacao_proposta_ou_negociacao(
+        self,
+        mensagem: str,
+        chat_id: Optional[str] = None,
+        empresa_id: int = 1
+    ) -> tuple[bool, str]:
+        """
+        Verifica se o cliente está solicitando a elaboração de uma nova proposta comercial,
+        orçamento formal, negociando termos, ou respondendo afirmativamente ao convite
+        da IA de proposta/atendimento com consultor feito na mensagem anterior.
+        Retorna (True, 'proposta' | 'negociacao') ou (False, '').
+        """
+        if not mensagem:
+            return False, ""
+        msg = mensagem.strip().lower()
+        msg_sem_pont = re.sub(r"[^\w\s]", "", msg).strip()
+
+        # Se for estritamente uma consulta aos itens que ele já possui no sistema, não é novo ticket
+        termos_consulta_existente = [
+            "quais propostas", "qual proposta que tenho", "propostas que tenho", "tenho proposta",
+            "possuo proposta", "proposta que possuo", "meus contratos", "qual o contrato que tenho",
+            "contratos que tenho", "itens em aberto", "o que tenho em aberto", "minhas pendências",
+            "o que eu contratei", "o que contratei", "valor do meu contrato"
+        ]
+        if any(t in msg for t in termos_consulta_existente) and not any(p in msg for p in ["nova proposta", "novo orçamento", "outro contrato", "desconto", "negociar", "fechar"]):
+            return False, ""
+
+        # 0. Verificação de resposta afirmativa ao convite comercial (CTA) da IA na mensagem anterior
+        if chat_id:
+            try:
+                hist = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=1, empresa_id=empresa_id)
+                if hist and hist[-1].get("resposta_ia"):
+                    ultima_ia = hist[-1]["resposta_ia"].lower()
+                    ofertou_proposta_ou_humano = any(p in ultima_ia for p in [
+                        "proposta comercial", "proposta personalizada", "preparássemos uma proposta",
+                        "preparassemos uma proposta", "consultores humanos", "atendente humano",
+                        "entender melhor sobre o nosso trabalho", "entender melhor sobre nosso trabalho",
+                        "consultor humano", "proposta comercial personalizada"
+                    ])
+                    if ofertou_proposta_ou_humano:
+                        respostas_afirmativas = {
+                            "sim", "sim!", "sim por favor", "sim pf", "quero", "quero sim", "quero sim por favor",
+                            "gostaria", "gostaria sim", "gostaria por favor", "pode ser", "com certeza", "claro",
+                            "claro com certeza", "vamos", "vamos la", "vamos lá", "bora", "pode mandar", "pode enviar",
+                            "manda", "envia", "manda aí", "manda ai", "ok", "beleza", "isso", "por favor",
+                            "quero a proposta", "manda a proposta", "gostaria da proposta", "proposta",
+                            "quero entender melhor", "entender melhor", "falar com consultor", "falar com atendente",
+                            "atendente humano", "consultor humano", "prefiro falar com atendente", "com atendente",
+                            "sim gostaria", "sim quero", "sim pode ser", "sim claro", "pode ser sim"
+                        }
+                        if msg_sem_pont in respostas_afirmativas or any(msg_limpa.startswith(prefix) for msg_limpa in [msg] for prefix in ["sim", "quero", "gostaria", "pode ser", "claro"]):
+                            return True, "proposta"
+            except Exception as e:
+                logger.debug(f"[Orquestrador] Erro ao checar histórico para CTA de proposta: {e}")
+
+        # 1. Padrões de Proposta Comercial / Orçamento Formal
+        padroes_proposta = [
+            r"\b(quero|gostaria|preciso|solicito|desejo|favor|pode|consegue)\s+(?:de\s+)?(?:uma?\s+)?(?:nova?\s+)?(proposta|or[cç]amento|cota[cç][aã]o)\b",
+            r"\b(me\s+(?:envie|mande|passa|encaminhe)|enviar|mandar|gerar|elaborar|preparar)\s+(?:uma?\s+)?(?:nova?\s+)?(proposta|or[cç]amento|cota[cç][aã]o)\b",
+            r"\b(proposta\s+comercial|proposta\s+formal|or[cç]amento\s+formal)\b",
+            r"\b(como\s+(?:fa[cç]o\s+para\s+)?(?:receber|obter|solicitar)\s+(?:uma?\s+)?proposta)\b",
+            r"\b(quero\s+(?:contratar|comprar)|vamos\s+fechar)\s*[,.]?\s*(?:me\s+)?(?:manda|envia)\s+(?:a\s+)?proposta\b",
+            r"\b(manda\s+(?:a\s+)?proposta|envia\s+(?:a\s+)?proposta|passa\s+(?:a\s+)?proposta)\b",
+            r"\b(quero\s+a\s+proposta|gostaria\s+da\s+proposta|enviar\s+a\s+proposta)\b",
+            r"\b(entender\s+melhor\s+sobre\s+o\s+trabalho|falar\s+com\s+(?:um\s+)?consultor)\b"
+        ]
+        for p in padroes_proposta:
+            if re.search(p, msg):
+                return True, "proposta"
+
+        # 2. Padrões de Negociação de Valores, Desconto e Contrato
+        padroes_negociacao = [
+            r"\b(tem|teria|consegue|d[aá]\s+para|conseguem)\s+(?:algum\s+)?desconto\b",
+            r"\b(negociar|negocia[cç][aã]o|fazer\s+um\s+(?:pre[cç]o|valor)\s+melhor|mais\s+em\s+conta|mais\s+barato)\b",
+            r"\b(podemos\s+negociar|quero\s+negociar|negociar\s+(?:o\s+)?(?:pre[cç]o|valor|contrato))\b",
+            r"\b(condi[cç][oõ]es?\s+(?:especia(?:l|is)|personalizadas?|diferenciadas?)\s+de\s+pagamento)\b",
+            r"\b(parcelar\s+em\s+mais|formas?\s+de\s+pagamento\s+especia(?:l|is))\b",
+            r"\b(fechar\s+(?:o\s+)?contrato|assinar\s+(?:o\s+)?contrato|elaborar\s+(?:o\s+)?contrato)\b",
+            r"\b(termos?\s+d[oe]\s+contrato|cl[aá]usulas?\s+d[oe]\s+contrato|alterar\s+cl[aá]usula)\b",
+            r"\b(vamos\s+fechar\s+(?:neg[oó]cio|o\s+contrato))\b",
+            r"\b(quero\s+fechar\s+(?:neg[oó]cio|o\s+contrato))\b"
+        ]
+        for p in padroes_negociacao:
+            if re.search(p, msg):
+                return True, "negociacao"
+
+        return False, ""
+
     def classificar_intencao_gerente(
         self,
         mensagem: str,
@@ -609,6 +698,25 @@ class AgentOrchestrator:
         ]
         eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais) or any(re.search(p, msg_limpa) for p in padroes_comerciais_regex)
 
+        # 3. Solicitação de Proposta Comercial ou Negociação de Contrato (Demanda Humana Exclusiva)
+        eh_prop_neg, tipo_prop_neg = self.eh_solicitacao_proposta_ou_negociacao(
+            mensagem,
+            chat_id=contexto.get("chat_id"),
+            empresa_id=contexto.get("empresa_id", 1)
+        )
+        if eh_prop_neg:
+            if not contexto.get("tem_telefone_valido") and not dados_contato_extraidos.get("tem_contato"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "tipo_ticket": tipo_prop_neg,
+                    "criterio": f"Solicitação de {tipo_prop_neg} exigindo telefone/WhatsApp para abertura de ticket comercial"
+                }
+            return {
+                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                "tipo_ticket": tipo_prop_neg,
+                "criterio": f"Solicitação de {tipo_prop_neg} formal encaminhada para geração de ticket e operador humano"
+            }
+
         # 4. Se acabou de fornecer os dados faltantes nesta mensagem
         if dados_contato_extraidos.get("tem_contato"):
             tem_nome_agora = bool(dados_contato_extraidos.get("nome") or contexto["tem_nome_valido"])
@@ -624,6 +732,13 @@ class AgentOrchestrator:
                 msg_resto = re.sub(r"(?i)(me chamo|meu nome [eé]|sou o|sou a|whats(?:app)?|zap|celular|telefone|fone|contato|olá|ola|oi|bom dia|boa tarde|boa noite)", "", msg_resto)
                 msg_resto = re.sub(r"[^\w\s]", "", msg_resto).strip()
                 palavras_resto = msg_resto.split()
+
+                if eh_prop_neg:
+                    return {
+                        "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                        "tipo_ticket": tipo_prop_neg,
+                        "criterio": "Dados de contato fornecidos junto com pedido de proposta/negociação"
+                    }
 
                 if eh_consulta_comercial:
                     return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Dados de contato fornecidos junto com consulta comercial"}
@@ -932,6 +1047,54 @@ class AgentOrchestrator:
             return msg_transbordo, {
                 "intencao": "TRANSBORDO_HUMANO",
                 "status": "humano",
+                "documentos_usados": []
+            }
+
+        # --- AÇÃO: SOLICITAÇÃO DE PROPOSTA OU NEGOCIAÇÃO DE CONTRATO (GERAÇÃO DE TICKET IA) ---
+        if intencao == "SOLICITACAO_PROPOSTA_NEGOCIACAO":
+            tipo_ticket = classificacao.get("tipo_ticket", "proposta")
+            titulo_ticket = (
+                "Solicitação de Proposta Comercial"
+                if tipo_ticket == "proposta"
+                else "Negociação de Valores / Termos de Contrato"
+            )
+
+            from app.services.ticket_service import criar_ticket_automatico
+            ticket = criar_ticket_automatico(
+                empresa_id=empresa_id,
+                cliente_id=contexto["cliente_id"],
+                telegram_chat_id=chat_id,
+                tipo=tipo_ticket,
+                titulo=titulo_ticket,
+                ultima_mensagem_cliente=mensagem,
+                cliente_nome=nome_exibicao,
+                cliente_telefone=contexto.get("telefone", ""),
+                prioridade="alta"
+            )
+            ticket_id = ticket.get("id", 1)
+
+            saudacao_nome = f", {nome_exibicao}" if nome_exibicao else ""
+            if tipo_ticket == "proposta":
+                msg_resposta = (
+                    f"Perfeito{saudacao_nome}! Para elaboração de propostas comerciais personalizadas com todos os detalhes e "
+                    "as melhores condições, nosso atendimento é conduzido diretamente por um dos nossos consultores especialistas.\n\n"
+                    f"🎫 Já abri um chamado prioritário (**Ticket #{ticket_id}**) para nossa equipe comercial com o resumo do que você precisa. "
+                    "Em instantes um de nossos atendentes dará continuidade por aqui mesmo!"
+                )
+            else:
+                msg_resposta = (
+                    f"Com certeza{saudacao_nome}! Para negociação de valores, condições especiais e termos de contrato, "
+                    "nosso atendimento é realizado diretamente por um consultor comercial com autonomia para apresentar a melhor condição possível.\n\n"
+                    f"🎫 Já registrei seu chamado prioritário (**Ticket #{ticket_id}**) para a nossa equipe. "
+                    "Um dos nossos especialistas responderá por aqui em instantes para alinharmos todos os detalhes!"
+                )
+
+            return msg_resposta, {
+                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                "ticket_id": ticket_id,
+                "tipo": tipo_ticket,
+                "cadastrado": contexto["cadastrado_completo"],
+                "remover_teclado": True,
                 "documentos_usados": []
             }
 

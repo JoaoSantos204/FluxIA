@@ -17,6 +17,7 @@ from app.routes.users import router as users_router
 from app.routes.auth import router as auth_router
 from app.routes.crm import router as crm_router
 from app.routes.analytics import router as analytics_router
+from app.routes.tickets import router as tickets_router
 from app.services.followup_service import executar_followup_automatico
 
 # Criação da Aplicação (Ponto Central)
@@ -72,6 +73,7 @@ app.include_router(company_router)
 app.include_router(users_router)
 app.include_router(crm_router)
 app.include_router(analytics_router)
+app.include_router(tickets_router)
 
 
 NO_CACHE_HEADERS = {
