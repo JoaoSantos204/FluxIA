@@ -235,7 +235,35 @@ class MultiVendorAIEngine:
             else:
                 texto_final = str(resposta).strip()
 
+            # Extração direta de tokens da mensagem retornada pelo LangChain / Provedor
+            tokens_p = 0
+            tokens_c = 0
+            if hasattr(resposta, "usage_metadata") and resposta.usage_metadata:
+                tokens_p = resposta.usage_metadata.get("input_tokens") or 0
+                tokens_c = resposta.usage_metadata.get("output_tokens") or 0
+            elif hasattr(resposta, "response_metadata") and isinstance(resposta.response_metadata, dict):
+                um = resposta.response_metadata.get("usage_metadata") or {}
+                tokens_p = um.get("input_tokens") or 0
+                tokens_c = um.get("output_tokens") or 0
+
+            # Se não obtido via metadados, calcula pela contagem de caracteres
+            if not tokens_p or not tokens_c:
+                prompt_chars = sum(len(str(getattr(m, "content", ""))) for m in mensagens)
+                comp_chars = len(texto_final)
+                tokens_p = tokens_p or max(25, prompt_chars // 4)
+                tokens_c = tokens_c or max(10, comp_chars // 4)
+
             telemetria_id = callback_obs.telemetria_id or 0
+            if telemetria_id:
+                from app.services.ai_observability_service import atualizar_telemetria_tokens
+                atualizar_telemetria_tokens(
+                    telemetria_id=telemetria_id,
+                    tokens_prompt=tokens_p,
+                    tokens_completion=tokens_c,
+                    vendor=callback_obs.vendor,
+                    modelo=callback_obs.modelo
+                )
+
             return texto_final, telemetria_id
         except Exception as e:
             logger.error(f"[AIEngine] Erro na execução orquestrada com LangChain: {e}")

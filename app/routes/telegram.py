@@ -733,18 +733,18 @@ async def telegram_webhook(
                 contexto_utilizado=contexto_publico if tem_contexto else None
             )
 
-        if meta_exec.get("intencao") == "PERGUNTA_CONHECIMENTO":
-            background_tasks.add_task(
-                registrar_pergunta_historico,
-                canal="telegram",
-                empresa_id=empresa_id,
-                pergunta=texto_recebido,
-                resposta=resposta_ia,
-                telegram_chat_id=chat_id,
-                documentos_utilizados=docs_usados,
-                teve_contexto=tem_contexto,
-                fonte_resposta="base_conhecimento"
-            )
+        # Registra a interação no histórico unificado de auditoria
+        background_tasks.add_task(
+            registrar_pergunta_historico,
+            canal="telegram",
+            empresa_id=empresa_id,
+            pergunta=texto_recebido,
+            resposta=resposta_ia,
+            telegram_chat_id=chat_id,
+            documentos_utilizados=docs_usados,
+            teve_contexto=tem_contexto,
+            fonte_resposta="base_conhecimento" if tem_contexto else "conhecimento_geral"
+        )
 
         # Move a qualificação comercial e atualização do funil de vendas para background task
         # evitando timeouts HTTP da API do Telegram (que causavam atraso e retransmissões com backoff)

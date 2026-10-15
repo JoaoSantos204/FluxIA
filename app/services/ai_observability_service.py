@@ -15,6 +15,8 @@ TABELA_CUSTOS_USD = {
         "gemini-3.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
         "gemini-2.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
         "gemini-2.5-flash": {"prompt": 0.15, "completion": 0.60},
+        "gemini-2.0-flash": {"prompt": 0.10, "completion": 0.40},
+        "gemini-1.5-flash": {"prompt": 0.075, "completion": 0.30},
         "default": {"prompt": 0.075, "completion": 0.30}
     },
     "openai": {
@@ -30,10 +32,44 @@ def calcular_custo_estimado(vendor: str, modelo: str, tokens_prompt: int, tokens
     v_norm = (vendor or "google").lower()
     tabela_vendor = TABELA_CUSTOS_USD.get(v_norm, TABELA_CUSTOS_USD["google"])
     
-    precos = tabela_vendor.get(modelo, tabela_vendor["default"])
-    custo_prompt = (tokens_prompt / 1_000_000.0) * precos["prompt"]
-    custo_comp = (tokens_completion / 1_000_000.0) * precos["completion"]
+    precos = tabela_vendor.get(modelo, tabela_vendor.get("default", {"prompt": 0.075, "completion": 0.30}))
+    custo_prompt = ((tokens_prompt or 0) / 1_000_000.0) * precos["prompt"]
+    custo_comp = ((tokens_completion or 0) / 1_000_000.0) * precos["completion"]
     return round(custo_prompt + custo_comp, 7)
+
+
+def atualizar_telemetria_tokens(
+    telemetria_id: int,
+    tokens_prompt: int,
+    tokens_completion: int,
+    vendor: str = "google",
+    modelo: str = "gemini-3.5-flash-lite"
+) -> None:
+    """Atualiza de forma precisa os tokens e custo de uma telemetria caso o callback não tenha capturado inicialmente."""
+    if not telemetria_id:
+        return
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    tokens_prompt = int(tokens_prompt or 0)
+    tokens_completion = int(tokens_completion or 0)
+    tokens_total = tokens_prompt + tokens_completion
+    custo = calcular_custo_estimado(vendor, modelo, tokens_prompt, tokens_completion)
+    try:
+        cursor.execute(f"""
+            UPDATE ia_telemetria_execucao
+            SET tokens_prompt = {ph},
+                tokens_completion = {ph},
+                tokens_total = {ph},
+                custo_estimado_usd = {ph}
+            WHERE id = {ph}
+        """, (tokens_prompt, tokens_completion, tokens_total, custo, telemetria_id))
+        conexao.commit()
+    except Exception as e:
+        conexao.rollback()
+        logger.warning(f"[AIObservability] Falha ao atualizar tokens da telemetria #{telemetria_id}: {e}")
+    finally:
+        conexao.close()
 
 
 def registrar_telemetria(
@@ -117,6 +153,7 @@ class AIObservabilityCallbackHandler(BaseCallbackHandler):
         self.modelo: str = "gemini-3.5-flash-lite"
         self.tokens_prompt: int = 0
         self.tokens_completion: int = 0
+        self.prompt_chars: int = 0
         self.tools_chamadas: List[Dict[str, Any]] = []
         self.status: str = "sucesso"
         self.mensagem_erro: Optional[str] = None
@@ -126,6 +163,7 @@ class AIObservabilityCallbackHandler(BaseCallbackHandler):
         self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
     ) -> None:
         self.start_time = time.time()
+        self.prompt_chars = sum(len(str(p)) for p in prompts) if prompts else 0
         # Identifica modelo/vendor através dos metadados da invocação
         invoc_params = kwargs.get("invocation_params", {})
         if "model" in invoc_params:
@@ -169,17 +207,36 @@ class AIObservabilityCallbackHandler(BaseCallbackHandler):
                     self.tokens_prompt = getattr(token_usage, "prompt_tokens", None) or token_usage.get("prompt_tokens") or 0
                     self.tokens_completion = getattr(token_usage, "completion_tokens", None) or token_usage.get("completion_tokens") or 0
             
-            # Se não encontrou no llm_output, inspeciona as gerações
-            if not self.tokens_prompt and response.generations:
+            # Se não encontrou no llm_output, inspeciona as gerações e suas mensagens (LangChain ChatGeneration)
+            if response.generations:
                 for gen_list in response.generations:
                     for gen in gen_list:
+                        # 1. Verifica no ChatGeneration.message (formato moderno LangChain)
+                        msg = getattr(gen, "message", None)
+                        if msg:
+                            u_meta = getattr(msg, "usage_metadata", None)
+                            if not u_meta and hasattr(msg, "response_metadata") and isinstance(msg.response_metadata, dict):
+                                u_meta = msg.response_metadata.get("usage_metadata") or msg.response_metadata.get("token_usage")
+                            if u_meta and isinstance(u_meta, dict):
+                                self.tokens_prompt = u_meta.get("input_tokens") or u_meta.get("prompt_token_count") or self.tokens_prompt
+                                self.tokens_completion = u_meta.get("output_tokens") or u_meta.get("candidates_token_count") or self.tokens_completion
+                        
+                        # 2. Verifica no generation_info
                         info = getattr(gen, "generation_info", {}) or {}
                         usage = info.get("usage_metadata") or info.get("token_usage") or {}
-                        if usage:
+                        if usage and isinstance(usage, dict):
                             self.tokens_prompt = usage.get("prompt_token_count") or usage.get("input_tokens") or self.tokens_prompt
                             self.tokens_completion = usage.get("candidates_token_count") or usage.get("output_tokens") or self.tokens_completion
         except Exception as e:
             logger.warning(f"[AIObservability] Aviso ao extrair tokens: {e}")
+
+        # Fallback heurístico inteligente se o provedor não reportou tokens:
+        # Padrão da indústria: ~4 caracteres por token
+        comp_chars = sum(len(getattr(gen, "text", "") or "") for gen_list in (response.generations or []) for gen in gen_list)
+        if not self.tokens_prompt:
+            self.tokens_prompt = max(25, self.prompt_chars // 4 if self.prompt_chars else 180)
+        if not self.tokens_completion:
+            self.tokens_completion = max(10, comp_chars // 4 if comp_chars else 45)
 
         # Grava a telemetria automaticamente no banco Neon
         self.telemetria_id = registrar_telemetria(

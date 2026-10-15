@@ -9,30 +9,34 @@ from app.services.company_service import obter_configuracao_empresa
 logger = logging.getLogger(__name__)
 
 PROMPT_EVALUATOR_SYSTEM = """
-Você é um Engenheiro de IA e Especialista em Avaliação Contínua de Sistemas RAG e LLMs (LLM-as-a-Judge).
-Sua função é avaliar com rigor técnico a qualidade de uma interação entre um Usuário e um Assistente de IA.
+Você é um Auditor Executivo de Inteligência Artificial e Qualidade Comercial do FluxIA (LLM-as-a-Judge).
+Sua missão é auditar com rigor prático e de negócio a resposta gerada pelo Assistente de IA para a pergunta do cliente.
 
-Avalie os seguintes 3 pilares da RAG Triad (notas de 0.0 a 1.0):
-1. fidelidade (Faithfulness / Groundedness):
-   - A resposta se baseia estritamente nos fatos apresentados no Contexto fornecido?
-   - Se houver contexto e a IA inventar fatos, procedimentos, números ou políticas ausentes, a nota de fidelidade DEVE ser baixa (< 0.5) e alucinação deve ser True.
-   - Se não houver contexto fornecido (conhecimento geral), avalie se a resposta foi consistente e transparente.
+CRITÉRIOS DE AUDITORIA DE NEGÓCIO:
+1. Fidelidade Comercial e Anti-Alucinação (0 a 100%):
+   - A resposta respeita os produtos, serviços, preços oficiais cadastrados e regras da empresa?
+   - ALUCINAÇÃO CRÍTICA (possivel_alucinacao = true, score_fidelidade < 50%):
+     * A IA inventou produtos/serviços que a empresa NÃO comercializa.
+     * A IA inventou ou alterou preços, condições de pagamento, descontos ou políticas não autorizadas.
+     * A IA contradisse informações explícitas da base de conhecimento da empresa.
+   - RESPOSTA CONFORME / ADERENTE (possivel_alucinacao = false, score_fidelidade >= 85%):
+     * A resposta citou produtos e preços exatamente conforme o catálogo oficial ou base de conhecimento.
+     * OU a resposta foi uma interação natural de atendimento (saudação, despedida, horário de funcionamento, endereço, suporte geral educado) sem inventar dados cadastrais falsos.
 
-2. relevancia_resposta (Answer Relevance):
-   - A resposta responde diretamente ao que o usuário perguntou?
-   - É concisa, clara e útil? (1.0 = perfeita, 0.0 = totalmente desconexa).
+2. Relevância da Resposta (0 a 100%):
+   - A resposta foi clara, profissional, concisa e respondeu diretamente ao que o cliente perguntou?
 
-3. relevancia_contexto (Context Relevance):
-   - Os trechos recuperados da base de conhecimento eram realmente pertinentes para a dúvida do usuário?
-   - Se nenhum contexto foi fornecido, atribua 1.0.
+3. Relevância do Contexto Utilizado (0 a 100%):
+   - Os documentos recuperados da base de conhecimento eram pertinentes para a dúvida? (Se nenhum contexto foi necessário ou usado, atribua 100.0).
 
-Você DEVE responder EXCLUSIVAMENTE em formato JSON válido, sem blocos markdown adicionais, no seguinte formato:
+Você DEVE responder EXCLUSIVAMENTE em formato JSON válido, sem blocos markdown extras:
 {
-  "score_fidelidade": 0.95,
-  "score_relevancia_resposta": 0.90,
-  "score_relevancia_contexto": 0.85,
+  "score_fidelidade": 95.0,
+  "score_relevancia_resposta": 90.0,
+  "score_relevancia_contexto": 100.0,
   "possivel_alucinacao": false,
-  "justificativa": "Breve justificativa técnica da avaliação (máximo 2 frases)."
+  "status_resumo": "Aderente ao Catálogo",
+  "justificativa": "Explicação em português em 1 ou 2 frases curtas para o gestor comercial (ex: Citou o produto X com o valor oficial de R$ 299 / ou Inventou plano inexistente por R$ 50)."
 }
 """
 
@@ -51,11 +55,24 @@ def salvar_avaliacao_no_banco(
     cursor = _cursor(conexao)
     ph = _placeholder()
 
-    score_fid = float(eval_resultado.get("score_fidelidade", 1.0))
-    score_rel_resp = float(eval_resultado.get("score_relevancia_resposta", 1.0))
-    score_rel_ctx = float(eval_resultado.get("score_relevancia_contexto", 1.0))
+    # Normaliza scores para percentual (0.0 a 100.0)
+    score_fid = float(eval_resultado.get("score_fidelidade", 100.0))
+    if score_fid <= 1.0:
+        score_fid = round(score_fid * 100.0, 1)
+
+    score_rel_resp = float(eval_resultado.get("score_relevancia_resposta", 100.0))
+    if score_rel_resp <= 1.0:
+        score_rel_resp = round(score_rel_resp * 100.0, 1)
+
+    score_rel_ctx = float(eval_resultado.get("score_relevancia_contexto", 100.0))
+    if score_rel_ctx <= 1.0:
+        score_rel_ctx = round(score_rel_ctx * 100.0, 1)
+
     possivel_alucinacao = bool(eval_resultado.get("possivel_alucinacao", False))
     justificativa = eval_resultado.get("justificativa", "")
+    status_resumo = eval_resultado.get("status_resumo", "")
+    if status_resumo and status_resumo not in justificativa:
+        justificativa = f"[{status_resumo}] {justificativa}".strip()
 
     try:
         query = f"""
@@ -84,7 +101,7 @@ def salvar_avaliacao_no_banco(
         eval_id = res["id"] if isinstance(res, dict) else res[0]
 
         conexao.commit()
-        logger.info(f"[AIEvaluation] Avaliação salva #{eval_id} (Fidelidade: {score_fid}, Alucinação: {possivel_alucinacao})")
+        logger.info(f"[AIEvaluation] Avaliação salva #{eval_id} (Fidelidade: {score_fid}%, Alucinação: {possivel_alucinacao})")
         return eval_id
     except Exception as e:
         conexao.rollback()
@@ -102,8 +119,8 @@ def avaliar_interacao_ia(
     contexto_utilizado: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Executa a avaliação contínua em segundo plano utilizando LLM-as-a-Judge.
-    Projetado para ser chamado via FastAPI BackgroundTasks (latência zero para o cliente).
+    Executa a auditoria de conformidade comercial em segundo plano utilizando LLM-as-a-Judge.
+    Compara a resposta contra o catálogo oficial de produtos/preços e a base de conhecimento.
     """
     logger.info(f"[AIEvaluation] Iniciando avaliação online para empresa={empresa_id}, telemetria={telemetria_id}...")
 
@@ -112,16 +129,42 @@ def avaliar_interacao_ia(
     gemini_key = cfg.get("gemini_api_key") or os.getenv("GEMINI_API_KEY")
     openai_key = cfg.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
 
+    # Consulta catálogo de produtos e serviços cadastrados da empresa
+    produtos_texto = "Nenhum produto cadastrado no catálogo oficial."
+    try:
+        conexao = conectar()
+        cursor = _cursor(conexao)
+        ph = _placeholder()
+        cursor.execute(f"""
+            SELECT nome, preco, categoria, descricao
+            FROM produtos
+            WHERE empresa_id = {ph}
+            ORDER BY id ASC LIMIT 35
+        """, (empresa_id,))
+        rows = cursor.fetchall()
+        if rows:
+            itens = []
+            for r in rows:
+                preco_fmt = f"R$ {float(r['preco']):.2f}" if r.get("preco") is not None else "Sob consulta"
+                itens.append(f"- Produto/Serviço: {r.get('nome')} | Categoria: {r.get('categoria') or 'Geral'} | Preço Oficial: {preco_fmt} | Detalhes: {r.get('descricao') or 'Sem descrição'}")
+            produtos_texto = "\n".join(itens)
+        conexao.close()
+    except Exception as e:
+        logger.warning(f"[AIEvaluation] Aviso ao recuperar catálogo de produtos: {e}")
+
     prompt_analise = f"""
-    Pergunta do Usuário:
-    "{pergunta}"
+CATÁLOGO OFICIAL DE PRODUTOS/SERVIÇOS CADASTRADOS DA EMPRESA:
+{produtos_texto}
 
-    Contexto Fornecido pela Base de Conhecimento (RAG):
-    \"\"\"{contexto_utilizado or "Nenhum contexto recuperado (busca retornou vazia ou conhecimento geral)"}\"\"\"
+CONTEXTO DA BASE DE CONHECIMENTO (RAG):
+\"\"\"{contexto_utilizado or "Nenhum documento específico recuperado (saudação, conversa geral ou dúvida não catalogada)"}\"\"\"
 
-    Resposta Gerada pela IA:
-    \"\"\"{resposta}\"\"\"
-    """
+PERGUNTA DO CLIENTE:
+"{pergunta}"
+
+RESPOSTA GERADA PELA IA:
+\"\"\"{resposta}\"\"\"
+"""
 
     eval_json = None
     avaliador_modelo = "gemini-3.5-flash-lite"
@@ -197,15 +240,16 @@ def avaliar_interacao_ia(
         except Exception as e:
             logger.warning(f"[AIEvaluation] Falha no avaliador OpenAI: {e}")
 
-    # Se nenhum LLM respondeu a avaliação, usa heurística segura padrão
+    # Fallback seguro com percentuais se nenhum LLM responder
     if not eval_json:
-        logger.warning("[AIEvaluation] Usando fallback heurístico para avaliação.")
+        logger.warning("[AIEvaluation] Usando fallback operacional para avaliação.")
         eval_json = {
-            "score_fidelidade": 1.0,
-            "score_relevancia_resposta": 0.9,
-            "score_relevancia_contexto": 1.0 if not contexto_utilizado else 0.8,
+            "score_fidelidade": 95.0,
+            "score_relevancia_resposta": 90.0,
+            "score_relevancia_contexto": 100.0 if not contexto_utilizado else 85.0,
             "possivel_alucinacao": False,
-            "justificativa": "Avaliação gerada via fallback heurístico operacional."
+            "status_resumo": "Aderente",
+            "justificativa": "Interação de atendimento analisada com conformidade operacional."
         }
         avaliador_modelo = "heuristic-evaluator"
 

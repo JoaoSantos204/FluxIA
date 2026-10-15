@@ -76,7 +76,7 @@ def documentos_mais_usados(
     usuario_perfil: Optional[str] = Query(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-Id")
 ):
-    """Retorna os documentos mais acionados pelo RAG com frequência e similaridade média. Restrito a admin/master."""
+    """Retorna os documentos/catálogos mais acionados pelo RAG com taxa de participação no atendimento e última utilização. Restrito a admin/master."""
     _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
 
     conexao = conectar()
@@ -84,20 +84,23 @@ def documentos_mais_usados(
     ph = _placeholder()
     try:
         cursor.execute(f"""
-            SELECT documentos_utilizados
+            SELECT documentos_utilizados, criado_em
             FROM perguntas_historico
             WHERE empresa_id = {ph} AND teve_contexto = {ph}
+            ORDER BY id DESC
         """, (empresa_id, True))
 
         linhas = cursor.fetchall()
+        total_com_contexto = len(linhas)
         ranking = {}
 
         for linha in linhas:
             docs_raw = linha.get("documentos_utilizados")
+            data_criado = linha.get("criado_em")
             if not docs_raw:
                 continue
             try:
-                docs = json.loads(docs_raw)
+                docs = json.loads(docs_raw) if isinstance(docs_raw, str) else docs_raw
             except Exception:
                 continue
 
@@ -108,22 +111,36 @@ def documentos_mais_usados(
                     continue
 
                 if nome not in ranking:
-                    ranking[nome] = {"nome_arquivo": nome, "total_consultas": 0, "soma_similaridade": 0.0}
+                    ranking[nome] = {
+                        "nome_arquivo": nome,
+                        "total_consultas": 0,
+                        "soma_similaridade": 0.0,
+                        "ultima_utilizacao": data_criado
+                    }
                 ranking[nome]["total_consultas"] += 1
                 ranking[nome]["soma_similaridade"] += sim
+                if not ranking[nome]["ultima_utilizacao"] and data_criado:
+                    ranking[nome]["ultima_utilizacao"] = data_criado
 
         resultado = []
         for nome, dados in ranking.items():
             qtd = dados["total_consultas"]
             media = round(dados["soma_similaridade"] / qtd, 3) if qtd > 0 else 0.0
+            taxa_part = round((qtd / total_com_contexto) * 100, 1) if total_com_contexto > 0 else 0.0
             resultado.append({
                 "nome_arquivo": nome,
                 "total_consultas": qtd,
+                "taxa_participacao_pct": taxa_part,
+                "ultima_utilizacao": str(dados["ultima_utilizacao"]) if dados["ultima_utilizacao"] else None,
                 "similaridade_media": media
             })
 
         resultado.sort(key=lambda x: x["total_consultas"], reverse=True)
-        return {"total_documentos_rankeados": len(resultado), "ranking": resultado}
+        return {
+            "total_documentos_rankeados": len(resultado),
+            "total_consultas_com_contexto": total_com_contexto,
+            "ranking": resultado
+        }
     finally:
         conexao.close()
 
@@ -423,6 +440,186 @@ def obter_evaluations_ia(
             "total_alucinacoes": total_alucinacoes,
             "taxa_assertividade_sem_alucinacao_percent": taxa_assertividade,
             "ultimas_avaliacoes": ultimas
+        }
+    finally:
+        conexao.close()
+
+
+@router.get("/ia-auditoria-consolidada")
+def obter_auditoria_consolidada_ia(
+    empresa_id: int = Query(1),
+    canal: Optional[str] = Query(None),
+    limite: int = Query(25, ge=1, le=100),
+    pagina: int = Query(1, ge=1),
+    usuario_id: Optional[int] = Query(None),
+    usuario_perfil: Optional[str] = Query(None),
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Painel Executivo Unificado de Auditoria e Inteligência de IA:
+    Consolida KPIs de custo em R$/USD, consumo de tokens, origem por canal (Telegram vs Portal),
+    taxa de aderência ao catálogo/base e histórico detalhado auditável. Restrito a admin/master.
+    """
+    _validar_acesso_analytics(usuario_id, x_user_id, usuario_perfil)
+
+    limite_val = int(limite) if isinstance(limite, int) or (isinstance(limite, str) and limite.isdigit()) else 25
+    pagina_val = int(pagina) if isinstance(pagina, int) or (isinstance(pagina, str) and pagina.isdigit()) else 1
+    canal_val = canal.strip().lower() if canal and isinstance(canal, str) and canal.strip() else None
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        filtros_t = [f"t.empresa_id = {ph}"]
+        params_t = [empresa_id]
+
+        if canal_val:
+            filtros_t.append(f"t.canal = {ph}")
+            params_t.append(canal_val)
+
+        where_t = "WHERE " + " AND ".join(filtros_t)
+
+        # 1. KPIs de Telemetria e Custo
+        cursor.execute(f"""
+            SELECT 
+                COUNT(*) AS total_interacoes,
+                COUNT(CASE WHEN t.canal = 'telegram' THEN 1 END) AS total_telegram,
+                COUNT(CASE WHEN t.canal = 'portal' THEN 1 END) AS total_portal,
+                COALESCE(SUM(t.tokens_prompt), 0) AS total_tokens_prompt,
+                COALESCE(SUM(t.tokens_completion), 0) AS total_tokens_completion,
+                COALESCE(SUM(t.tokens_total), 0) AS total_tokens,
+                COALESCE(SUM(t.custo_estimado_usd), 0.0) AS custo_total_usd,
+                COALESCE(AVG(t.latencia_ms), 0) AS latencia_media_ms
+            FROM ia_telemetria_execucao t
+            {where_t}
+        """, tuple(params_t))
+        kpi_row = cursor.fetchone()
+
+        custo_usd = float(kpi_row["custo_total_usd"] if kpi_row else 0.0)
+        custo_brl = round(custo_usd * 5.60, 4)
+
+        # 2. KPIs de Auditoria de Conteúdo / Alucinação
+        cursor.execute(f"""
+            SELECT 
+                COUNT(*) AS total_avaliadas,
+                COUNT(CASE WHEN e.possivel_alucinacao IS TRUE THEN 1 END) AS total_alucinacoes,
+                COALESCE(AVG(CASE WHEN e.score_fidelidade <= 1.0 THEN e.score_fidelidade * 100.0 ELSE e.score_fidelidade END), 100.0) AS media_fidelidade_pct
+            FROM ia_evaluations e
+            LEFT JOIN ia_telemetria_execucao t ON t.id = e.telemetria_id
+            {where_t}
+        """, tuple(params_t))
+        eval_row = cursor.fetchone()
+
+        total_avaliadas = int(eval_row["total_avaliadas"] if eval_row else 0)
+        total_alucinacoes = int(eval_row["total_alucinacoes"] if eval_row else 0)
+        taxa_aderencia = 100.0 if total_avaliadas == 0 else round(((total_avaliadas - total_alucinacoes) / total_avaliadas) * 100.0, 1)
+
+        # 3. Documentos e Catálogos Mais Utilizados
+        cursor.execute(f"""
+            SELECT documentos_utilizados, criado_em
+            FROM perguntas_historico
+            WHERE empresa_id = {ph} AND teve_contexto = {ph}
+            ORDER BY id DESC
+        """, (empresa_id, True))
+        doc_rows = cursor.fetchall()
+        total_ctx = len(doc_rows)
+        doc_map = {}
+
+        for dr in doc_rows:
+            docs_raw = dr.get("documentos_utilizados")
+            dt = dr.get("criado_em")
+            if not docs_raw:
+                continue
+            try:
+                docs = json.loads(docs_raw) if isinstance(docs_raw, str) else docs_raw
+            except Exception:
+                continue
+            for d in docs:
+                nome = d.get("nome_arquivo")
+                if not nome:
+                    continue
+                if nome not in doc_map:
+                    doc_map[nome] = {"nome_arquivo": nome, "total_consultas": 0, "ultima_utilizacao": dt}
+                doc_map[nome]["total_consultas"] += 1
+                if not doc_map[nome]["ultima_utilizacao"] and dt:
+                    doc_map[nome]["ultima_utilizacao"] = dt
+
+        ranking_documentos = []
+        for nome, dados in doc_map.items():
+            qtd = dados["total_consultas"]
+            taxa_part = round((qtd / total_ctx) * 100.0, 1) if total_ctx > 0 else 0.0
+            ranking_documentos.append({
+                "nome_arquivo": nome,
+                "total_consultas": qtd,
+                "taxa_participacao_pct": taxa_part,
+                "ultima_utilizacao": str(dados["ultima_utilizacao"]) if dados["ultima_utilizacao"] else None
+            })
+        ranking_documentos.sort(key=lambda x: x["total_consultas"], reverse=True)
+
+        # 4. Histórico Auditável Paginado
+        offset = (pagina_val - 1) * limite_val
+        params_t_pag = list(params_t) + [limite_val, offset]
+
+        cursor.execute(f"""
+            SELECT 
+                t.id AS telemetria_id,
+                t.canal,
+                t.vendor,
+                t.modelo,
+                t.tokens_prompt,
+                t.tokens_completion,
+                t.tokens_total,
+                t.custo_estimado_usd,
+                t.latencia_ms,
+                t.status_execucao,
+                t.criado_em,
+                e.id AS evaluation_id,
+                e.pergunta,
+                e.resposta,
+                CASE 
+                    WHEN e.score_fidelidade IS NULL THEN 100.0
+                    WHEN e.score_fidelidade <= 1.0 THEN e.score_fidelidade * 100.0
+                    ELSE e.score_fidelidade
+                END AS score_aderencia_pct,
+                e.possivel_alucinacao,
+                e.justificativa_avaliacao
+            FROM ia_telemetria_execucao t
+            LEFT JOIN ia_evaluations e ON e.telemetria_id = t.id
+            {where_t}
+            ORDER BY t.id DESC
+            LIMIT {ph} OFFSET {ph}
+        """, tuple(params_t_pag))
+        itens_rows = cursor.fetchall()
+
+        itens = []
+        for r in itens_rows:
+            it = dict(r)
+            custo_item_usd = float(it.get("custo_estimado_usd") or 0.0)
+            it["custo_estimado_brl"] = round(custo_item_usd * 5.60, 4)
+            it["score_aderencia_pct"] = round(float(it.get("score_aderencia_pct") or 100.0), 1)
+            itens.append(it)
+
+        return {
+            "kpis": {
+                "total_interacoes": int(kpi_row["total_interacoes"] if kpi_row else 0),
+                "total_telegram": int(kpi_row["total_telegram"] if kpi_row else 0),
+                "total_portal": int(kpi_row["total_portal"] if kpi_row else 0),
+                "total_tokens": int(kpi_row["total_tokens"] if kpi_row else 0),
+                "total_tokens_prompt": int(kpi_row["total_tokens_prompt"] if kpi_row else 0),
+                "total_tokens_completion": int(kpi_row["total_tokens_completion"] if kpi_row else 0),
+                "custo_total_usd": round(custo_usd, 6),
+                "custo_total_brl": custo_brl,
+                "latencia_media_ms": round(float(kpi_row["latencia_media_ms"] if kpi_row else 0), 1),
+                "taxa_aderencia_pct": taxa_aderencia,
+                "total_alucinacoes": total_alucinacoes
+            },
+            "ranking_documentos": ranking_documentos[:15],
+            "interacoes": itens,
+            "paginacao": {
+                "pagina": pagina_val,
+                "limite": limite_val,
+                "total_interacoes": int(kpi_row["total_interacoes"] if kpi_row else 0)
+            }
         }
     finally:
         conexao.close()
