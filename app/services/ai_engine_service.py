@@ -239,11 +239,10 @@ class MultiVendorAIEngine:
             return texto_final, telemetria_id
         except Exception as e:
             logger.error(f"[AIEngine] Erro na execução orquestrada com LangChain: {e}")
-            # Em caso de erro crítico nos dois provedores, retorna mensagem amigável de suporte
-            telefone = (config_suporte or {}).get("numero_suporte_humano", "(11) 99999-9999")
+            # Em caso de erro crítico nos provedores, informa que o atendimento humano dará continuidade pelo Telegram
             msg_erro = (
-                f"Desculpe, nossos serviços de inteligência estão temporariamente indisponíveis. "
-                f"Por favor, entre em contato com nosso atendimento humano pelo telefone: {telefone}."
+                "Desculpe, tivemos uma instabilidade momentânea no processamento inteligente. "
+                "Sua mensagem foi registrada e um de nossos atendentes humanos responderá diretamente por aqui nesta mesma conversa em instantes."
             )
             return msg_erro, callback_obs.telemetria_id or 0
 

@@ -618,7 +618,7 @@ async def telegram_webhook(
                 "📖 **Guia do Assistente Virtual FluxIA**\n\n"
                 "• Envie suas dúvidas em linguagem natural.\n"
                 "• Nossas respostas são fundamentadas nas informações e diretrizes oficiais da empresa.\n"
-                "• Se precisar falar com um atendente humano, use o comando `/suporte`."
+                "• Se precisar falar com um atendente humano ou solicitar propostas, basta pedir por aqui mesmo que abriremos um chamado imediatamente!"
             )
             enviar_mensagem_telegram(chat_id, msg_ajuda, empresa_id=empresa_id)
             salvar_interacao(telegram_chat_id=chat_id, mensagem_usuario=texto_recebido, resposta_ia=msg_ajuda, lida=False, empresa_id=empresa_id)

@@ -549,20 +549,24 @@ class AgentOrchestrator:
             "contratos que tenho", "itens em aberto", "o que tenho em aberto", "minhas pendências",
             "o que eu contratei", "o que contratei", "valor do meu contrato"
         ]
-        if any(t in msg for t in termos_consulta_existente) and not any(p in msg for p in ["nova proposta", "novo orçamento", "outro contrato", "desconto", "negociar", "fechar"]):
+        if any(t in msg for t in termos_consulta_existente) and not any(p in msg for p in ["nova proposta", "novo orçamento", "outro contrato", "desconto", "negociar", "fechar", "prosseguir", "avançar", "continuidade"]):
             return False, ""
 
         # 0. Verificação de resposta afirmativa ao convite comercial (CTA) da IA na mensagem anterior
         if chat_id:
             try:
-                hist = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=1, empresa_id=empresa_id)
-                if hist and hist[-1].get("resposta_ia"):
-                    ultima_ia = hist[-1]["resposta_ia"].lower()
+                hist = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=5, empresa_id=empresa_id)
+                # Como a rota já pode ter gravado o registro da mensagem atual com resposta_ia vazia,
+                # filtramos apenas as interações que contêm resposta da IA de fato.
+                hist_com_ia = [h for h in hist if (h.get("resposta_ia") or "").strip()]
+                if hist_com_ia:
+                    ultima_ia = hist_com_ia[-1]["resposta_ia"].lower()
                     ofertou_proposta_ou_humano = any(p in ultima_ia for p in [
                         "proposta comercial", "proposta personalizada", "preparássemos uma proposta",
                         "preparassemos uma proposta", "consultores humanos", "atendente humano",
                         "entender melhor sobre o nosso trabalho", "entender melhor sobre nosso trabalho",
-                        "consultor humano", "proposta comercial personalizada"
+                        "consultor humano", "proposta comercial personalizada", "enviar uma proposta",
+                        "enviada uma proposta", "equipe comercial", "consultor comercial"
                     ])
                     if ofertou_proposta_ou_humano:
                         respostas_afirmativas = {
@@ -573,23 +577,28 @@ class AgentOrchestrator:
                             "quero a proposta", "manda a proposta", "gostaria da proposta", "proposta",
                             "quero entender melhor", "entender melhor", "falar com consultor", "falar com atendente",
                             "atendente humano", "consultor humano", "prefiro falar com atendente", "com atendente",
-                            "sim gostaria", "sim quero", "sim pode ser", "sim claro", "pode ser sim"
+                            "sim gostaria", "sim quero", "sim pode ser", "sim claro", "pode ser sim",
+                            "pode", "pode sim", "fechado", "com certeza quero", "manda ver", "manda bala"
                         }
-                        if msg_sem_pont in respostas_afirmativas or any(msg_limpa.startswith(prefix) for msg_limpa in [msg] for prefix in ["sim", "quero", "gostaria", "pode ser", "claro"]):
+                        if msg_sem_pont in respostas_afirmativas or any(msg.startswith(prefix) for prefix in ["sim", "quero", "gostaria", "pode ser", "claro", "pode mandar", "pode enviar"]):
                             return True, "proposta"
             except Exception as e:
                 logger.debug(f"[Orquestrador] Erro ao checar histórico para CTA de proposta: {e}")
 
-        # 1. Padrões de Proposta Comercial / Orçamento Formal
+        # 1. Padrões de Proposta Comercial / Orçamento Formal / Continuidade de Proposta
         padroes_proposta = [
             r"\b(quero|gostaria|preciso|solicito|desejo|favor|pode|consegue)\s+(?:de\s+)?(?:uma?\s+)?(?:nova?\s+)?(proposta|or[cç]amento|cota[cç][aã]o)\b",
             r"\b(me\s+(?:envie|mande|passa|encaminhe)|enviar|mandar|gerar|elaborar|preparar)\s+(?:uma?\s+)?(?:nova?\s+)?(proposta|or[cç]amento|cota[cç][aã]o)\b",
             r"\b(proposta\s+comercial|proposta\s+formal|or[cç]amento\s+formal)\b",
             r"\b(como\s+(?:fa[cç]o\s+para\s+)?(?:receber|obter|solicitar)\s+(?:uma?\s+)?proposta)\b",
+            r"\b(como\s+(?:posso\s+|fa[cç]o\s+para\s+)?(?:prosseguir|avan[cç]ar|dar\s+continuidade|continuar)\s+(?:com\s+|na\s+)?(?:a\s+|minha\s+|uma\s+)?proposta)\b",
+            r"\b(possibilidade\s+de\s+(?:uma\s+)?(?:nova\s+)?proposta)\b",
+            r"\b(prosseguir|avan[cç]ar|dar\s+continuidade)\s+(?:com\s+|na\s+)?(?:a\s+|minha\s+)?proposta\b",
             r"\b(quero\s+(?:contratar|comprar)|vamos\s+fechar)\s*[,.]?\s*(?:me\s+)?(?:manda|envia)\s+(?:a\s+)?proposta\b",
             r"\b(manda\s+(?:a\s+)?proposta|envia\s+(?:a\s+)?proposta|passa\s+(?:a\s+)?proposta)\b",
             r"\b(quero\s+a\s+proposta|gostaria\s+da\s+proposta|enviar\s+a\s+proposta)\b",
-            r"\b(entender\s+melhor\s+sobre\s+o\s+trabalho|falar\s+com\s+(?:um\s+)?consultor)\b"
+            r"\b(entender\s+melhor\s+sobre\s+o\s+trabalho|falar\s+com\s+(?:um\s+)?consultor)\b",
+            r"\b(fechar|aprovar|aceitar)\s+(?:a\s+|minha\s+)?proposta\b"
         ]
         for p in padroes_proposta:
             if re.search(p, msg):
@@ -705,16 +714,10 @@ class AgentOrchestrator:
             empresa_id=contexto.get("empresa_id", 1)
         )
         if eh_prop_neg:
-            if not contexto.get("tem_telefone_valido") and not dados_contato_extraidos.get("tem_contato"):
-                return {
-                    "intencao": "COLETA_CONTATO",
-                    "tipo_ticket": tipo_prop_neg,
-                    "criterio": f"Solicitação de {tipo_prop_neg} exigindo telefone/WhatsApp para abertura de ticket comercial"
-                }
             return {
                 "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
                 "tipo_ticket": tipo_prop_neg,
-                "criterio": f"Solicitação de {tipo_prop_neg} formal encaminhada para geração de ticket e operador humano"
+                "criterio": f"Solicitação de {tipo_prop_neg} formal encaminhada para geração imediata de ticket no CRM e atendimento via Telegram"
             }
 
         # 4. Se acabou de fornecer os dados faltantes nesta mensagem
@@ -1035,18 +1038,32 @@ class AgentOrchestrator:
             finally:
                 conexao.close()
 
-            tel_suporte = config_empresa.get("numero_suporte_humano", "(11) 99999-9999")
-            orientacao = config_empresa.get("mensagem_suporte", "Nossa equipe de suporte foi notificada e entrará em contato.")
+            # Criação automática do ticket de suporte para atendimento direto pelo Telegram
+            from app.services.ticket_service import criar_ticket_automatico
+            ticket = criar_ticket_automatico(
+                empresa_id=empresa_id,
+                cliente_id=contexto.get("cliente_id"),
+                telegram_chat_id=chat_id,
+                tipo="suporte",
+                titulo="Solicitação de Atendimento Humano",
+                ultima_mensagem_cliente=mensagem,
+                cliente_nome=nome_exibicao,
+                cliente_telefone=contexto.get("telefone", ""),
+                prioridade="alta"
+            )
+            ticket_id = ticket.get("id") if ticket else None
+            ticket_str = f" (**Ticket #{ticket_id}**)" if ticket_id else ""
 
             msg_transbordo = (
-                f"👤 {nome_exibicao + ', ' if nome_exibicao else ''}seu atendimento foi transferido para um consultor humano da nossa equipe!\n\n"
-                f"{orientacao}\n"
-                f"📱 Contato de Suporte Direto: `{tel_suporte}`\n\n"
-                "Um atendente responderá nesta mesma conversa em breve."
+                f"👤 {nome_exibicao + ', ' if nome_exibicao else ''}seu atendimento foi transferido para a nossa equipe!\n\n"
+                f"🎫 Já abri um chamado prioritário{ticket_str} para que um dos nossos atendentes dê continuidade ao seu atendimento. "
+                "Eles responderão diretamente por aqui nesta conversa em instantes!"
             )
             return msg_transbordo, {
                 "intencao": "TRANSBORDO_HUMANO",
                 "status": "humano",
+                "ticket_id": ticket_id,
+                "remover_teclado": True,
                 "documentos_usados": []
             }
 
@@ -1059,10 +1076,24 @@ class AgentOrchestrator:
                 else "Negociação de Valores / Termos de Contrato"
             )
 
+            # Marca a conversa como humano para que o operador dê continuidade pelo Telegram via Ticket
+            conexao = conectar()
+            cursor = _cursor(conexao)
+            ph = _placeholder()
+            try:
+                cursor.execute(f"""
+                    INSERT INTO conversas_telegram (chat_id, status, empresa_id)
+                    VALUES ({ph}, 'humano', {ph})
+                    ON CONFLICT (chat_id) DO UPDATE SET status = 'humano', atualizado_em = CURRENT_TIMESTAMP
+                """, (chat_id, empresa_id))
+                conexao.commit()
+            finally:
+                conexao.close()
+
             from app.services.ticket_service import criar_ticket_automatico
             ticket = criar_ticket_automatico(
                 empresa_id=empresa_id,
-                cliente_id=contexto["cliente_id"],
+                cliente_id=contexto.get("cliente_id"),
                 telegram_chat_id=chat_id,
                 tipo=tipo_ticket,
                 titulo=titulo_ticket,
@@ -1092,6 +1123,7 @@ class AgentOrchestrator:
             return msg_resposta, {
                 "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
                 "ticket_id": ticket_id,
+                "status": "humano",
                 "tipo": tipo_ticket,
                 "cadastrado": contexto["cadastrado_completo"],
                 "remover_teclado": True,

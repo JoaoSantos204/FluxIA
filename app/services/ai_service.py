@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 def montar_system_prompt(config_suporte: dict | None = None) -> str:
     suporte = config_suporte or {}
-    telefone = suporte.get("numero_suporte_humano", "(11) 99999-9999")
-    mensagem_suporte = suporte.get("mensagem_suporte", "Nossa equipe de suporte está à disposição para ajudar.")
+    mensagem_suporte = suporte.get("mensagem_suporte", "Nossa equipe está à disposição para ajudar.")
 
     return f"""
     Você é o assistente virtual de inteligência artificial da empresa no atendimento ao cliente.
@@ -44,16 +43,18 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
             * Responda prontamente e com clareza a partir da base de conhecimento da empresa.
         - Para dúvidas sobre produtos, planos, regras ou soluções corporativas:
             * Apresente as informações com riqueza de detalhes, organização visual e objetividade.
-        - Se uma informação técnica específica não estiver documentada na base:
-            * Esclareça de forma educada e transparente, indicando o contato da equipe: {telefone} ({mensagem_suporte}).
+        - Se uma informação técnica ou detalhe específico não estiver documentado na base:
+            * Esclareça de forma educada e transparente que não localizou essa especificação nos registros oficiais e informe que nossa equipe humana responderá diretamente por aqui nesta mesma conversa.
+            * NUNCA invente números de telefone e NUNCA oriente o cliente a ligar ou chamar em outro número externo. O atendimento é feito 100% diretamente por aqui no Telegram.
         - NUNCA mencione termos técnicos internos de IA como "chunk", "embedding", "RAG", "prompt" ou "similaridade cosseno".
 
-    5. Limites de Atuação: Propostas e Negociações Exclusivas com Consultor Humano:
+    5. Limites de Atuação: Propostas, Negociações e Atendimento Humano Exclusivo:
         - Você pode informar valores de tabela e tirar dúvidas da base de conhecimento, bem como consultar propostas e contratos já existentes do cliente.
         - Porém, você NUNCA cria novas propostas comerciais formais e NUNCA negocia valores, descontos, prazos ou termos contratuais de forma autônoma.
-        - Quando o cliente solicitar elaboração de proposta personalizada, pedir descontos ou quiser negociar/fechar contrato:
-            * Esclareça com simpatia e profissionalismo que para garantir as melhores condições e personalização, as propostas formais e negociações de contrato são conduzidas diretamente por um consultor humano da nossa equipe.
-            * Informe que um chamado/ticket prioritário já foi registrado para a equipe comercial e que um consultor entrará em contato por esta mesma conversa em instantes.
+        - Quando o cliente solicitar proposta comercial, pedir descontos, negociar termos, pedir para falar com atendente ou como prosseguir com a proposta:
+            * Esclareça com simpatia e profissionalismo que propostas formais e negociações são conduzidas diretamente por um consultor especialista da nossa equipe.
+            * Informe que um chamado prioritário (ticket) foi registrado para a equipe e que um consultor humano dará continuidade por aqui mesmo nesta conversa em instantes.
+            * NUNCA forneça telefones externos. O atendimento é 100% pelo próprio Telegram.
 
     6. Convite Comercial Proativo após Apresentar Preços e Produtos:
         - Sempre que você responder sobre preços, planos, valores ou apresentar os produtos e serviços da empresa:
@@ -65,7 +66,6 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
 
 def montar_system_prompt_interno(config_suporte: dict | None = None) -> str:
     suporte = config_suporte or {}
-    telefone = suporte.get("numero_suporte_humano", "(11) 99999-9999")
 
     return f"""
     Você é o Copiloto Corporativo de Inteligência Artificial e Assistente Operacional Interno da plataforma FluxIA.
@@ -200,10 +200,9 @@ class AIService:
                     if tentativa < retries:
                         time.sleep(delay)
 
-        telefone = (config_suporte or {}).get("numero_suporte_humano", "(11) 99999-9999")
         return (
-            f"Desculpe, nossos serviços de inteligência estão com alta demanda no momento. "
-            f"Caso precise de assistência imediata, por favor contate nossa equipe de suporte pelo telefone: {telefone}."
+            "Desculpe, nossos serviços de inteligência estão com alta demanda momentânea. "
+            "Sua solicitação foi registrada e nossa equipe humana responderá diretamente por aqui nesta conversa em instantes."
         )
 
     def gerar_resposta_interna(
