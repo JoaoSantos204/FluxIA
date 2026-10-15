@@ -362,14 +362,7 @@ class AgentOrchestrator:
         else:
             blocos.append("CONTRATOS: Nenhum contrato ativo registrado para este cliente no momento.")
 
-        negocios = contexto.get("negocios") or []
-        if negocios:
-            blocos.append(f"OPORTUNIDADES / NEGOCIAÇÕES NO CRM ({len(negocios)}):")
-            for n in negocios[:3]:
-                val = f"R$ {float(n.get('valor_estimado') or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                blocos.append(f"- Negócio #{n.get('id')}: Produto: {n.get('produto_nome') or 'Diversos'} | Estágio: {n.get('estagio')} | Valor Estimado: {val}")
-
-        # Seção explícita consolidando exclusivamente os itens em aberto do cliente
+        # Seção explícita consolidando exclusivamente os itens contratuais e comerciais formais do cliente
         itens_abertos = []
         for p in propostas:
             st = (p.get("status_envio") or "").lower()
@@ -379,16 +372,19 @@ class AgentOrchestrator:
             st = (ct.get("status") or "").lower()
             if st not in ["cancelado", "rescindido"]:
                 itens_abertos.append(f"• Contrato Vigente #{ct.get('id')}: {ct.get('produto_nome') or 'Serviço'} (Valor: R$ {float(ct.get('valor_contrato') or 0):,.2f}, Status: {ct.get('status') or 'Ativo'})")
-        for n in negocios:
-            st = (n.get("estagio") or "").lower()
-            if st not in ["fechado", "perdido"]:
-                itens_abertos.append(f"• Oportunidade em Andamento #{n.get('id')}: {n.get('produto_nome') or 'Diversos'} (Estágio no Funil: {n.get('estagio')})")
 
         blocos.append("\n=== SEUS ITENS EM ABERTO CONOSCO ===")
         if itens_abertos:
             blocos.extend(itens_abertos)
         else:
             blocos.append("• Você não possui nenhuma pendência, proposta em aberto ou contrato no momento.")
+
+        blocos.append(
+            "\nDIRETRIZ DE PRIVACIDADE E SIGILO INTERNO:\n"
+            "Apresente apenas os Contratos e as Propostas Comerciais formais do cliente. "
+            "NUNCA cite termos internos de controle do CRM como 'negócio', 'estágio', 'funil', 'pipeline' ou 'valor estimado'. "
+            "Essas informações são exclusivamente para gerenciamento interno e não devem ser expostas ao cliente."
+        )
 
         return "\n".join(blocos)
 
@@ -673,6 +669,31 @@ class AgentOrchestrator:
 
         return False, ""
 
+    def eh_pedido_pdf_proposta(self, mensagem: str) -> bool:
+        """
+        Verifica se o cliente está solicitando o envio do documento PDF da proposta comercial.
+        """
+        if not mensagem:
+            return False
+        msg = mensagem.strip().lower()
+
+        tem_pdf = "pdf" in msg
+        tem_doc = any(t in msg for t in ["documento", "arquivo", "baixar"])
+        tem_proposta = "proposta" in msg or "orçamento" in msg or "orcamento" in msg or "contrato" in msg
+
+        # Se citar expressamente "pdf" com intenção de receber/ver/mandar
+        if tem_pdf and any(v in msg for v in ["manda", "envia", "mandar", "enviar", "quero", "gostaria", "ver", "tem", "pode", "passa", "consegue", "baixa"]):
+            return True
+
+        if tem_doc and tem_proposta and any(v in msg for v in ["manda", "envia", "mandar", "enviar", "quero", "gostaria", "ver", "tem", "pode", "passa"]):
+            return True
+
+        padroes = [
+            r"\b(proposta\s+em\s+pdf|pdf\s+da\s+proposta|enviar\s+pdf|mandar\s+pdf|manda\s+o\s+pdf|envia\s+o\s+pdf)\b",
+            r"\b(documento\s+da\s+proposta|arquivo\s+da\s+proposta|proposta\s+em\s+documento)\b"
+        ]
+        return any(re.search(p, msg) for p in padroes)
+
     def classificar_intencao_gerente(
         self,
         mensagem: str,
@@ -687,6 +708,7 @@ class AgentOrchestrator:
         - DESPEDIDA: Encerramento ou agradecimento final (tchau, até mais, obrigado por tudo, era só isso, pode encerrar).
         - SAUDACAO: Apenas saudação inicial (oi, olá, bom dia) sem pergunta substantiva.
         - TRANSBORDO_HUMANO: Solicitação explícita de atendente/suporte humano.
+        - ENVIO_PDF_PROPOSTA: Solicitação de envio do documento da proposta em formato PDF.
         - CONSULTA_COMERCIAL: Dúvida em primeira pessoa sobre itens em aberto, propostas, contratos, negócios em andamento.
         - PERGUNTA_CONHECIMENTO: Pergunta legítima sobre produtos, serviços, preços, regras ou informações corporativas.
         """
@@ -698,6 +720,13 @@ class AgentOrchestrator:
             return {
                 "intencao": "BLOQUEIO_PRIVACIDADE",
                 "criterio": "Tentativa de consulta a dados de outros clientes ou carteira de clientes (LGPD)"
+            }
+
+        # 0.1 Solicitação de Envio do Documento da Proposta em PDF
+        if self.eh_pedido_pdf_proposta(mensagem):
+            return {
+                "intencao": "ENVIO_PDF_PROPOSTA",
+                "criterio": "Cliente solicitou envio do documento em PDF da proposta comercial"
             }
 
         # 1. Comandos Diretos e Transbordo Humano
@@ -1061,6 +1090,97 @@ class AgentOrchestrator:
                 "intencao": "DESPEDIDA",
                 "cadastrado": contexto["cadastrado_completo"],
                 "conversa_encerrada": True,
+                "remover_teclado": True,
+                "documentos_usados": []
+            }
+
+        # --- AÇÃO: ENVIO DO DOCUMENTO DA PROPOSTA EM PDF VIA TELEGRAM ---
+        if intencao == "ENVIO_PDF_PROPOSTA":
+            propostas_cliente = contexto.get("propostas") or []
+            from app.services.proposal_pdf_service import gerar_pdf_proposta_bytes
+            from app.routes.telegram import enviar_documento_telegram
+
+            primeiro_nome = nome_exibicao.split()[0] if nome_exibicao else ""
+            saudacao = f"{primeiro_nome}, " if primeiro_nome else ""
+
+            if propostas_cliente:
+                # Tenta identificar se o usuário citou o ID de uma proposta específica (ex: "proposta 23" ou "23")
+                proposta_alvo = propostas_cliente[0]
+                for pr in propostas_cliente:
+                    if str(pr.get("id")) in mensagem:
+                        proposta_alvo = pr
+                        break
+
+                id_especifico = proposta_alvo.get("id")
+                prod_alvo = proposta_alvo.get("produto_nome") or "Solução Especializada"
+                val_alvo = float(proposta_alvo.get("valor") or 0.0)
+                val_fmt = f"R$ {val_alvo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+                pdf_bytes = gerar_pdf_proposta_bytes(proposta_id=id_especifico, empresa_id=empresa_id)
+                if pdf_bytes:
+                    nome_arq = f"Proposta_{id_especifico}_{empresa_id}.pdf"
+                    legenda = f"📄 Proposta Comercial #{id_especifico} - {prod_alvo} ({val_fmt})"
+                    enviou = enviar_documento_telegram(
+                        chat_id=chat_id,
+                        arquivo_bytes=pdf_bytes,
+                        nome_arquivo=nome_arq,
+                        legenda=legenda,
+                        empresa_id=empresa_id
+                    )
+                    if enviou:
+                        msg_resposta = (
+                            f"📄 {saudacao}acabei de te enviar o documento em PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) logo acima!\n\n"
+                            "Você pode baixar e visualizar todo o detalhamento do escopo, investimento e condições oficiais.\n\n"
+                            "Se desejar tirar qualquer dúvida, solicitar algum ajuste ou aprovar a proposta, basta me responder por aqui mesmo!"
+                        )
+                        return msg_resposta, {
+                            "intencao": "ENVIO_PDF_PROPOSTA",
+                            "proposta_id": id_especifico,
+                            "cadastrado": contexto["cadastrado_completo"],
+                            "documento_enviado": True,
+                            "documentos_usados": []
+                        }
+
+            # Se o cliente ainda não tem uma proposta formal emitida no sistema, abre ticket prioritário
+            from app.services.ticket_service import criar_ticket_automatico
+            ticket = criar_ticket_automatico(
+                empresa_id=empresa_id,
+                cliente_id=contexto.get("cliente_id"),
+                telegram_chat_id=chat_id,
+                tipo="proposta",
+                titulo="Solicitação de Proposta Comercial em PDF",
+                ultima_mensagem_cliente=mensagem,
+                cliente_nome=nome_exibicao,
+                cliente_telefone=contexto.get("telefone", ""),
+                prioridade="alta"
+            )
+            ticket_id = ticket.get("id", 1)
+
+            # Marca a conversa como humano para o consultor elaborar e enviar
+            conexao = conectar()
+            cursor = _cursor(conexao)
+            ph = _placeholder()
+            try:
+                cursor.execute(f"""
+                    INSERT INTO conversas_telegram (chat_id, status, empresa_id)
+                    VALUES ({ph}, 'humano', {ph})
+                    ON CONFLICT (chat_id) DO UPDATE SET status = 'humano', atualizado_em = CURRENT_TIMESTAMP
+                """, (chat_id, empresa_id))
+                conexao.commit()
+            finally:
+                conexao.close()
+
+            msg_resposta = (
+                f"Perfeito, {saudacao}! Para elaborarmos a sua proposta comercial formal em PDF com todos os itens, escopo detalhado e condições especiais sob medida, "
+                f"já registrei um chamado prioritário (**Ticket #{ticket_id}**) para nossa equipe comercial.\n\n"
+                "Em instantes nosso consultor especialista responderá por aqui mesmo no Telegram e enviará o PDF completo para você!"
+            )
+            return msg_resposta, {
+                "intencao": "ENVIO_PDF_PROPOSTA",
+                "ticket_id": ticket_id,
+                "status": "humano",
+                "tipo": "proposta",
+                "cadastrado": contexto["cadastrado_completo"],
                 "remover_teclado": True,
                 "documentos_usados": []
             }

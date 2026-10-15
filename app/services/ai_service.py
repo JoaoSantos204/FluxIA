@@ -32,6 +32,7 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
             * Informe com clareza o número da proposta/contrato, produto associado, valor, status e condições registradas no dossiê dele.
             * Destaque quais itens estão aguardando andamento ou assinatura.
             * Caso ele não tenha nenhum item em aberto, informe educadamente com transparência e se disponha a apresentar novos produtos ou soluções.
+            * NUNCA exponha informações de controle interno do CRM ao cliente (tais como 'Negócio #X', 'Estágio do Funil', 'Em Negociação', 'Pipeline' ou 'Valor Estimado'). O cliente deve visualizar estritamente seus Contratos e Propostas Comerciais formais.
 
     3. CONFIDENCIALIDADE E ISOLAMENTO ESTRITO DE CLIENTES (LGPD):
         - O usuário atendido é um cliente/lead específico. Ele NUNCA, SOB NENHUMA HIPÓTESE, pode ter acesso a dados de outros clientes, propostas de terceiros, contratos alheios ou listas da carteira de clientes da empresa.

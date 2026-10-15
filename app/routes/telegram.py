@@ -203,6 +203,43 @@ def enviar_mensagem_telegram(chat_id: str, texto: str, empresa_id: int | None = 
         logger.error(f"[Telegram] Erro ao enviar mensagem para chat {chat_id}: {e}")
 
 
+def enviar_documento_telegram(
+    chat_id: str,
+    arquivo_bytes: bytes,
+    nome_arquivo: str,
+    legenda: str = "",
+    empresa_id: int | None = None
+) -> bool:
+    """Envia um arquivo binário (ex: PDF de proposta) via API do Telegram como documento."""
+    token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
+    if not token:
+        logger.warning(f"[Telegram] Bot do Telegram não configurado para empresa {empresa_id}. Documento não enviado.")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendDocument"
+    files = {
+        "document": (nome_arquivo, arquivo_bytes, "application/pdf")
+    }
+    data = {
+        "chat_id": str(chat_id)
+    }
+    if legenda:
+        data["caption"] = converter_markdown_para_telegram_html(legenda)
+        data["parse_mode"] = "HTML"
+
+    try:
+        response = requests.post(url, data=data, files=files, timeout=25)
+        if response.status_code == 200:
+            logger.info(f"[Telegram] Documento '{nome_arquivo}' enviado com sucesso para o chat {chat_id}.")
+            return True
+        else:
+            logger.error(f"[Telegram] Erro ao enviar documento ({response.status_code}): {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"[Telegram] Falha na requisição de envio de documento para {chat_id}: {e}")
+        return False
+
+
 def buscar_nome_telegram_api(chat_id: str, empresa_id: int | None = None) -> str | None:
     """Consulta os dados do chat na API do Telegram para obter o nome real do usuário."""
     token = obter_token_bot_empresa(empresa_id=empresa_id, chat_id=chat_id)
