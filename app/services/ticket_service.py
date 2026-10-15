@@ -58,11 +58,11 @@ def gerar_resumo_ia_ticket(
         leia em menos de 10 segundos e saiba exatamente o que fazer.
         Estruture OBRIGATORIAMENTE no seguinte formato com marcadores:
 
-        👤 **Cliente:** {cliente_nome or 'Lead'} {f'({cliente_telefone})' if cliente_telefone else ''}
-        🎯 **Interesse:** [Qual produto, plano ou serviço o cliente demonstrou interesse]
-        💡 **Demanda do Ticket:** [O que o cliente pediu especificamente: proposta formal, desconto, formas de pagamento, detalhes do contrato]
-        📋 **Histórico da Conversa:** [Resumo em 2 a 3 frases dos principais pontos conversados]
-        ⚡ **Ação Recomendada:** [Instrução prática e direta para o operador fechar o negócio ou enviar a proposta]
+        • **Cliente:** {cliente_nome or 'Lead'} {f'({cliente_telefone})' if cliente_telefone else ''}
+        • **Interesse:** [Qual produto, plano ou serviço o cliente demonstrou interesse]
+        • **Demanda do Ticket:** [O que o cliente pediu especificamente: proposta formal, desconto, formas de pagamento, detalhes do contrato]
+        • **Histórico da Conversa:** [Resumo em 2 a 3 frases dos principais pontos conversados]
+        • **Ação Recomendada:** [Instrução prática e direta para o operador fechar o negócio ou enviar a proposta]
         """
 
         resposta = client.models.generate_content(
@@ -76,11 +76,11 @@ def gerar_resumo_ia_ticket(
 
     # Fallback estruturado caso ocorra erro na API do Gemini
     return (
-        f"👤 **Cliente:** {cliente_nome or 'Lead'} {f'({cliente_telefone})' if cliente_telefone else ''}\n"
-        f"🎯 **Interesse:** Demanda identificada via atendimento autônomo\n"
-        f"💡 **Demanda do Ticket:** {'Solicitação de elaboração de proposta comercial' if tipo == 'proposta' else 'Negociação de contrato e condições comerciais'}\n"
-        f"📋 **Histórico da Conversa:** Cliente solicitou atendimento humano após dialogar com o bot no Telegram. Última mensagem: \"{ultima_mensagem}\".\n"
-        f"⚡ **Ação Recomendada:** Entrar em contato com o cliente via Telegram ou WhatsApp para apresentar proposta personalizada e avançar na negociação."
+        f"• **Cliente:** {cliente_nome or 'Lead'} {f'({cliente_telefone})' if cliente_telefone else ''}\n"
+        f"• **Interesse:** Demanda identificada via atendimento autônomo\n"
+        f"• **Demanda do Ticket:** {'Solicitação de elaboração de proposta comercial' if tipo == 'proposta' else 'Negociação de contrato e condições comerciais'}\n"
+        f"• **Histórico da Conversa:** Cliente solicitou atendimento humano após dialogar com o bot no Telegram. Última mensagem: \"{ultima_mensagem}\".\n"
+        f"• **Ação Recomendada:** Entrar em contato com o cliente via Telegram ou WhatsApp para apresentar proposta personalizada e avançar na negociação."
     )
 
 

@@ -396,7 +396,7 @@
         </div>
         <a href="/admin" id="nav-item-admin" class="nav-item" style="color:#a78bfa; display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-          Gestão de Ambientes ⚙️
+          Gestão de Ambientes
         </a>
       </div>
     </div>
@@ -535,16 +535,16 @@
       <div class="chat-sidebar">
         <div class="chat-search" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <input class="search-input" placeholder="Buscar no Telegram..." oninput="filtrarConversasTelegram(this.value)" />
-          <button class="btn-icon" style="background:rgba(255,255,255,0.05); color:white;" onclick="recarregarConversasTelegram()" title="Atualizar conversas">🔄</button>
+          <button class="btn-icon" style="background:rgba(255,255,255,0.05); color:white;" onclick="recarregarConversasTelegram()" title="Atualizar conversas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
         </div>
         <!-- Abas Ativas vs Arquivadas -->
         <div class="chat-sidebar-tabs" style="display:flex; gap:6px; padding:6px 12px 10px 12px; border-bottom:1px solid rgba(255,255,255,0.06);">
           <button id="tab-conversas-ativas" class="chat-tab-btn" onclick="trocarAbaConversasTelegram('ativas')" style="flex:1; padding:6px 10px; font-size:11px; font-weight:600; border-radius:6px; border:1px solid rgba(56,189,248,0.3); background:rgba(56,189,248,0.12); color:#38bdf8; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
-            <span>💬 Ativas</span>
+            <span>Ativas</span>
             <span id="badge-count-ativas" style="background:rgba(56,189,248,0.25); color:#38bdf8; font-size:10px; padding:1px 6px; border-radius:10px;">0</span>
           </button>
           <button id="tab-conversas-arquivadas" class="chat-tab-btn" onclick="trocarAbaConversasTelegram('arquivadas')" style="flex:1; padding:6px 10px; font-size:11px; font-weight:600; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
-            <span>📁 Arquivadas</span>
+            <span>Arquivadas</span>
             <span id="badge-count-arquivadas" style="background:rgba(255,255,255,0.08); color:var(--text-muted); font-size:10px; padding:1px 6px; border-radius:10px;">0</span>
           </button>
         </div>
@@ -557,27 +557,27 @@
 
       <div class="chat-window">
         <div class="chat-header">
-          <div class="ch-avatar" id="chat-header-avatar" style="background:#229ED9; color:white;">✈️</div>
+          <div class="ch-avatar" id="chat-header-avatar" style="background:#229ED9; color:white;">TG</div>
           <div class="ch-info">
             <div class="ch-name" id="chat-header-name">Selecione uma conversa</div>
             <div class="ch-status" id="chat-header-status">Canal: Telegram · Modo: <span id="chat-header-modo" style="font-weight:600; color:#38bdf8;">Assistente IA</span></div>
           </div>
           <div class="chat-actions" style="display:flex; align-items:center; gap:8px;">
             <button id="btn-toggle-atendimento" class="btn-secondary" style="padding:5px 12px; font-size:11px; display:none;" onclick="alternarModoAtendimento()">
-              🧑 Assumir Atendimento
+              Assumir Atendimento
             </button>
             <button id="btn-toggle-arquivar" class="btn-secondary" style="padding:5px 12px; font-size:11px; display:none;" onclick="alternarArquivamentoConversaAtiva()">
-              📁 Arquivar Conversa
+              Arquivar Conversa
             </button>
             <button class="btn-secondary" style="padding:5px 12px; font-size:11px;" onclick="recarregarConversasTelegram()">
-              🔄 Atualizar
+              Atualizar
             </button>
           </div>
         </div>
 
         <div class="chat-messages" id="lead-chat-messages">
           <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; line-height:1.6;">
-            <div style="font-size:36px; margin-bottom:12px;">✈️</div>
+            <div style="font-size:36px; margin-bottom:12px;">TG</div>
             <strong>Histórico de Conversas do Telegram</strong><br>
             Selecione um contato à esquerda para carregar as mensagens trocadas com o bot em tempo real.
           </div>
@@ -623,14 +623,14 @@
       <div class="dash-header" style="flex-wrap:wrap; gap:16px; margin-bottom:14px;">
         <div>
           <div class="page-title" style="display:flex; align-items:center; gap:10px;">
-            <span>🎫 Fila de Tickets & Tarefas IA</span>
+            <span>Fila de Tickets & Tarefas IA</span>
             <span id="header-badge-tickets" class="contract-status-badge cs-pending" style="font-size:11px;">0 Pendentes</span>
           </div>
           <div class="page-sub">Chamados gerados automaticamente pela IA para elaboração de propostas comerciais, negociação de contratos e transbordo humano</div>
         </div>
         <div style="display:flex; gap:10px; align-items:center;">
           <button class="btn-secondary" onclick="carregarTicketsIA()" style="font-size:12px; display:flex; align-items:center; gap:6px;">
-            <span>🔄</span> Atualizar Fila
+            Atualizar Fila
           </button>
         </div>
       </div>
@@ -671,9 +671,9 @@
 
           <select class="cf-input" id="filtro-tipo-ticket" onchange="carregarTicketsIA()" style="max-width:200px; padding:6px 12px; font-size:12px;">
             <option value="todos">Todos os Tipos</option>
-            <option value="proposta">📄 Propostas Comerciais</option>
-            <option value="negociacao">🤝 Negociações de Contrato</option>
-            <option value="suporte">🛠️ Transbordo / Suporte</option>
+            <option value="proposta">Propostas Comerciais</option>
+            <option value="negociacao">Negociações de Contrato</option>
+            <option value="suporte">Transbordo / Suporte</option>
           </select>
         </div>
 
@@ -700,7 +700,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Cliente
           </button>
-          <button class="btn-secondary" onclick="carregarClientesCRM()" style="font-size:12px;">🔄 Atualizar</button>
+          <button class="btn-secondary" onclick="carregarClientesCRM()" style="font-size:12px;">Atualizar</button>
         </div>
       </div>
 
@@ -742,7 +742,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Produto
           </button>
-          <button class="btn-secondary" onclick="carregarProdutosCRM()" style="font-size:12px;">🔄 Atualizar</button>
+          <button class="btn-secondary" onclick="carregarProdutosCRM()" style="font-size:12px;">Atualizar</button>
         </div>
       </div>
 
@@ -785,7 +785,7 @@
           <button class="btn-green" onclick="abrirModalNovoNegocio()" style="font-size:12px;">
             + Novo Negócio
           </button>
-          <button class="btn-secondary" onclick="carregarPipelinesKanban()" style="font-size:12px;">🔄 Atualizar Funil</button>
+          <button class="btn-secondary" onclick="carregarPipelinesKanban()" style="font-size:12px;">Atualizar Funil</button>
         </div>
       </div>
 
@@ -808,7 +808,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Nova Proposta
           </button>
-          <button class="btn-secondary" onclick="carregarPropostasCRM()" style="font-size:12px;">🔄 Atualizar</button>
+          <button class="btn-secondary" onclick="carregarPropostasCRM()" style="font-size:12px;">Atualizar</button>
         </div>
       </div>
 
@@ -871,7 +871,7 @@
           <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
               <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
-                <span style="font-size:16px;">👤</span> 1. Dados do Cliente / Destinatário
+                1. Dados do Cliente / Destinatário
               </div>
               <span style="font-size:11px; color:var(--text-muted);">Selecione existente ou digite novo</span>
             </div>
@@ -905,7 +905,7 @@
           <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
               <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
-                <span style="font-size:16px;">📦</span> 2. Produto, Solução & Investimento
+                2. Produto, Solução & Investimento
               </div>
               <span style="font-size:11px; color:var(--text-muted);">Defina o item e o valor</span>
             </div>
@@ -939,7 +939,7 @@
           <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:10px;">
               <div style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:8px;">
-                <span style="font-size:16px;">📝</span> 3. Condições Comerciais & Escopo
+                3. Condições Comerciais & Escopo
               </div>
             </div>
 
@@ -948,11 +948,11 @@
               
               <!-- Opções Clicáveis -->
               <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;" id="tela-prop-payment-options">
-                <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoTela('pix')">⚡ PIX</button>
-                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('transferencia')">🏦 Transferência</button>
-                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('debito')">💳 Débito</button>
-                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_vista')">💳 Crédito à Vista</button>
-                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_parcelado')">📅 Crédito Parcelado</button>
+                <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoTela('pix')">PIX</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('transferencia')">Transferência</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('debito')">Débito</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_vista')">Crédito à Vista</button>
+                <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoTela('credito_parcelado')">Crédito Parcelado</button>
               </div>
 
               <!-- Campo Dinâmico de Parcelas (exibido apenas se Crédito Parcelado) -->
@@ -990,7 +990,7 @@
             <div style="display:flex; align-items:center; gap:10px; margin-top:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
               <input type="checkbox" id="tela-prop-indexar-rag-chk" checked style="cursor:pointer; width:16px; height:16px;" />
               <label for="tela-prop-indexar-rag-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
-                🧠 Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
+                Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
               </label>
             </div>
           </div>
@@ -999,9 +999,9 @@
           <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0;">
             <button class="btn-secondary" onclick="switchTab('propostas')">← Cancelar / Voltar</button>
             <div style="display:flex; gap:10px;">
-              <button class="btn-secondary" onclick="previsualizarPropostaTela()">👁 Pré-visualizar</button>
+              <button class="btn-secondary" onclick="previsualizarPropostaTela()">Pré-visualizar</button>
               <button class="btn-green" onclick="salvarEGerarPropostaTela()" style="font-weight:600; padding:10px 20px;">
-                📄 Gerar Proposta & Criar Documento
+                Gerar Proposta & Criar Documento
               </button>
             </div>
           </div>
@@ -1012,16 +1012,16 @@
         <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-sm); position:sticky; top:20px; display:flex; flex-direction:column; height:calc(100vh - 120px); min-height:560px;">
           <div style="padding:14px 18px; border-bottom:1px solid var(--border); background:var(--surface-hover); display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <div style="font-weight:700; font-size:13px; color:var(--text);">📄 Prévia do Documento Oficial</div>
+              <div style="font-weight:700; font-size:13px; color:var(--text);">Prévia do Documento Oficial</div>
               <div style="font-size:11px; color:var(--text-muted);">Visualização em tempo real do documento timbrado</div>
             </div>
-            <button class="btn-secondary" onclick="previsualizarPropostaTela()" style="padding:4px 10px; font-size:11px;">🔄 Atualizar Prévia</button>
+            <button class="btn-secondary" onclick="previsualizarPropostaTela()" style="padding:4px 10px; font-size:11px;">Atualizar Prévia</button>
           </div>
           <div style="flex:1; background:#ffffff; position:relative;">
             <iframe id="tela-prop-preview-iframe" style="width:100%; height:100%; border:none;" srcdoc="<div style='display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#94a3b8; font-family:sans-serif; text-align:center; padding:20px;'><svg width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#cbd5e1' stroke-width='1.5' style='margin-bottom:12px;'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14,2 14,8 20,8'/></svg><p style='font-size:14px; margin:0 0 6px 0; color:#475569; font-weight:600;'>Pré-visualização do Documento</p><p style='font-size:12px; margin:0;'>Preencha os campos ao lado e clique em <strong>Pré-visualizar Documento</strong> para conferir o layout oficial timbrado.</p></div>"></iframe>
           </div>
           <div style="padding:12px 18px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); background:var(--surface);">
-            ✦ O documento timbrado gerado é salvo em PDF/HTML, indexado para busca na IA (RAG) e fica acessível na aba <strong>Base de Conhecimento</strong>.
+            O documento timbrado gerado é salvo em PDF/HTML, indexado para busca na IA (RAG) e fica acessível na aba <strong>Base de Conhecimento</strong>.
           </div>
         </div>
 
@@ -1040,7 +1040,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Importar Contrato
           </button>
-          <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">🔄 Atualizar Lista</button>
+          <button class="btn-secondary" onclick="carregarContratosCRM()" style="font-size:12px;">Atualizar Lista</button>
         </div>
       </div>
       <div class="contract-content">
@@ -1064,7 +1064,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Novo Pipeline
           </button>
-          <button class="btn-secondary" onclick="carregarPipelinesAdmin()" style="font-size:12px;">🔄 Atualizar</button>
+          <button class="btn-secondary" onclick="carregarPipelinesAdmin()" style="font-size:12px;">Atualizar</button>
         </div>
       </div>
 
@@ -1091,7 +1091,7 @@
 
       <div class="chat-window">
         <div class="chat-header">
-          <div class="ch-avatar" style="background:#534AB7; color:white;">✦</div>
+          <div class="ch-avatar" style="background:#534AB7; color:white;">IA</div>
           <div class="ch-info">
             <div class="ch-name">Copiloto IA Interno</div>
             <div class="ch-status">Assistente Híbrido · Base de Conhecimento + Conhecimento Geral</div>
@@ -1137,8 +1137,8 @@
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
             <div style="font-size:12px; color:var(--text); font-weight:600;">Nível de Acesso (RBAC) do Documento:</div>
             <select id="upload-nivel-acesso" class="login-input" style="padding:6px 12px; font-size:12px; max-width:240px; background:var(--bg); color:var(--text); border:1px solid var(--border);">
-              <option value="publico">🌐 Público (Telegram e Portal)</option>
-              <option value="interno">🔒 Interno (Apenas Colaboradores no Portal)</option>
+              <option value="publico">Público (Telegram e Portal)</option>
+              <option value="interno">Interno (Apenas Colaboradores no Portal)</option>
             </select>
           </div>
 
@@ -1180,7 +1180,7 @@
           <div class="page-sub">Assertividade semântica do RAG, ranking de documentos e histórico de perguntas</div>
         </div>
         <button class="btn-secondary" onclick="carregarAnalytics()" style="font-size:12px;">
-          🔄 Atualizar Métricas
+          Atualizar Métricas
         </button>
       </div>
 
@@ -1223,14 +1223,14 @@
       <!-- TABELAS: RANKING E HISTORICO -->
       <div class="dash-body" style="grid-template-columns: 1fr 1.3fr; gap:20px;">
         <div class="metric-card" style="padding:20px;">
-          <div class="section-title" style="margin-bottom:14px;">📚 Documentos Mais Acionados pelo RAG</div>
+          <div class="section-title" style="margin-bottom:14px;">Documentos Mais Acionados pelo RAG</div>
           <div id="analytics-ranking-container">
             <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando ranking...</div>
           </div>
         </div>
 
         <div class="metric-card" style="padding:20px;">
-          <div class="section-title" style="margin-bottom:14px;">💬 Histórico Recente de Perguntas</div>
+          <div class="section-title" style="margin-bottom:14px;">Histórico Recente de Perguntas</div>
           <div id="analytics-historico-container">
             <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando histórico...</div>
           </div>
@@ -1246,7 +1246,7 @@
           <div class="page-sub">Tracing de execução LangChain · Telemetria de custos e latência · RAG Triad Online Evaluation (LLM-as-a-Judge)</div>
         </div>
         <button class="btn-secondary" onclick="carregarObservabilidadeEEvaluation()" style="font-size:12px;">
-          🔄 Atualizar Telemetria
+          Atualizar Telemetria
         </button>
       </div>
 
@@ -1258,8 +1258,8 @@
         </span>
         <div style="display:flex; gap:8px;">
           <button class="btn-secondary btn-filtro-obs active" id="btn-filtro-obs-todos" onclick="filtrarCanalObservabilidade(null, this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">Todos os Agentes</button>
-          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-telegram" onclick="filtrarCanalObservabilidade('telegram', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">🤖 Assistente Telegram</button>
-          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-portal" onclick="filtrarCanalObservabilidade('portal', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">✦ Copiloto Interno (Portal)</button>
+          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-telegram" onclick="filtrarCanalObservabilidade('telegram', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">Assistente Telegram</button>
+          <button class="btn-secondary btn-filtro-obs" id="btn-filtro-obs-portal" onclick="filtrarCanalObservabilidade('portal', this)" style="font-size:11px; padding:5px 12px; border-radius:6px;">Copiloto Interno (Portal)</button>
         </div>
       </div>
 
@@ -1305,7 +1305,7 @@
       <!-- PAINEL RAG TRIAD & DISTRIBUIÇÃO MULTI-VENDOR -->
       <div class="dash-body" style="grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
         <div class="metric-card" style="padding:20px;">
-          <div class="section-title" style="margin-bottom:14px;">🎯 Continuous Evaluation — RAG Triad (LLM-as-a-Judge)</div>
+          <div class="section-title" style="margin-bottom:14px;">Continuous Evaluation — RAG Triad (LLM-as-a-Judge)</div>
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">
             Avaliação contínua automática em tempo real para cada interação com o cliente, garantindo integridade e conformidade sem aumentar a latência percebida:
           </div>
@@ -1344,7 +1344,7 @@
         </div>
 
         <div class="metric-card" style="padding:20px;">
-          <div class="section-title" style="margin-bottom:14px;">🌐 Distribuição Multi-Vendor & Modelos</div>
+          <div class="section-title" style="margin-bottom:14px;">Distribuição Multi-Vendor & Modelos</div>
           <div id="obs-vendors-container">
             <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando dados dos provedores...</div>
           </div>
@@ -1353,7 +1353,7 @@
 
       <!-- AUDITORIA DETALHADA DAS ÚLTIMAS AVALIAÇÕES -->
       <div class="metric-card" style="padding:20px; margin-top:20px;">
-        <div class="section-title" style="margin-bottom:14px;">📋 Auditoria de Avaliações Online (Últimas Interações)</div>
+        <div class="section-title" style="margin-bottom:14px;">Auditoria de Avaliações Online (Últimas Interações)</div>
         <div id="obs-tabela-avaliacoes">
           <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando auditoria...</div>
         </div>
@@ -1417,18 +1417,18 @@
             <div class="config-field" style="margin-bottom:10px;">
               <div class="cf-label">Fuso Horário Padrão</div>
               <select class="login-input" id="config-fuso-horario" style="background:var(--bg); color:var(--text); border:1px solid var(--border); padding:8px 12px; width:100%;">
-                <option value="America/Sao_Paulo">🇧🇷 Horário de Brasília (UTC-03:00 - Padrão Nacional)</option>
-                <option value="America/Manaus">🇧🇷 Horário de Manaus / AM (UTC-04:00)</option>
-                <option value="America/Cuiaba">🇧🇷 Horário de Cuiabá / MT / MS (UTC-04:00)</option>
-                <option value="America/Rio_Branco">🇧🇷 Horário do Acre (UTC-05:00)</option>
-                <option value="America/Noronha">🇧🇷 Fernando de Noronha (UTC-02:00)</option>
-                <option value="America/Fortaleza">🇧🇷 Nordeste / Fortaleza (UTC-03:00)</option>
-                <option value="America/Belem">🇧🇷 Norte / Belém (UTC-03:00)</option>
-                <option value="UTC">🌐 Tempo Universal Coordenado (UTC+00:00)</option>
-                <option value="America/New_York">🇺🇸 Nova York / Leste EUA (UTC-05:00)</option>
-                <option value="Europe/Lisbon">🇵🇹 Lisboa / Portugal (UTC+00:00)</option>
-                <option value="Europe/London">🇬🇧 Londres / Reino Unido (UTC+00:00)</option>
-                <option value="auto">💻 Automático (Detectar fuso local do navegador)</option>
+                <option value="America/Sao_Paulo">Horário de Brasília (UTC-03:00 - Padrão Nacional)</option>
+                <option value="America/Manaus">Horário de Manaus / AM (UTC-04:00)</option>
+                <option value="America/Cuiaba">Horário de Cuiabá / MT / MS (UTC-04:00)</option>
+                <option value="America/Rio_Branco">Horário do Acre (UTC-05:00)</option>
+                <option value="America/Noronha">Fernando de Noronha (UTC-02:00)</option>
+                <option value="America/Fortaleza">Nordeste / Fortaleza (UTC-03:00)</option>
+                <option value="America/Belem">Norte / Belém (UTC-03:00)</option>
+                <option value="UTC">Tempo Universal Coordenado (UTC+00:00)</option>
+                <option value="America/New_York">Nova York / Leste EUA (UTC-05:00)</option>
+                <option value="Europe/Lisbon">Lisboa / Portugal (UTC+00:00)</option>
+                <option value="Europe/London">Londres / Reino Unido (UTC+00:00)</option>
+                <option value="auto">Automático (Detectar fuso local do navegador)</option>
               </select>
             </div>
             <div id="fuso-horario-status" style="font-size:11px; margin-top:4px; margin-bottom:12px; color:var(--text-muted);">
@@ -1467,7 +1467,7 @@
 
             <!-- BANNER DE ALERTA QUANDO NÃO CONFIGURADO (PARTE 28) -->
             <div id="telegram-bot-aviso-desconectado" style="display:none; margin-bottom:14px; padding:12px 14px; border-radius:8px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; font-size:12px; line-height:1.5;">
-              ⚠️ <strong>Bot do Telegram não configurado</strong> — cadastre o token do seu bot abaixo para habilitar o atendimento via Telegram. Sem essa configuração, o canal não funciona.
+              <strong>Bot do Telegram não configurado</strong> — cadastre o token do seu bot abaixo para habilitar o atendimento via Telegram. Sem essa configuração, o canal não funciona.
             </div>
 
             <div class="config-field" style="margin-bottom:10px;">
@@ -1491,7 +1491,7 @@
 
             <div style="display:flex; gap:8px;">
               <button class="btn-green" style="flex:1; justify-content:center; padding:10px;" onclick="salvarConfiguracaoBotTelegram()">
-                ⚡ Salvar & Conectar Bot do Telegram
+                Salvar & Conectar Bot do Telegram
               </button>
               <button class="btn-secondary" id="btn-remover-bot-telegram" style="padding:10px 14px; font-size:12px; display:none;" onclick="removerBotTelegramEmpresa()">
                 Desconectar
@@ -1499,7 +1499,7 @@
             </div>
 
             <div style="margin-top:12px; padding:10px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid var(--border); font-size:11px; color:var(--text-muted); line-height:1.4;">
-              <strong style="color:var(--text);">💡 Como criar o bot da sua empresa:</strong><br>
+              <strong style="color:var(--text);">Como criar o bot da sua empresa:</strong><br>
               1. No Telegram, abra o <strong>@BotFather</strong> e envie <code>/newbot</code>.<br>
               2. Escolha o nome público e o username (terminado em <em>bot</em>).<br>
               3. Copie o Token HTTP API gerado, cole no campo acima e clique em <strong>Salvar & Conectar</strong>.<br>
@@ -1724,7 +1724,7 @@ function mostrarToast(mensagem, tipo = 'success') {
   }
   const toast = document.createElement('div');
   toast.className = `toast ${tipo}`;
-  toast.innerHTML = `<span>${tipo === 'success' ? '✓' : '⚠️'}</span> <span>${escapeHtml(mensagem)}</span>`;
+  toast.innerHTML = `<span>${tipo === 'success' ? '●' : '●'}</span> <span>${escapeHtml(mensagem)}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.remove();
@@ -1740,6 +1740,9 @@ function escapeHtml(texto) {
 
 function formatarMarkdownParaHtml(texto) {
   if (!texto) return '';
+  let sanitizado = texto
+    .replace(/[👤🎯💡📋⚡✦]/g, '')
+    .replace(/^\s*\*\*RESUMO INTELIGENTE[^\n]*\*\*/gim, '**Resumo da Demanda:**');
   let html = String(texto)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -2079,7 +2082,7 @@ function limparPainelChatVazio() {
   const headerName = document.getElementById('chat-header-name');
   if (headerName) headerName.textContent = 'Selecione uma conversa';
   const headerAvatar = document.getElementById('chat-header-avatar');
-  if (headerAvatar) headerAvatar.textContent = '✈️';
+  if (headerAvatar) headerAvatar.textContent = 'TG';
   const modoEl = document.getElementById('chat-header-modo');
   if (modoEl) {
     modoEl.textContent = 'Assistente IA';
@@ -2094,7 +2097,7 @@ function limparPainelChatVazio() {
   if (container) {
     container.innerHTML = `
       <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; line-height:1.6;">
-        <div style="font-size:36px; margin-bottom:12px;">✈️</div>
+        <div style="font-size:36px; margin-bottom:12px;">TG</div>
         <strong>Histórico de Conversas do Telegram</strong><br>
         Selecione um contato à esquerda para carregar as mensagens trocadas com o bot em tempo real.
       </div>
@@ -2131,7 +2134,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
     if (filtroAbaConversas === 'arquivadas') {
       container.innerHTML = `
         <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
-          <div style="font-size:28px; margin-bottom:8px;">📁</div>
+          <div style="font-size:24px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">--</div>
           <strong>Nenhuma conversa arquivada</strong><br>
           Conversas arquivadas não aparecem na sua lista ativa, mas ficam salvas aqui para consulta a qualquer momento.
         </div>
@@ -2139,7 +2142,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
     } else {
       container.innerHTML = `
         <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
-          <div style="font-size:28px; margin-bottom:8px;">✈️</div>
+          <div style="font-size:28px; margin-bottom:8px;">TG</div>
           <strong>Nenhum lead no Telegram</strong><br>
           Quando clientes interagirem com seu Bot, as conversas aparecerão aqui em tempo real.
         </div>
@@ -2166,12 +2169,12 @@ function renderizarListaConversasTelegram(filtradas = null) {
               <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
               <button 
                 onclick="event.stopPropagation(); alternarArquivamentoConversa('${c.chat_id}', ${!isArq})" 
-                title="${isArq ? 'Desarquivar conversa (retornar para ativas)' : 'Arquivar conversa'}" 
-                style="background:none; border:none; cursor:pointer; font-size:12px; opacity:0.6; padding:2px 4px; border-radius:4px; transition:all 0.15s;" 
-                onmouseover="this.style.opacity='1'; this.style.transform='scale(1.2)';" 
-                onmouseout="this.style.opacity='0.6'; this.style.transform='scale(1)';"
+                title="${isArq ? 'Desarquivar conversa' : 'Arquivar conversa'}" 
+                style="background:rgba(255,255,255,0.06); border:1px solid var(--border); cursor:pointer; font-size:10px; color:var(--text-muted); padding:1px 6px; border-radius:4px; transition:all 0.15s;" 
+                onmouseover="this.style.color='var(--text)'; this.style.borderColor='var(--text-muted)';" 
+                onmouseout="this.style.color='var(--text-muted)'; this.style.borderColor='var(--border)';"
               >
-                ${isArq ? '📤' : '📁'}
+                ${isArq ? 'Desarquivar' : 'Arquivar'}
               </button>
             </div>
           </div>
@@ -2180,7 +2183,7 @@ function renderizarListaConversasTelegram(filtradas = null) {
           </div>
           <div style="margin-top:4px; display:flex; align-items:center; gap:6px;">
             <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 6px;">
-              ${isHuman ? '🧑 ' + (c.nome_atendente || 'Humano') : '🤖 IA Autônoma'}
+              ${isHuman ? (c.nome_atendente || 'Atendente Humano') : 'IA Autônoma'}
             </span>
             ${isArq ? `<span style="font-size:9px; background:rgba(245,158,11,0.15); color:#f59e0b; padding:2px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3);">Arquivada</span>` : ''}
           </div>
@@ -2224,7 +2227,7 @@ function renderizarDashboardConversasTelegram() {
               <div class="ci-msg" style="color:var(--text-muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:6px;">${escapeHtml(limparMarkdown(c.ultima_mensagem)) || 'Sem mensagens'}</div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 7px;">
-                  ${isHuman ? '🧑 Atendente Humano' : '🤖 Assistente IA'}
+                  ${isHuman ? 'Atendente Humano' : 'Assistente IA'}
                 </span>
                 <span style="font-size:10px; color:var(--text-muted);">Chat ID: ${c.chat_id}</span>
               </div>
@@ -2262,13 +2265,13 @@ function atualizarUIArquivamento(isArquivada) {
   if (btn) {
     btn.style.display = 'inline-flex';
     if (isArquivada) {
-      btn.textContent = '📤 Desarquivar';
+      btn.textContent = 'Desarquivar';
       btn.title = 'Mover de volta para conversas ativas';
       btn.style.color = '#f59e0b';
       btn.style.borderColor = 'rgba(245,158,11,0.4)';
       btn.style.background = 'rgba(245,158,11,0.1)';
     } else {
-      btn.textContent = '📁 Arquivar';
+      btn.textContent = 'Arquivar';
       btn.title = 'Ocultar da lista de ativas e mover para arquivadas';
       btn.style.color = 'var(--text)';
       btn.style.borderColor = 'var(--border)';
@@ -2277,7 +2280,7 @@ function atualizarUIArquivamento(isArquivada) {
   }
 
   if (lpArquivo) {
-    lpArquivo.textContent = isArquivada ? '📁 Arquivada' : '💬 Ativa';
+    lpArquivo.textContent = isArquivada ? 'Arquivada' : 'Ativa';
     lpArquivo.style.color = isArquivada ? '#f59e0b' : '#38bdf8';
   }
 }
@@ -2498,7 +2501,7 @@ function atualizarUIAssumirDevolver(nomeAtendente) {
       btn.style.background = '#854F0B';
       btn.style.color = '#fef3c7';
       btn.style.border = '1px solid #b45309';
-      btn.textContent = '🤖 Devolver para IA';
+      btn.textContent = 'Devolver para IA';
     }
     if (modoEl) {
       modoEl.textContent = 'Atendimento Humano (' + (nomeAtendente || (usuarioAtual ? usuarioAtual.nome : 'Operador')) + ')';
@@ -2511,7 +2514,7 @@ function atualizarUIAssumirDevolver(nomeAtendente) {
       btn.style.background = 'var(--surface)';
       btn.style.color = 'var(--text)';
       btn.style.border = '1px solid var(--border)';
-      btn.textContent = '🧑 Assumir Atendimento';
+      btn.textContent = 'Assumir Atendimento';
     }
     if (modoEl) {
       modoEl.textContent = 'Assistente IA (Autônomo)';
@@ -2978,7 +2981,7 @@ function renderizarTabelaProdutos(produtos) {
       <td style="font-weight:600; color:var(--text);">${escapeHtml(p.nome)}</td>
       <td>
         <span style="font-size:11px; padding:3px 8px; border-radius:6px; background:rgba(34,158,217,0.12); color:#229ed9; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
-          📊 ${escapeHtml(p.pipeline_nome || 'Funil Padrão')}
+          ${escapeHtml(p.pipeline_nome || 'Funil Padrão')}
         </span>
       </td>
       <td style="color:var(--text-muted); font-size:12px; max-width:280px;">${escapeHtml(p.descricao || 'Sem descrição')}</td>
@@ -3151,7 +3154,7 @@ async function carregarPipelinesKanban() {
 
     select.innerHTML = pipelinesCache.map(p => `
       <option value="${p.id}" ${p.id === pipelineAtivoId || (!pipelineAtivoId && p.padrao) ? 'selected' : ''}>
-        ${escapeHtml(p.nome)} ${p.padrao ? '★ (Padrão)' : ''} ${p.produto_nome ? `[${escapeHtml(p.produto_nome)}]` : ''}
+        ${escapeHtml(p.nome)} ${p.padrao ? '(Padrão)' : ''} ${p.produto_nome ? `[${escapeHtml(p.produto_nome)}]` : ''}
       </option>
     `).join('');
 
@@ -3225,7 +3228,7 @@ function renderizarKanbanDinamico(pipeline, negocios) {
                 <span style="font-size:10px; color:var(--text-muted);">#${n.id}</span>
               </div>
               <div style="font-size:11px; color:var(--text-muted); margin:4px 0;">
-                📦 ${escapeHtml(n.produto_nome || 'Geral')}
+                ${escapeHtml(n.produto_nome || 'Geral')}
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                 <div style="font-weight:700; color:#34d399; font-size:13px;">
@@ -3547,7 +3550,7 @@ async function carregarPipelinesAdmin() {
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-weight:700; font-size:16px; color:var(--text); font-family:'Syne',sans-serif;">${escapeHtml(p.nome)}</span>
-              ${p.padrao ? '<span class="badge-status badge-default">★ Padrão</span>' : ''}
+              ${p.padrao ? '<span class="badge-status badge-default">Padrão</span>' : ''}
               <span class="badge-status" style="background:rgba(255,255,255,0.06); color:var(--text-muted);">
                 ${p.produto_nome ? `Produto: ${escapeHtml(p.produto_nome)}` : 'Funil Geral'}
               </span>
@@ -3846,13 +3849,13 @@ function renderizarTabelaPropostas(propostas) {
       <td style="color:var(--text-muted); font-size:11px;">${formatarData(p.criado_em)}</td>
       <td>
         <span class="badge-status ${p.status_envio === 'enviado' ? 'badge-active' : 'badge-default'}">
-          ${p.status_envio === 'enviado' ? '✓ Enviado' : 'Pendente'}
+          ${p.status_envio === 'enviado' ? 'Enviado' : 'Pendente'}
         </span>
       </td>
       <td>
         ${p.na_base_conhecimento ? `
           <span class="badge-status badge-active" style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25);" title="Documento indexado no RAG para respostas da IA">
-            ✓ Na Base IA
+            Na Base IA
           </span>
         ` : `
           <span class="badge-status badge-default" style="color:var(--text-muted); opacity:0.85;" title="Não indexada na base de conhecimento">
@@ -3862,19 +3865,19 @@ function renderizarTabelaPropostas(propostas) {
       </td>
       <td style="text-align:right;">
         <div style="display:inline-flex; gap:6px; justify-content:flex-end; align-items:center;">
-          <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">👁 Ver</button>
+          <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="visualizarHTMLProposta(${p.id})">Ver</button>
           ${isAdmin ? `
             ${p.na_base_conhecimento ? `
               <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171; border-color:rgba(248,113,113,0.3);" title="Remover da Base de Conhecimento (RAG)" onclick="alternarBaseConhecimentoProposta(${p.id}, false)">
-                🧠 Remover da Base
+                Remover da Base
               </button>
             ` : `
               <button class="btn-green" style="padding:4px 8px; font-size:11px;" title="Adicionar / Reindexar na Base de Conhecimento (RAG)" onclick="alternarBaseConhecimentoProposta(${p.id}, true)">
-                🧠 + Adicionar à Base
+                + Adicionar à Base
               </button>
             `}
-            <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarProposta(${p.id})">✏️ Editar</button>
-            <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="excluirPropostaCRM(${p.id})">🗑️ Excluir</button>
+            <button class="btn-secondary" style="padding:4px 8px; font-size:11px;" onclick="abrirModalEditarProposta(${p.id})">Editar</button>
+            <button class="btn-secondary" style="padding:4px 8px; font-size:11px; color:#f87171;" onclick="excluirPropostaCRM(${p.id})">Excluir</button>
           ` : ''}
         </div>
       </td>
@@ -4128,7 +4131,7 @@ async function previsualizarPropostaTela() {
 
   const iframe = document.getElementById('tela-prop-preview-iframe');
   if (iframe) {
-    iframe.srcdoc = "<div style='display:flex; align-items:center; justify-content:center; height:100%; color:#64748b; font-family:sans-serif;'><p>⏳ Gerando prévia do documento...</p></div>";
+    iframe.srcdoc = "<div style='display:flex; align-items:center; justify-content:center; height:100%; color:#64748b; font-family:sans-serif;'><p>Gerando prévia do documento...</p></div>";
   }
 
   const empresaId = obterEmpresaAtivaId();
@@ -4170,7 +4173,7 @@ async function salvarEGerarPropostaTela() {
   const btn = document.getElementById('btn-gerar-proposta-tela');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳ Gerando e indexando no RAG...</span>`;
+    btn.innerHTML = `<span>Gerando e indexando no RAG...</span>`;
   }
 
   const empresaId = obterEmpresaAtivaId();
@@ -4326,7 +4329,7 @@ async function salvarEGerarPropostaDireta() {
   } finally {
     if (btnGerar) {
       btnGerar.disabled = false;
-      btnGerar.textContent = '📄 Gerar Proposta & Criar Documento';
+      btnGerar.textContent = 'Gerar Proposta & Criar Documento';
     }
   }
 }
@@ -4407,10 +4410,10 @@ async function carregarContratosCRM() {
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="contract-val">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.valor_contrato || c.valor || 0)}</div>
           <span class="contract-status-badge ${c.status === 'assinado' ? 'cs-signed' : 'cs-draft'}">
-            ${c.status === 'assinado' ? '✓ Assinado' : 'Minuta'}
+            ${c.status === 'assinado' ? 'Assinado' : 'Minuta'}
           </span>
           <span class="contract-status-badge ${c.na_base_conhecimento ? 'cs-signed' : 'cs-draft'}" style="${c.na_base_conhecimento ? '' : 'color:var(--text-muted); opacity:0.8;'}" title="${c.na_base_conhecimento ? 'Indexado na base corporativa' : 'Não indexado na base'}">
-            ${c.na_base_conhecimento ? '🧠 Na Base IA' : 'Fora da Base'}
+            ${c.na_base_conhecimento ? 'Na Base IA' : 'Fora da Base'}
           </span>
           ${c.status !== 'assinado' ? `
             <button class="btn-green" style="font-size:11px; padding:4px 10px;" onclick="assinarContratoCRM(${c.id})">Assinar</button>
@@ -4418,11 +4421,11 @@ async function carregarContratosCRM() {
           ${isAdmin ? `
             ${c.na_base_conhecimento ? `
               <button class="btn-secondary" style="font-size:11px; padding:4px 10px; color:#f87171; border-color:rgba(248,113,113,0.3);" title="Remover este contrato da Base de Conhecimento" onclick="alternarBaseConhecimentoContrato(${c.id}, false)">
-                🧠 Remover da Base
+                Remover da Base
               </button>
             ` : `
               <button class="btn-green" style="font-size:11px; padding:4px 10px;" title="Adicionar / Reindexar contrato na Base de Conhecimento" onclick="alternarBaseConhecimentoContrato(${c.id}, true)">
-                🧠 + Adicionar à Base
+                + Adicionar à Base
               </button>
             `}
             <button class="btn-secondary" style="font-size:11px; padding:4px 10px; color:#f87171;" onclick="excluirContratoCRM(${c.id})">Excluir</button>
@@ -4679,7 +4682,7 @@ async function salvarImportacaoContrato() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '📤 Importar & Indexar';
+      btn.textContent = 'Importar & Indexar';
     }
   }
 }
@@ -4742,7 +4745,7 @@ async function carregarAnalytics() {
               ${ranking.map((item, idx) => `
                 <tr style="border-bottom:1px solid var(--border);">
                   <td style="padding:8px 4px; color:var(--text-muted);">${idx + 1}</td>
-                  <td style="padding:8px 4px; font-weight:500; color:var(--text);">📄 ${item.nome_arquivo}</td>
+                  <td style="padding:8px 4px; font-weight:500; color:var(--text);">${item.nome_arquivo}</td>
                   <td style="padding:8px 4px; text-align:center;"><span class="nav-badge" style="background:#229ED9;">${item.total_consultas}</span></td>
                   <td style="padding:8px 4px; text-align:right; color:#34d399; font-weight:600;">${(item.similaridade_media * 100).toFixed(1)}%</td>
                 </tr>
@@ -4776,17 +4779,17 @@ async function carregarAnalytics() {
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span style="font-weight:700; color:#38bdf8;">[${(item.canal || 'portal').toUpperCase()}]</span>
-                      <span style="font-size:11px; color:var(--text-muted);">👤 ${autor}</span>
+                      <span style="font-size:11px; color:var(--text-muted);">${autor}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
-                      <span style="font-size:11px; color:var(--text-muted);">🕒 ${dataHora}</span>
+                      <span style="font-size:11px; color:var(--text-muted);">${dataHora}</span>
                       <span class="contract-status-badge ${item.teve_contexto ? 'cs-signed' : 'cs-pending'}" style="font-size:10px;">
-                        ${item.teve_contexto ? '✓ Base de Conhecimento' : '✦ Conhecimento Geral'}
+                        ${item.teve_contexto ? 'Base de Conhecimento' : 'Conhecimento Geral'}
                       </span>
                     </div>
                   </div>
-                  <div style="color:var(--text); font-weight:600; margin-bottom:4px;">❓ ${item.pergunta}</div>
-                  <div style="color:var(--text-muted); font-size:11px; line-height:1.4;">💬 ${item.resposta.substring(0, 160)}${item.resposta.length > 160 ? '...' : ''}</div>
+                  <div style="color:var(--text); font-weight:600; margin-bottom:4px;">${item.pergunta}</div>
+                  <div style="color:var(--text-muted); font-size:11px; line-height:1.4;">${item.resposta.substring(0, 160)}${item.resposta.length > 160 ? '...' : ''}</div>
                 </div>
               `;
             }).join('')}
@@ -4870,11 +4873,11 @@ async function carregarConfiguracoesEmpresa() {
       if (data.gemini_api_key_mascarada) {
         geminiInput.placeholder = data.gemini_api_key_mascarada;
         geminiInput.value = '';
-        geminiStatus.innerHTML = `<span style="color:#34d399;">✓ Chave própria Google (${data.gemini_api_key_mascarada})</span>`;
+        geminiStatus.innerHTML = `<span style="color:#34d399;">Chave própria Google (${data.gemini_api_key_mascarada})</span>`;
       } else {
         geminiInput.placeholder = 'AIzaSy... (ou deixe vazio para padrão)';
         geminiInput.value = '';
-        geminiStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão da plataforma</span>`;
+        geminiStatus.innerHTML = `<span style="color:var(--text-muted);">Utilizando chave padrão da plataforma</span>`;
       }
     }
 
@@ -4882,11 +4885,11 @@ async function carregarConfiguracoesEmpresa() {
       if (data.openai_api_key_mascarada) {
         openaiInput.placeholder = data.openai_api_key_mascarada;
         openaiInput.value = '';
-        openaiStatus.innerHTML = `<span style="color:#38bdf8;">✓ Chave própria OpenAI (${data.openai_api_key_mascarada})</span>`;
+        openaiStatus.innerHTML = `<span style="color:#38bdf8;">Chave própria OpenAI (${data.openai_api_key_mascarada})</span>`;
       } else {
         openaiInput.placeholder = 'sk-... (ou deixe vazio para padrão)';
         openaiInput.value = '';
-        openaiStatus.innerHTML = `<span style="color:var(--text-muted);">✦ Utilizando chave padrão / fallback</span>`;
+        openaiStatus.innerHTML = `<span style="color:var(--text-muted);">Utilizando chave padrão / fallback</span>`;
       }
     }
 
@@ -4903,7 +4906,7 @@ async function carregarConfiguracoesEmpresa() {
       try {
         fusoNavegador = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
       } catch (e) {}
-      fusoStatus.innerHTML = `<span style="color:var(--text-muted);">💻 Fuso local detectado neste dispositivo: <strong style="color:var(--text);">${fusoNavegador}</strong></span>`;
+      fusoStatus.innerHTML = `<span style="color:var(--text-muted);">Fuso local detectado neste dispositivo: <strong style="color:var(--text);">${fusoNavegador}</strong></span>`;
     }
 
     // Configuração do Bot Dedicado do Telegram (PARTE 28)
@@ -4924,13 +4927,13 @@ async function carregarConfiguracoesEmpresa() {
         btnWebhook.style.opacity = '1';
         btnWebhook.style.cursor = 'pointer';
       }
-      if (userEl) userEl.innerHTML = `🤖 <strong>@${data.telegram_bot_username || 'Bot'}</strong> (Bot Próprio Conectado)`;
+      if (userEl) userEl.innerHTML = `<strong>@${data.telegram_bot_username || 'Bot'}</strong> (Bot Próprio Conectado)`;
       if (tokenInput) {
         tokenInput.placeholder = data.telegram_bot_token_mascarada || '••••••••';
         tokenInput.value = '';
       }
       if (tokenStatus) {
-        tokenStatus.innerHTML = `<span style="color:#34d399;">✓ Token conectado (${data.telegram_bot_token_mascarada})</span>`;
+        tokenStatus.innerHTML = `<span style="color:#34d399;">Token conectado (${data.telegram_bot_token_mascarada})</span>`;
       }
       if (btnRemover) btnRemover.style.display = 'inline-flex';
     } else {
@@ -4940,7 +4943,7 @@ async function carregarConfiguracoesEmpresa() {
         btnWebhook.style.opacity = '0.35';
         btnWebhook.style.cursor = 'not-allowed';
       }
-      if (userEl) userEl.innerHTML = `<span style="color:#f87171;">⚠️ Nenhum bot próprio configurado para esta empresa</span>`;
+      if (userEl) userEl.innerHTML = `<span style="color:#f87171;">Nenhum bot próprio configurado para esta empresa</span>`;
       if (tokenInput) {
         tokenInput.placeholder = 'Cole o token HTTP API gerado pelo @BotFather...';
         tokenInput.value = '';
@@ -5080,7 +5083,7 @@ async function salvarConfiguracaoBotTelegram() {
   const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
 
   if (tokenStatus) {
-    tokenStatus.innerHTML = `<span style="color:#60a5fa;">⏳ Validando e conectando bot com o Telegram...</span>`;
+    tokenStatus.innerHTML = `<span style="color:#60a5fa;">Validando e conectando bot com o Telegram...</span>`;
   }
 
   try {
@@ -5103,7 +5106,7 @@ async function salvarConfiguracaoBotTelegram() {
     carregarConfiguracoesEmpresa();
   } catch (err) {
     if (tokenStatus) {
-      tokenStatus.innerHTML = `<span style="color:#ef4444; font-weight:600;">⚠️ ${escapeHtml(err.message)}</span>`;
+      tokenStatus.innerHTML = `<span style="color:#ef4444; font-weight:600;">${escapeHtml(err.message)}</span>`;
     }
     alert('Aviso sobre o Bot do Telegram:\n\n' + err.message);
   }
@@ -5193,7 +5196,7 @@ async function carregarObservabilidadeEEvaluation() {
               <div style="display:flex; gap:8px; margin-bottom:12px;">
                 ${data.distribuicao_canais.map(c => `
                   <div style="flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:11px;">
-                    <span style="font-weight:700; color:${c.canal === 'telegram' ? '#38bdf8' : '#818cf8'};">${c.canal === 'telegram' ? '🤖 TELEGRAM' : '✦ PORTAL'}</span>
+                    <span style="font-weight:700; color:${c.canal === 'telegram' ? '#38bdf8' : '#818cf8'};">${c.canal === 'telegram' ? 'TELEGRAM' : 'PORTAL'}</span>
                     <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${c.total_chamadas} interações · $ ${c.custo_usd.toFixed(4)}</div>
                   </div>
                 `).join('')}
@@ -5278,11 +5281,11 @@ async function carregarObservabilidadeEEvaluation() {
                   ${data.ultimas_avaliacoes.map(ev => {
                     const dataFmt = ev.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(ev.criado_em) : new Date(ev.criado_em).toLocaleTimeString('pt-BR')) : '';
                     const badgeAluc = ev.possivel_alucinacao 
-                      ? '<span class="contract-status-badge cs-cancelled" style="font-size:10px;">⚠️ Alucinação</span>'
-                      : '<span class="contract-status-badge cs-signed" style="font-size:10px;">✓ Fiel ao Contexto</span>';
+                      ? '<span class="contract-status-badge cs-cancelled" style="font-size:10px;">Alucinação</span>'
+                      : '<span class="contract-status-badge cs-signed" style="font-size:10px;">Fiel ao Contexto</span>';
                     const badgeCanal = (ev.canal === 'telegram')
-                      ? '<span class="contract-status-badge" style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">🤖 Telegram</span>'
-                      : '<span class="contract-status-badge" style="font-size:10px; background:rgba(129,140,248,0.15); color:#818cf8; border:1px solid rgba(129,140,248,0.3);">✦ Portal</span>';
+                      ? '<span class="contract-status-badge" style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3);">Telegram</span>'
+                      : '<span class="contract-status-badge" style="font-size:10px; background:rgba(129,140,248,0.15); color:#818cf8; border:1px solid rgba(129,140,248,0.3);">Portal</span>';
                     return `
                       <tr style="border-bottom:1px solid var(--border);">
                         <td style="padding:10px; white-space:nowrap; color:var(--text-muted);">${dataFmt}</td>
@@ -5321,7 +5324,7 @@ async function registrarWebhookTelegram() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Falha ao registrar');
-    alert(`✓ Webhook configurado com sucesso!\nURL: ${data.url_registrada}`);
+    alert(`Webhook configurado com sucesso!\nURL: ${data.url_registrada}`);
     carregarStatusWebhook();
   } catch (e) {
     alert('Erro ao registrar webhook: ' + e.message);
@@ -5408,7 +5411,7 @@ async function dispararFollowupManual(forcar = false) {
     const res = await fetch(url, { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erro ao disparar follow-up');
-    alert(`✓ Rotina de Follow-up Executada!\nTotal de leads reengajados: ${data.total_enviados || 0}`);
+    alert(`Rotina de Follow-up Executada!\nTotal de leads reengajados: ${data.total_enviados || 0}`);
   } catch (e) {
     alert('Erro ao acionar follow-up: ' + e.message);
   }
@@ -5452,20 +5455,20 @@ function renderizarDocumentos(docs) {
 
     return `
       <div class="kb-row" style="cursor:pointer;" onclick="abrirModalVisualizarDoc(${d.id})">
-        <div class="kb-icon">📄</div>
+        <div class="kb-icon" style="font-size:12px; font-weight:700; color:var(--text-muted);">DOC</div>
         <div class="kb-info">
           <div class="kb-name">${d.nome_arquivo}</div>
-          <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt} · <span style="color:#38bdf8; text-decoration:underline;">👁️ Ver conteúdo</span></div>
+          <div class="kb-meta">${(d.tipo_arquivo || '').toUpperCase()} · ${dataFmt} · <span style="color:#38bdf8; text-decoration:underline;">Ver conteúdo</span></div>
         </div>
         <div class="kb-status" onclick="event.stopPropagation()">
           ${ehAdmin ? `
             <select class="kanban-select" style="padding:4px 8px; font-size:11px; border-radius:6px; cursor:pointer;" onchange="alterarNivelAcessoDocumento(${d.id}, this.value)">
-              <option value="publico" ${isPublic ? 'selected' : ''}>🌐 Público</option>
-              <option value="interno" ${!isPublic ? 'selected' : ''}>🔒 Interno</option>
+              <option value="publico" ${isPublic ? 'selected' : ''}>Público</option>
+              <option value="interno" ${!isPublic ? 'selected' : ''}>Interno</option>
             </select>
           ` : `
             <span class="contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}" style="font-size:11px;">
-              ${isPublic ? '🌐 Público' : '🔒 Interno'}
+              ${isPublic ? 'Público' : 'Interno'}
             </span>
           `}
         </div>
@@ -5518,7 +5521,7 @@ async function abrirModalVisualizarDoc(id) {
 
     const isPublic = (doc.nivel_acesso || 'publico').toLowerCase() === 'publico';
     nivelBadgeEl.className = `contract-status-badge ${isPublic ? 'cs-signed' : 'cs-pending'}`;
-    nivelBadgeEl.textContent = isPublic ? '🌐 Público' : '🔒 Interno';
+    nivelBadgeEl.textContent = isPublic ? 'Público' : 'Interno';
 
     dataEl.textContent = doc.data_upload ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(doc.data_upload) : doc.data_upload.substring(0, 10)) : '-';
 
@@ -5530,7 +5533,7 @@ async function abrirModalVisualizarDoc(id) {
     const ehAdmin = usuarioAtual && ['admin', 'master'].includes(usuarioAtual.perfil);
 
     if (ehAdmin) {
-      avisoRbacEl.innerHTML = '<span style="color:#10b981; font-weight:600;">✓ Permissão de Administrador ativa (Download liberado)</span>';
+      avisoRbacEl.innerHTML = '<span style="color:#10b981; font-weight:600;">Permissão de Administrador ativa (Download liberado)</span>';
       downloadContainer.innerHTML = `
         <button class="btn-green" onclick="baixarDocumentoDireto(${doc.id}, '${doc.nome_arquivo}')" style="display:flex; align-items:center; gap:6px;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -5538,7 +5541,7 @@ async function abrirModalVisualizarDoc(id) {
         </button>
       `;
     } else {
-      avisoRbacEl.innerHTML = '<span style="color:#f59e0b; font-weight:600;">🔒 Download restrito a administradores. Acesso somente leitura autorizado.</span>';
+      avisoRbacEl.innerHTML = '<span style="color:#f59e0b; font-weight:600;">Download restrito a administradores. Acesso somente leitura autorizado.</span>';
       downloadContainer.innerHTML = `
         <button class="btn-secondary" disabled style="opacity:0.5; cursor:not-allowed; display:flex; align-items:center; gap:6px;" title="Apenas administradores podem baixar arquivos da base de conhecimento">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -5637,13 +5640,13 @@ async function enviarUploadDocumento(arquivo) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erro ao enviar documento');
 
-    statusEl.textContent = `✓ ${arquivo.name} (${nivelEscolhido.toUpperCase()}) indexado com sucesso! (${data.total_chunks} chunks gerados)`;
+    statusEl.textContent = `${arquivo.name} (${nivelEscolhido.toUpperCase()}) indexado com sucesso! (${data.total_chunks} chunks gerados)`;
     setTimeout(() => {
       statusEl.textContent = 'Arraste arquivos aqui ou clique para selecionar';
     }, 4000);
     carregarDocumentos();
   } catch (err) {
-    statusEl.textContent = '⚠️ Falha no upload: ' + err.message;
+    statusEl.textContent = 'Falha no upload: ' + err.message;
   }
 }
 
@@ -5673,6 +5676,9 @@ let sessaoAtivaChatRAGId = null;
 
 function formatarMarkdownParaHtml(texto) {
   if (!texto) return '';
+  let sanitizado = texto
+    .replace(/[👤🎯💡📋⚡✦]/g, '')
+    .replace(/^\s*\*\*RESUMO INTELIGENTE[^\n]*\*\*/gim, '**Resumo da Demanda:**');
   let html = texto
     .replace(/```([\s\S]*?)```/g, '<pre style="background:var(--bg); padding:8px 12px; border-radius:6px; overflow-x:auto; font-size:12px; margin:6px 0; border:1px solid var(--border);"><code>$1</code></pre>')
     .replace(/`([^`]+)`/g, '<code style="background:var(--bg); padding:2px 4px; border-radius:4px; font-size:12px; border:1px solid var(--border);">$1</code>')
@@ -5696,7 +5702,7 @@ async function carregarHistoricoRecenteChatRAG() {
 
     let html = `
       <div class="rag-hist-item ${!conversaAtivaHistoricaId ? 'active' : ''}" onclick="limparChatRAG()" style="cursor:pointer; font-weight:700; display:flex; align-items:center; gap:6px;">
-        <span style="color:#10b981;">✦</span> Nova Consulta
+        Nova Consulta
       </div>
     `;
 
@@ -5712,10 +5718,10 @@ async function carregarHistoricoRecenteChatRAG() {
         return `
           <div class="rag-hist-item ${isActive ? 'active' : ''}" onclick="visualizarConversaHistoricaChat(${c.id})" style="cursor:pointer; padding:10px 12px; margin-bottom:4px; border-radius:8px;" title="${c.pergunta}">
             <div style="font-weight:600; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);">
-              ❓ ${c.pergunta}
+              ${c.pergunta}
             </div>
             <div style="font-size:10px; color:var(--text-muted); margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
-              <span>🕒 ${dataHora}</span>
+              <span>${dataHora}</span>
               <span style="color:${badgeCor}; font-weight:600;">${badgeTexto}</span>
             </div>
           </div>
@@ -5747,14 +5753,14 @@ async function visualizarConversaHistoricaChat(id) {
 
   const isBase = (c.fonte === 'base_conhecimento' || c.teve_contexto);
   const badgeFonte = isBase 
-    ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">✓ Base de Conhecimento Interna</span>'
-    : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">✦ Conhecimento Geral Corporativo</span>';
+    ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">Base de Conhecimento Interna</span>'
+    : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">Conhecimento Geral Corporativo</span>';
 
   const docsTexto = (c.documentos_consultados && c.documentos_consultados.length > 0)
-    ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${c.documentos_consultados.join(', ')}</strong></div>`
+    ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">Fontes consultadas: <strong>${c.documentos_consultados.join(', ')}</strong></div>`
     : '';
 
-  const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${c.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
+  const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;"> ${c.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
 
   const dataFmt = c.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(c.criado_em) : new Date(c.criado_em).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})) : 'Anterior';
 
@@ -5840,14 +5846,14 @@ async function enviarPerguntaRAG() {
 
     const isBase = (data.fonte === 'base_conhecimento');
     const badgeFonte = isBase 
-      ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">✓ Base de Conhecimento Interna</span>'
-      : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">✦ Conhecimento Geral Corporativo</span>';
+      ? '<span class="kb-badge kb-badge-interna" style="margin-bottom:8px; display:inline-flex;">Base de Conhecimento Interna</span>'
+      : '<span class="kb-badge kb-badge-geral" style="margin-bottom:8px; display:inline-flex;">Conhecimento Geral Corporativo</span>';
 
     const docsTexto = (data.documentos_consultados && data.documentos_consultados.length > 0)
-      ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">📄 Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
+      ? `<div class="kb-sources" style="font-size:11px; margin-top:8px; border-top:1px solid var(--border); padding-top:6px;">Fontes consultadas: <strong>${data.documentos_consultados.join(', ')}</strong></div>`
       : '';
 
-    const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;">🤖 ${data.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
+    const modeloTag = `<span class="kb-badge kb-badge-modelo" style="margin-top:6px; display:inline-flex; align-items:center; gap:4px;"> ${data.modelo_usado || 'gemini-3.5-flash-lite'}</span>`;
 
     if (loadEl) {
       loadEl.innerHTML = `
@@ -6159,7 +6165,7 @@ async function carregarTicketsIA() {
     console.error('Erro ao listar tickets:', e);
     container.innerHTML = `
       <div style="padding:40px; text-align:center; color:#ef4444; font-size:13px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:10px;">
-        ⚠️ Erro ao carregar tickets: ${e.message}
+        Erro ao carregar tickets: ${e.message}
       </div>
     `;
   }
@@ -6172,7 +6178,7 @@ function renderizarTicketsIA(tickets) {
   if (!tickets || tickets.length === 0) {
     container.innerHTML = `
       <div style="padding:60px 20px; text-align:center; color:var(--text-muted); font-size:13px; background:var(--surface); border:1px dashed var(--border); border-radius:12px;">
-        <div style="font-size:36px; margin-bottom:10px;">🎫</div>
+        <div style="font-size:28px; font-weight:700; color:var(--primary); margin-bottom:8px;">#</div>
         <strong style="color:var(--text);">Nenhum ticket encontrado</strong><br>
         <span style="font-size:12px; margin-top:4px; display:inline-block;">Quando clientes solicitarem propostas personalizadas, negociações de contrato ou apoio humano, a IA gerará os chamados automaticamente aqui com resumo completo da conversa.</span>
       </div>
@@ -6194,13 +6200,13 @@ function renderizarTicketsIA(tickets) {
     }
 
     // Tipo de demanda
-    let tipoTexto = '📄 Proposta Comercial';
+    let tipoTexto = 'Proposta Comercial';
     let tipoCor = '#38bdf8';
     if (t.tipo === 'negociacao') {
-      tipoTexto = '🤝 Negociação de Contrato';
+      tipoTexto = 'Negociação de Contrato';
       tipoCor = '#f59e0b';
     } else if (t.tipo === 'suporte') {
-      tipoTexto = '🛠️ Suporte / Transbordo';
+      tipoTexto = 'Suporte / Transbordo';
       tipoCor = '#a855f7';
     }
 
@@ -6227,14 +6233,14 @@ function renderizarTicketsIA(tickets) {
             <div>
               <div style="font-weight:700; font-size:14px; color:var(--text);">${nomeCliente}</div>
               <div style="font-size:12px; color:var(--text-muted); display:flex; gap:12px; margin-top:2px; flex-wrap:wrap;">
-                <span>📱 ${telCliente || 'Telefone não informado'}</span>
-                <span>✈️ Chat ID: <code style="font-family:monospace; color:#38bdf8;">${t.telegram_chat_id || '-'}</code></span>
+                <span>Telefone: ${telCliente || 'Não informado'}</span>
+                <span>Chat ID: <code style="font-family:monospace; color:#38bdf8;">${t.telegram_chat_id || '-'}</code></span>
               </div>
             </div>
           </div>
           ${t.telegram_chat_id ? `
           <button class="btn-secondary" onclick="abrirChatDoTicket('${t.telegram_chat_id}')" style="font-size:11px; padding:6px 12px; display:flex; align-items:center; gap:6px;">
-            <span>💬</span> Abrir Chat Completo
+            Abrir Chat Completo
           </button>` : ''}
         </div>
 
@@ -6246,7 +6252,7 @@ function renderizarTicketsIA(tickets) {
         <!-- Resumo IA da Conversa (Ambientação do Atendente) -->
         <div style="background:linear-gradient(135deg, rgba(34,158,217,0.08) 0%, rgba(168,85,247,0.08) 100%); border:1px solid rgba(34,158,217,0.25); border-radius:10px; padding:16px;">
           <div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
-            <span>✦</span> Resumo Inteligente da Conversa (Ambientação para o Atendente)
+            Resumo da Conversa (Ambientação para o Atendente)
           </div>
           <div style="font-size:13px; line-height:1.7; color:var(--text);">${formatarMarkdownParaHtml(t.resumo_conversa || 'Sem resumo disponível')}</div>
         </div>
@@ -6262,7 +6268,7 @@ function renderizarTicketsIA(tickets) {
         ${t.resposta_atendente ? `
         <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); padding:10px 14px; border-radius:8px; font-size:12px;">
           <div style="color:#10b981; font-weight:700; display:flex; justify-content:space-between;">
-            <span>✓ Última resposta enviada pelo atendente (${t.atendente_nome || 'Operador'}):</span>
+            <span>Última resposta enviada pelo atendente (${t.atendente_nome || 'Operador'}):</span>
           </div>
           <div style="color:var(--text); margin-top:4px; font-size:13px;">${formatarMarkdownParaHtml(t.resposta_atendente)}</div>
         </div>` : ''}
@@ -6277,15 +6283,15 @@ function renderizarTicketsIA(tickets) {
             <textarea class="cf-input" id="resp-ticket-${t.id}" rows="2" placeholder="Digite a proposta, condições negociadas ou esclarecimento para enviar ao cliente..." style="flex:1; min-width:260px; resize:vertical; font-size:13px; padding:10px;"></textarea>
             <div style="display:flex; flex-direction:column; gap:6px;">
               <button class="btn-green" onclick="responderTicketPeloCard(${t.id})" style="padding:10px 18px; font-size:12px; font-weight:700; white-space:nowrap; display:flex; align-items:center; gap:6px;">
-                <span>📤</span> Enviar no Telegram
+                Enviar no Telegram
               </button>
               <div style="display:flex; gap:6px;">
                 ${t.status !== 'resolvido' ? `
                 <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'resolvido')" style="flex:1; font-size:11px; padding:5px 8px; color:#10b981;" title="Marcar como Concluído">
-                  ✓ Marcar Resolvido
+                  Marcar Resolvido
                 </button>` : `
                 <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'aberto')" style="flex:1; font-size:11px; padding:5px 8px; color:#ef4444;" title="Reabrir Chamado">
-                  ↺ Reabrir
+                  Reabrir Chamado
                 </button>`}
               </div>
             </div>
@@ -6353,7 +6359,7 @@ async function responderTicketPeloCard(ticketId) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erro ao enviar resposta');
 
-    mostrarToast('✓ Mensagem enviada com sucesso ao Telegram do cliente!', 'success');
+    mostrarToast('Mensagem enviada com sucesso ao Telegram do cliente!', 'success');
     textarea.value = '';
     carregarTicketsIA();
   } catch (e) {
@@ -6481,7 +6487,7 @@ async function atualizarInterfaceTenant() {
             <select id="select-switcher-empresa" onchange="trocarEmpresaAtiva(this.value)" style="background:transparent; color:#fff; border:none; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600; outline:none; cursor:pointer;">
               ${listaEmpresasCadastradas.map(emp => `
                 <option value="${emp.id}" ${emp.id === ativaId ? 'selected' : ''} style="background:#1a1f2e; color:#fff;">
-                  🏢 ${emp.nome} (${emp.cnpj_ou_identificador || 'CNPJ não inf.'})
+                  ${emp.nome} (${emp.cnpj_ou_identificador || 'CNPJ não inf.'})
                 </option>
               `).join('')}
             </select>
@@ -6591,7 +6597,7 @@ document.addEventListener('DOMContentLoaded', () => {
   <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:90%; max-width:800px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
     <div class="modal-header" style="border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
       <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:22px;">📄</span>
+        <span style="font-size:14px; font-weight:700; color:var(--text-muted);">DOC</span>
         <div>
           <div class="modal-title" id="doc-modal-titulo" style="color:var(--text); font-weight:700; font-family:'Syne',sans-serif; font-size:15px;">Documento</div>
           <div id="doc-modal-sub" style="font-size:11px; color:var(--text-muted); margin-top:2px;">Metadados e Conteúdo Indexado no RAG</div>
@@ -6606,7 +6612,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div style="color:var(--border);">|</div>
         <div style="font-size:11px; color:var(--text-muted);">
-          Nível de Acesso: <span id="doc-modal-nivel-badge" class="contract-status-badge cs-signed" style="font-size:10px;">🌐 Público</span>
+          Nível de Acesso: <span id="doc-modal-nivel-badge" class="contract-status-badge cs-signed" style="font-size:10px;">Público</span>
         </div>
         <div style="color:var(--border);">|</div>
         <div style="font-size:11px; color:var(--text-muted);">
@@ -6620,7 +6626,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <span style="font-size:12px; font-weight:700; color:var(--text);">Conteúdo Extraído para Busca Vetorial Semântica:</span>
-        <button class="btn-secondary" onclick="copiarTextoDocModal()" style="font-size:11px; padding:3px 10px;">📋 Copiar Texto</button>
+        <button class="btn-secondary" onclick="copiarTextoDocModal()" style="font-size:11px; padding:3px 10px;">Copiar Texto</button>
       </div>
       <div id="doc-modal-conteudo" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; max-height:360px; overflow-y:auto; color:var(--text); font-family:monospace;">
         Carregando conteúdo...
@@ -6840,7 +6846,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px;">
-            <span>👤</span> Dados do Cliente / Destinatário
+            Dados do Cliente / Destinatário
           </div>
           <span style="font-size:11px; color:var(--text-muted);">Selecione existente ou digite novo</span>
         </div>
@@ -6873,7 +6879,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- SEÇÃO PRODUTO & VALOR -->
       <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
         <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-          <span>📦</span> Produto / Solução & Investimento
+          Produto / Solução & Investimento
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
@@ -6904,18 +6910,18 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- SEÇÃO CONDIÇÕES & ESCOPO -->
       <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
         <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:6px; margin-bottom:10px;">
-          <span>📝</span> Escopo & Condições Comerciais
+          Escopo & Condições Comerciais
         </div>
 
         <div class="config-field" style="margin-bottom:12px;">
           <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">Forma de Pagamento *</div>
           
           <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;" id="modal-prop-payment-options">
-            <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoModal('pix')">⚡ PIX</button>
-            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('transferencia')">🏦 Transferência</button>
-            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('debito')">💳 Débito</button>
-            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_vista')">💳 Crédito à Vista</button>
-            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_parcelado')">📅 Crédito Parcelado</button>
+            <button type="button" class="btn-payment-opt active" onclick="selecionarFormaPagamentoModal('pix')">PIX</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('transferencia')">Transferência</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('debito')">Débito</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_vista')">Crédito à Vista</button>
+            <button type="button" class="btn-payment-opt" onclick="selecionarFormaPagamentoModal('credito_parcelado')">Crédito Parcelado</button>
           </div>
 
           <div id="modal-prop-parcelas-wrap" style="display:none; align-items:center; gap:8px; margin-bottom:8px; padding:8px 10px; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
@@ -6954,20 +6960,20 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="display:flex; align-items:center; gap:10px; margin-top:6px; padding:6px 4px;">
         <input type="checkbox" id="proposta-indexar-rag-chk" checked style="cursor:pointer; width:16px; height:16px;" />
         <label for="proposta-indexar-rag-chk" style="font-size:12px; color:var(--text); cursor:pointer;">
-          🧠 Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
+          Incluir proposta na Base de Conhecimento (RAG) para consulta do Copiloto IA
         </label>
       </div>
 
       <div style="font-size:11px; color:var(--text-muted); margin-top:8px; line-height:1.4;">
-        ✦ O documento gerado será salvo no repositório corporativo, cadastrado na tela de <strong>Documentos</strong>, indexado semanticamente no <strong>RAG</strong> e registrado no <strong>Funil de Vendas</strong>.
+        O documento gerado será salvo no repositório corporativo, cadastrado na tela de <strong>Documentos</strong>, indexado semanticamente no <strong>RAG</strong> e registrado no <strong>Funil de Vendas</strong>.
       </div>
 
     </div>
     <div class="modal-footer" style="border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
       <button class="btn-secondary" onclick="fecharModalCriarProposta()">Cancelar</button>
       <div style="display:flex; gap:10px;">
-        <button class="btn-secondary" id="btn-previa-proposta" onclick="previsualizarPropostaDireta()">👁 Pré-visualizar</button>
-        <button class="btn-green" id="btn-gerar-enviar-proposta" onclick="salvarEGerarPropostaDireta()">📄 Gerar Proposta & Criar Documento</button>
+        <button class="btn-secondary" id="btn-previa-proposta" onclick="previsualizarPropostaDireta()">Pré-visualizar</button>
+        <button class="btn-green" id="btn-gerar-enviar-proposta" onclick="salvarEGerarPropostaDireta()">Gerar Proposta & Criar Documento</button>
       </div>
     </div>
   </div>
@@ -6984,7 +6990,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <iframe id="container-previa-html" style="width:100%; height:100%; border:none;"></iframe>
     </div>
     <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:12px 20px; display:flex; justify-content:flex-end; gap:10px;">
-      <button class="btn-secondary" onclick="document.getElementById('container-previa-html').contentWindow.print()">🖨 Imprimir</button>
+      <button class="btn-secondary" onclick="document.getElementById('container-previa-html').contentWindow.print()">Imprimir</button>
       <button class="btn-green" onclick="fecharModalPreviaProposta()">Concluir</button>
     </div>
   </div>
@@ -6994,7 +7000,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div class="modal-overlay" id="modal-editar-proposta" style="display:none; align-items:center; justify-content:center; z-index:10000;">
   <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:550px; overflow:hidden;">
     <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">✏️ Editar Proposta Comercial</div>
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">Editar Proposta Comercial</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalEditarProposta()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:14px;">
@@ -7033,7 +7039,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div class="modal-overlay" id="modal-importar-contrato" style="display:none; align-items:center; justify-content:center; z-index:10000;">
   <div class="modal-content" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); width:95%; max-width:550px; overflow:hidden;">
     <div class="modal-header" style="background:var(--surface); color:var(--text); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">📤 Importar Contrato Formalizado</div>
+      <div class="modal-title" style="font-weight:700; font-family:'Syne',sans-serif; font-size:15px; color:var(--text);">Importar Contrato Formalizado</div>
       <button class="btn-icon" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;" onclick="fecharModalImportarContrato()">✕</button>
     </div>
     <div class="modal-body" style="padding:20px; display:flex; flex-direction:column; gap:14px;">
@@ -7065,7 +7071,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div class="modal-footer" style="background:var(--surface); border-top:1px solid var(--border); padding:14px 20px; display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn-secondary" onclick="fecharModalImportarContrato()">Cancelar</button>
-      <button class="btn-green" id="btn-importar-contrato-salvar" onclick="salvarImportacaoContrato()">📤 Importar & Indexar</button>
+      <button class="btn-green" id="btn-importar-contrato-salvar" onclick="salvarImportacaoContrato()">Importar & Indexar</button>
     </div>
   </div>
 </div>
