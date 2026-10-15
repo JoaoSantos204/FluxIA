@@ -537,6 +537,17 @@
           <input class="search-input" placeholder="Buscar no Telegram..." oninput="filtrarConversasTelegram(this.value)" />
           <button class="btn-icon" style="background:rgba(255,255,255,0.05); color:white;" onclick="recarregarConversasTelegram()" title="Atualizar conversas">🔄</button>
         </div>
+        <!-- Abas Ativas vs Arquivadas -->
+        <div class="chat-sidebar-tabs" style="display:flex; gap:6px; padding:6px 12px 10px 12px; border-bottom:1px solid rgba(255,255,255,0.06);">
+          <button id="tab-conversas-ativas" class="chat-tab-btn" onclick="trocarAbaConversasTelegram('ativas')" style="flex:1; padding:6px 10px; font-size:11px; font-weight:600; border-radius:6px; border:1px solid rgba(56,189,248,0.3); background:rgba(56,189,248,0.12); color:#38bdf8; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
+            <span>💬 Ativas</span>
+            <span id="badge-count-ativas" style="background:rgba(56,189,248,0.25); color:#38bdf8; font-size:10px; padding:1px 6px; border-radius:10px;">0</span>
+          </button>
+          <button id="tab-conversas-arquivadas" class="chat-tab-btn" onclick="trocarAbaConversasTelegram('arquivadas')" style="flex:1; padding:6px 10px; font-size:11px; font-weight:600; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.2s;">
+            <span>📁 Arquivadas</span>
+            <span id="badge-count-arquivadas" style="background:rgba(255,255,255,0.08); color:var(--text-muted); font-size:10px; padding:1px 6px; border-radius:10px;">0</span>
+          </button>
+        </div>
         <div class="chat-list-sidebar" id="lista-conversas-telegram">
           <div style="padding:24px; text-align:center; color:var(--text-muted); font-size:12px;">
             Carregando conversas do Telegram...
@@ -554,6 +565,9 @@
           <div class="chat-actions" style="display:flex; align-items:center; gap:8px;">
             <button id="btn-toggle-atendimento" class="btn-secondary" style="padding:5px 12px; font-size:11px; display:none;" onclick="alternarModoAtendimento()">
               🧑 Assumir Atendimento
+            </button>
+            <button id="btn-toggle-arquivar" class="btn-secondary" style="padding:5px 12px; font-size:11px; display:none;" onclick="alternarArquivamentoConversaAtiva()">
+              📁 Arquivar Conversa
             </button>
             <button class="btn-secondary" style="padding:5px 12px; font-size:11px;" onclick="recarregarConversasTelegram()">
               🔄 Atualizar
@@ -599,6 +613,7 @@
           <div class="lp-title">Métricas da Conversa</div>
           <div class="lp-field"><span class="lp-field-key">Status IA</span><span class="lp-field-val" id="lp-status-ia" style="color:#25D366;">● Operacional</span></div>
           <div class="lp-field"><span class="lp-field-key">Total Mensagens</span><span class="lp-field-val" id="lp-total-msgs">0</span></div>
+          <div class="lp-field"><span class="lp-field-key">Status Arquivo</span><span class="lp-field-val" id="lp-status-arquivo" style="color:var(--text-muted); font-weight:600;">-</span></div>
         </div>
       </div>
     </div>
@@ -1638,6 +1653,7 @@
 <script>
 let documentosCarregados = [];
 let listaConversasTelegram = [];
+let filtroAbaConversas = 'ativas'; // 'ativas' | 'arquivadas'
 let conversaAtivaChatId = null;
 let modoAtendimentoAtual = 'bot';
 let usuarioAtual = null;
@@ -1941,6 +1957,57 @@ function iniciarPollingConversaAtiva() {
   }, 1800);
 }
 
+function trocarAbaConversasTelegram(aba) {
+  filtroAbaConversas = aba;
+  const tabAtivas = document.getElementById('tab-conversas-ativas');
+  const tabArquivadas = document.getElementById('tab-conversas-arquivadas');
+
+  if (aba === 'ativas') {
+    if (tabAtivas) {
+      tabAtivas.style.border = '1px solid rgba(56,189,248,0.3)';
+      tabAtivas.style.background = 'rgba(56,189,248,0.12)';
+      tabAtivas.style.color = '#38bdf8';
+    }
+    if (tabArquivadas) {
+      tabArquivadas.style.border = '1px solid transparent';
+      tabArquivadas.style.background = 'transparent';
+      tabArquivadas.style.color = 'var(--text-muted)';
+    }
+  } else {
+    if (tabAtivas) {
+      tabAtivas.style.border = '1px solid transparent';
+      tabAtivas.style.background = 'transparent';
+      tabAtivas.style.color = 'var(--text-muted)';
+    }
+    if (tabArquivadas) {
+      tabArquivadas.style.border = '1px solid rgba(245,158,11,0.3)';
+      tabArquivadas.style.background = 'rgba(245,158,11,0.12)';
+      tabArquivadas.style.color = '#f59e0b';
+    }
+  }
+
+  // Limpa o termo de busca para visualização limpa da aba
+  const inputBusca = document.querySelector('.chat-sidebar .search-input');
+  if (inputBusca) inputBusca.value = '';
+
+  renderizarListaConversasTelegram();
+
+  // Se a conversa atualmente selecionada não pertencer à nova aba, seleciona a primeira da aba
+  const screenChat = document.getElementById('screen-chat');
+  if (screenChat && screenChat.classList.contains('active')) {
+    const conversasAba = listaConversasTelegram.filter(c => aba === 'arquivadas' ? !!c.arquivada : !c.arquivada);
+    const conversaPertence = conversasAba.some(c => String(c.chat_id) === String(conversaAtivaChatId));
+
+    if (!conversaPertence) {
+      if (conversasAba.length > 0) {
+        selecionarConversaTelegram(conversasAba[0].chat_id);
+      } else {
+        limparPainelChatVazio();
+      }
+    }
+  }
+}
+
 async function carregarConversasTelegram() {
   const containerList = document.getElementById('lista-conversas-telegram');
   const empresaId = obterEmpresaAtivaId();
@@ -1951,9 +2018,17 @@ async function carregarConversasTelegram() {
     const data = await res.json();
     listaConversasTelegram = data.conversas || [];
 
-    // PARTE 20: Badge lateral exibe APENAS a contagem de mensagens NÃO LIDAS
+    // Atualiza contadores das abas
+    const badgeAtivas = document.getElementById('badge-count-ativas');
+    const badgeArquivadas = document.getElementById('badge-count-arquivadas');
+    const totalAtivas = data.total_ativas !== undefined ? data.total_ativas : listaConversasTelegram.filter(c => !c.arquivada).length;
+    const totalArquivadas = data.total_arquivadas !== undefined ? data.total_arquivadas : listaConversasTelegram.filter(c => !!c.arquivada).length;
+    if (badgeAtivas) badgeAtivas.textContent = totalAtivas;
+    if (badgeArquivadas) badgeArquivadas.textContent = totalArquivadas;
+
+    // PARTE 20: Badge lateral exibe APENAS a contagem de mensagens NÃO LIDAS de conversas ativas
     const badgeChats = document.getElementById('badge-total-conversas');
-    const totalNaoLidas = data.total_nao_lidas !== undefined ? data.total_nao_lidas : listaConversasTelegram.reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
+    const totalNaoLidas = data.total_nao_lidas !== undefined ? data.total_nao_lidas : listaConversasTelegram.filter(c => !c.arquivada).reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
     if (badgeChats) {
       badgeChats.textContent = totalNaoLidas;
       badgeChats.style.display = totalNaoLidas > 0 ? 'inline-block' : 'none';
@@ -1965,9 +2040,11 @@ async function carregarConversasTelegram() {
     // Se estiver na tela de chat:
     const screenChat = document.getElementById('screen-chat');
     if (screenChat && screenChat.classList.contains('active')) {
-      if (!conversaAtivaChatId && listaConversasTelegram.length > 0) {
-        // Auto-seleciona a primeira conversa se nenhuma estiver ativa
-        selecionarConversaTelegram(listaConversasTelegram[0].chat_id);
+      const conversasAba = listaConversasTelegram.filter(c => filtroAbaConversas === 'arquivadas' ? !!c.arquivada : !c.arquivada);
+
+      if (!conversaAtivaChatId && conversasAba.length > 0) {
+        // Auto-seleciona a primeira conversa da aba se nenhuma estiver ativa
+        selecionarConversaTelegram(conversasAba[0].chat_id);
       } else if (conversaAtivaChatId) {
         // Atualiza cabeçalho e painel caso os dados do contato tenham sido enriquecidos
         const convAtual = listaConversasTelegram.find(c => String(c.chat_id) === String(conversaAtivaChatId));
@@ -1977,15 +2054,15 @@ async function carregarConversasTelegram() {
           if (headerName && headerName.textContent !== nomeExibicao) headerName.textContent = nomeExibicao;
           const lpName = document.getElementById('lp-name');
           if (lpName && lpName.textContent !== nomeExibicao) lpName.textContent = nomeExibicao;
+          atualizarUIArquivamento(convAtual.arquivada);
         } else {
-          // A conversa anteriormente ativa não pertence à empresa selecionada
-          if (listaConversasTelegram.length > 0) {
-            selecionarConversaTelegram(listaConversasTelegram[0].chat_id);
+          if (conversasAba.length > 0) {
+            selecionarConversaTelegram(conversasAba[0].chat_id);
           } else {
             limparPainelChatVazio();
           }
         }
-      } else if (listaConversasTelegram.length === 0) {
+      } else if (conversasAba.length === 0) {
         limparPainelChatVazio();
       }
     }
@@ -2010,6 +2087,8 @@ function limparPainelChatVazio() {
   }
   const btn = document.getElementById('btn-toggle-atendimento');
   if (btn) btn.style.display = 'none';
+  const btnArq = document.getElementById('btn-toggle-arquivar');
+  if (btnArq) btnArq.style.display = 'none';
 
   const container = document.getElementById('lead-chat-messages');
   if (container) {
@@ -2034,22 +2113,38 @@ function limparPainelChatVazio() {
   if (lpEmpresa) lpEmpresa.textContent = '-';
   const lpTotalMsgs = document.getElementById('lp-total-msgs');
   if (lpTotalMsgs) lpTotalMsgs.textContent = '0';
+  const lpArquivo = document.getElementById('lp-status-arquivo');
+  if (lpArquivo) {
+    lpArquivo.textContent = '-';
+    lpArquivo.style.color = 'var(--text-muted)';
+  }
 }
 
 function renderizarListaConversasTelegram(filtradas = null) {
   const container = document.getElementById('lista-conversas-telegram');
   if (!container) return;
 
-  const lista = filtradas || listaConversasTelegram;
+  const baseLista = filtradas || listaConversasTelegram;
+  const lista = baseLista.filter(c => filtroAbaConversas === 'arquivadas' ? !!c.arquivada : !c.arquivada);
 
   if (lista.length === 0) {
-    container.innerHTML = `
-      <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
-        <div style="font-size:28px; margin-bottom:8px;">✈️</div>
-        <strong>Nenhum lead no Telegram</strong><br>
-        Quando clientes interagirem com seu Bot, as conversas aparecerão aqui em tempo real.
-      </div>
-    `;
+    if (filtroAbaConversas === 'arquivadas') {
+      container.innerHTML = `
+        <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
+          <div style="font-size:28px; margin-bottom:8px;">📁</div>
+          <strong>Nenhuma conversa arquivada</strong><br>
+          Conversas arquivadas não aparecem na sua lista ativa, mas ficam salvas aqui para consulta a qualquer momento.
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div style="padding:32px 16px; text-align:center; color:var(--text-muted); font-size:12px; line-height:1.6;">
+          <div style="font-size:28px; margin-bottom:8px;">✈️</div>
+          <strong>Nenhum lead no Telegram</strong><br>
+          Quando clientes interagirem com seu Bot, as conversas aparecerão aqui em tempo real.
+        </div>
+      `;
+    }
     return;
   }
 
@@ -2059,22 +2154,35 @@ function renderizarListaConversasTelegram(filtradas = null) {
     const isActive = conversaAtivaChatId && String(c.chat_id) === String(conversaAtivaChatId);
     const hora = formatarHoraConversa(c.data_ultima_mensagem);
     const isHuman = c.status_atendimento === 'humano';
+    const isArq = !!c.arquivada;
 
     return `
-      <div class="chat-item ${isActive ? 'active' : ''}" onclick="selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer;">
+      <div class="chat-item ${isActive ? 'active' : ''}" onclick="selecionarConversaTelegram('${c.chat_id}')" style="cursor:pointer; position:relative;">
         <div class="ci-avatar" style="background:#229ED9; color:white;">${initials}</div>
-        <div class="ci-info">
+        <div class="ci-info" style="flex:1; min-width:0;">
           <div class="ci-name" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${nomeExibicao}</span>
-            <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:130px;">${nomeExibicao}</span>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">${hora}</span>
+              <button 
+                onclick="event.stopPropagation(); alternarArquivamentoConversa('${c.chat_id}', ${!isArq})" 
+                title="${isArq ? 'Desarquivar conversa (retornar para ativas)' : 'Arquivar conversa'}" 
+                style="background:none; border:none; cursor:pointer; font-size:12px; opacity:0.6; padding:2px 4px; border-radius:4px; transition:all 0.15s;" 
+                onmouseover="this.style.opacity='1'; this.style.transform='scale(1.2)';" 
+                onmouseout="this.style.opacity='0.6'; this.style.transform='scale(1)';"
+              >
+                ${isArq ? '📤' : '📁'}
+              </button>
+            </div>
           </div>
           <div class="ci-msg" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px;">
             ${escapeHtml(limparMarkdown(c.ultima_mensagem)) || 'Iniciou interação'}
           </div>
-          <div style="margin-top:4px;">
+          <div style="margin-top:4px; display:flex; align-items:center; gap:6px;">
             <span class="contract-status-badge ${isHuman ? 'cs-pending' : 'cs-signed'}" style="font-size:9px; padding:2px 6px;">
               ${isHuman ? '🧑 ' + (c.nome_atendente || 'Humano') : '🤖 IA Autônoma'}
             </span>
+            ${isArq ? `<span style="font-size:9px; background:rgba(245,158,11,0.15); color:#f59e0b; padding:2px 6px; border-radius:4px; border:1px solid rgba(245,158,11,0.3);">Arquivada</span>` : ''}
           </div>
         </div>
       </div>
@@ -2091,9 +2199,16 @@ function renderizarDashboardConversasTelegram() {
     return;
   }
 
+  // Dashboard exibe apenas conversas ativas (não arquivadas)
+  const ativas = listaConversasTelegram.filter(c => !c.arquivada);
+  if (ativas.length === 0) {
+    container.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px;">Nenhuma conversa ativa no momento.</div>`;
+    return;
+  }
+
   container.innerHTML = `
     <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap:12px;">
-      ${listaConversasTelegram.slice(0, 6).map(c => {
+      ${ativas.slice(0, 6).map(c => {
         const nomeExibicao = c.nome || ('Usuário #' + (c.chat_id ? String(c.chat_id).slice(-4) : ''));
         const hora = formatarHoraConversa(c.data_ultima_mensagem);
         const isHuman = c.status_atendimento === 'humano';
@@ -2140,6 +2255,98 @@ function recarregarConversasTelegram() {
   if (conversaAtivaChatId) carregarMensagensTelegram(conversaAtivaChatId, false);
 }
 
+function atualizarUIArquivamento(isArquivada) {
+  const btn = document.getElementById('btn-toggle-arquivar');
+  const lpArquivo = document.getElementById('lp-status-arquivo');
+
+  if (btn) {
+    btn.style.display = 'inline-flex';
+    if (isArquivada) {
+      btn.textContent = '📤 Desarquivar';
+      btn.title = 'Mover de volta para conversas ativas';
+      btn.style.color = '#f59e0b';
+      btn.style.borderColor = 'rgba(245,158,11,0.4)';
+      btn.style.background = 'rgba(245,158,11,0.1)';
+    } else {
+      btn.textContent = '📁 Arquivar';
+      btn.title = 'Ocultar da lista de ativas e mover para arquivadas';
+      btn.style.color = 'var(--text)';
+      btn.style.borderColor = 'var(--border)';
+      btn.style.background = 'var(--surface)';
+    }
+  }
+
+  if (lpArquivo) {
+    lpArquivo.textContent = isArquivada ? '📁 Arquivada' : '💬 Ativa';
+    lpArquivo.style.color = isArquivada ? '#f59e0b' : '#38bdf8';
+  }
+}
+
+async function alternarArquivamentoConversa(chatId, arquivar) {
+  if (!chatId) return;
+  chatId = String(chatId);
+  const empresaId = parseInt(obterEmpresaAtivaId()) || 1;
+  const endpoint = arquivar ? 'arquivar' : 'desarquivar';
+
+  try {
+    const res = await fetch(`/telegram/conversas/${chatId}/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresa_id: empresaId })
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar status de arquivamento');
+
+    // Atualiza localmente o array
+    const conv = listaConversasTelegram.find(c => String(c.chat_id) === String(chatId));
+    if (conv) {
+      conv.arquivada = arquivar;
+    }
+
+    // Atualiza contadores
+    const totalAtivas = listaConversasTelegram.filter(c => !c.arquivada).length;
+    const totalArquivadas = listaConversasTelegram.filter(c => !!c.arquivada).length;
+    const badgeAtivas = document.getElementById('badge-count-ativas');
+    const badgeArquivadas = document.getElementById('badge-count-arquivadas');
+    if (badgeAtivas) badgeAtivas.textContent = totalAtivas;
+    if (badgeArquivadas) badgeArquivadas.textContent = totalArquivadas;
+
+    // Se alterou a conversa atualmente aberta:
+    if (String(conversaAtivaChatId) === String(chatId)) {
+      atualizarUIArquivamento(arquivar);
+    }
+
+    // Re-renderiza a lista de conversas
+    renderizarListaConversasTelegram();
+
+    // Se estivermos na aba e o item foi movido, seleciona outro item da aba ativa
+    const conversasAbaAtual = listaConversasTelegram.filter(c => filtroAbaConversas === 'arquivadas' ? !!c.arquivada : !c.arquivada);
+    if (String(conversaAtivaChatId) === String(chatId)) {
+      const aindaEstaNaAba = conversasAbaAtual.some(c => String(c.chat_id) === String(chatId));
+      if (!aindaEstaNaAba) {
+        if (conversasAbaAtual.length > 0) {
+          selecionarConversaTelegram(conversasAbaAtual[0].chat_id);
+        } else {
+          limparPainelChatVazio();
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao alternar arquivamento:', e);
+    alert('Erro ao atualizar conversa: ' + e.message);
+  }
+}
+
+async function alternarArquivamentoConversaAtiva() {
+  if (!conversaAtivaChatId) return;
+  const conv = listaConversasTelegram.find(c => String(c.chat_id) === String(conversaAtivaChatId));
+  const isArq = conv ? !!conv.arquivada : false;
+
+  if (!isArq) {
+    if (!confirm('Deseja arquivar esta conversa? Ela será removida da lista ativa e poderá ser acessada na aba "Arquivadas".')) return;
+  }
+  await alternarArquivamentoConversa(conversaAtivaChatId, !isArq);
+}
+
 async function selecionarConversaTelegram(chatId) {
   if (!chatId) return;
   chatId = String(chatId);
@@ -2174,6 +2381,9 @@ async function selecionarConversaTelegram(chatId) {
   const lpTotalMsgs = document.getElementById('lp-total-msgs');
   if (lpTotalMsgs) lpTotalMsgs.textContent = (conv && conv.total_mensagens) ? conv.total_mensagens : 0;
 
+  // Atualiza botão e painel com o estado de arquivamento
+  atualizarUIArquivamento(conv ? !!conv.arquivada : false);
+
   // Feedback visual imediato ao transicionar: exibe carregador na área de mensagens
   const container = document.getElementById('lead-chat-messages');
   if (container && trocouConversa) {
@@ -2194,7 +2404,7 @@ async function selecionarConversaTelegram(chatId) {
       listaConversasTelegram[convIdx].nao_lidas = 0;
     }
     const badgeChats = document.getElementById('badge-total-conversas');
-    const totalNaoLidas = listaConversasTelegram.reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
+    const totalNaoLidas = listaConversasTelegram.filter(c => !c.arquivada).reduce((acc, curr) => acc + (curr.nao_lidas || 0), 0);
     if (badgeChats) {
       badgeChats.textContent = totalNaoLidas;
       badgeChats.style.display = totalNaoLidas > 0 ? 'inline-block' : 'none';

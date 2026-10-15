@@ -252,6 +252,7 @@ def _criar_banco_postgres(cursor):
             empresa_id INTEGER DEFAULT 1,
             status TEXT DEFAULT 'bot' CHECK (status IN ('bot','humano')),
             atendente_id INTEGER,
+            arquivada BOOLEAN DEFAULT FALSE,
             atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (atendente_id) REFERENCES usuarios(id) ON DELETE SET NULL
         )
@@ -376,6 +377,9 @@ def _criar_banco_postgres(cursor):
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='empresa_id') THEN
                 ALTER TABLE conversas_telegram ADD COLUMN empresa_id INTEGER DEFAULT 1;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='arquivada') THEN
+                ALTER TABLE conversas_telegram ADD COLUMN arquivada BOOLEAN DEFAULT FALSE;
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='gemini_api_key') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN gemini_api_key TEXT;

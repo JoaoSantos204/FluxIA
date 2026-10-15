@@ -579,6 +579,13 @@ async def telegram_webhook(
 
         cliente_id = cliente["id"]
 
+        # Se a conversa estiver arquivada, desarquiva automaticamente com a nova mensagem do cliente
+        try:
+            cursor.execute(f"UPDATE conversas_telegram SET arquivada = FALSE, atualizado_em = CURRENT_TIMESTAMP WHERE chat_id = {ph}", (str(chat_id),))
+            conexao.commit()
+        except Exception:
+            pass
+
         # Se recebemos contato compartilhado nativamente pelo botão do Telegram:
         if contato_recebido:
             raw_phone = str(contato_recebido.get("phone_number") or "").strip()
@@ -930,6 +937,66 @@ def devolver_conversa_ao_bot(chat_id: str):
         conexao.close()
 
 
+class AlternarArquivamentoRequest(BaseModel):
+    empresa_id: Optional[int] = None
+
+
+@router.post("/conversas/{chat_id}/arquivar")
+def arquivar_conversa_telegram(chat_id: str, dados: Optional[AlternarArquivamentoRequest] = None):
+    """Arquiva a conversa do Telegram para que não polua a lista de conversas ativas."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    emp_id = (dados.empresa_id if dados else None) or 1
+    try:
+        cursor.execute(f"SELECT chat_id FROM conversas_telegram WHERE chat_id = {ph}", (str(chat_id),))
+        existe = cursor.fetchone()
+        if existe:
+            cursor.execute(f"""
+                UPDATE conversas_telegram
+                SET arquivada = TRUE, atualizado_em = CURRENT_TIMESTAMP
+                WHERE chat_id = {ph}
+            """, (str(chat_id),))
+        else:
+            cursor.execute(f"""
+                INSERT INTO conversas_telegram (chat_id, status, arquivada, empresa_id)
+                VALUES ({ph}, 'bot', TRUE, {ph})
+            """, (str(chat_id), emp_id))
+
+        conexao.commit()
+        return {"sucesso": True, "chat_id": str(chat_id), "arquivada": True}
+    finally:
+        conexao.close()
+
+
+@router.post("/conversas/{chat_id}/desarquivar")
+def desarquivar_conversa_telegram(chat_id: str, dados: Optional[AlternarArquivamentoRequest] = None):
+    """Desarquiva a conversa do Telegram retornando-a para a lista ativa."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    emp_id = (dados.empresa_id if dados else None) or 1
+    try:
+        cursor.execute(f"SELECT chat_id FROM conversas_telegram WHERE chat_id = {ph}", (str(chat_id),))
+        existe = cursor.fetchone()
+        if existe:
+            cursor.execute(f"""
+                UPDATE conversas_telegram
+                SET arquivada = FALSE, atualizado_em = CURRENT_TIMESTAMP
+                WHERE chat_id = {ph}
+            """, (str(chat_id),))
+        else:
+            cursor.execute(f"""
+                INSERT INTO conversas_telegram (chat_id, status, arquivada, empresa_id)
+                VALUES ({ph}, 'bot', FALSE, {ph})
+            """, (str(chat_id), emp_id))
+
+        conexao.commit()
+        return {"sucesso": True, "chat_id": str(chat_id), "arquivada": False}
+    finally:
+        conexao.close()
+
+
 # ============================================================================
 # GESTÃO DE CONVERSAS NO CRM
 # ============================================================================
@@ -940,7 +1007,7 @@ class EnviarMensagemOperadorRequest(BaseModel):
 
 
 @router.get("/conversas")
-def listar_conversas_telegram(empresa_id: int | None = None):
+def listar_conversas_telegram(empresa_id: int | None = None, arquivada: Optional[bool] = None):
     """
     Lista contatos e conversas do Telegram com status de atendimento (Bot vs Humano)
     e identificação do atendente responsável, isolada por empresa.
@@ -956,6 +1023,10 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             filtros.append(f"(h.empresa_id = {ph} OR (h.empresa_id IS NULL AND cli.empresa_id = {ph}))")
             params.extend([empresa_id, empresa_id])
 
+        if arquivada is not None:
+            filtros.append(f"COALESCE(ct.arquivada, FALSE) = {ph}")
+            params.append(arquivada)
+
         where_sql = f"WHERE {' AND '.join(filtros)}" if filtros else ""
 
         query = f"""
@@ -968,13 +1039,14 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 cli.telefone AS cliente_telefone,
                 COALESCE(ct.status, 'bot') AS status_atendimento,
                 ct.atendente_id,
+                COALESCE(ct.arquivada, FALSE) AS arquivada,
                 u_atend.nome AS nome_atendente
             FROM historico_conversas h
             LEFT JOIN clientes cli ON cli.telegram_chat_id = h.telegram_chat_id AND (cli.empresa_id = h.empresa_id OR h.empresa_id IS NULL)
             LEFT JOIN conversas_telegram ct ON ct.chat_id = h.telegram_chat_id AND (ct.empresa_id = h.empresa_id OR ct.empresa_id IS NULL)
             LEFT JOIN usuarios u_atend ON u_atend.id = ct.atendente_id
             {where_sql}
-            GROUP BY h.telegram_chat_id, cli.nome, cli.telefone, ct.status, ct.atendente_id, u_atend.nome
+            GROUP BY h.telegram_chat_id, cli.nome, cli.telefone, ct.status, ct.atendente_id, ct.arquivada, u_atend.nome
             ORDER BY data_ultima_mensagem DESC
         """
         cursor.execute(query, tuple(params))
@@ -1048,6 +1120,8 @@ def listar_conversas_telegram(empresa_id: int | None = None):
             else:
                 dt_iso = dt_raw
 
+            is_arquivada = bool(l.get("arquivada")) if isinstance(l, dict) else bool(l["arquivada"] if "arquivada" in l.keys() else False)
+
             conversas.append({
                 "chat_id": chat_id,
                 "nome": nome_exibicao,
@@ -1058,18 +1132,23 @@ def listar_conversas_telegram(empresa_id: int | None = None):
                 "total_mensagens": l["total_interacoes"],
                 "nao_lidas": qtd_nao_lidas,
                 "ultima_mensagem": ultima_msg,
-                "data_ultima_mensagem": dt_iso
+                "data_ultima_mensagem": dt_iso,
+                "arquivada": is_arquivada
             })
 
-        total_nao_lidas = sum(c["nao_lidas"] for c in conversas)
+        total_ativas = sum(1 for c in conversas if not c.get("arquivada"))
+        total_arquivadas = sum(1 for c in conversas if c.get("arquivada"))
+        total_nao_lidas = sum(c["nao_lidas"] for c in conversas if not c.get("arquivada"))
         return {
             "total": len(conversas),
+            "total_ativas": total_ativas,
+            "total_arquivadas": total_arquivadas,
             "total_nao_lidas": total_nao_lidas,
             "conversas": conversas
         }
     except Exception as e:
         logger.error(f"[Telegram] Erro ao listar conversas: {e}")
-        return {"total": 0, "total_nao_lidas": 0, "conversas": []}
+        return {"total": 0, "total_ativas": 0, "total_arquivadas": 0, "total_nao_lidas": 0, "conversas": []}
     finally:
         conexao.close()
 
