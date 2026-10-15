@@ -677,43 +677,49 @@ class AgentOrchestrator:
         """
         Verifica se o cliente está solicitando o envio do documento PDF da proposta comercial,
         ou o envio/encaminhamento de uma proposta comercial já existente no sistema (ex: "Pode me enviar a proposta 18?").
+        Dúvidas e consultas (ex: "ver minhas propostas", "quais propostas") são respondidas por mensagem de texto.
         """
         if not mensagem:
             return False
         msg = mensagem.strip().lower()
 
-        tem_pdf = "pdf" in msg
-        tem_doc = any(t in msg for t in ["documento", "arquivo", "baixar", "download", "link"])
+        # 0. Se for pedido de visualização / consulta textual (ex: "ver minhas propostas", "quais propostas"),
+        # NÃO deve disparar envio direto de PDF, exceto se houver verbo explícito de envio (enviar/mandar/encaminhar/pdf).
+        padroes_consulta_texto = [
+            r"\b(ver|olhar|consultar|listar|quais|qual|mostrar|mostra|exibir|conhecer|saber)\s+.*?\b(proposta|propostas|contrato|contratos)\b",
+            r"\b(minhas?\s+propostas?|meus?\s+contratos?)\b",
+            r"\b(o\s+que\s+(?:eu\s+)?tenho\s+(?:em\s+aberto|de\s+proposta|de\s+contrato))\b",
+            r"\b(informa[cç][oõ]es|detalhes|dados)\s+.*?\b(proposta|propostas)\b"
+        ]
+        verbos_envio_estritos = [
+            "envia", "envie", "enviar", "manda", "mande", "mandar", "passa", "passe", "passar",
+            "encaminha", "encaminhar", "receber", "baixar", "download"
+        ]
+        tem_verbo_envio_estrito = any(v in msg for v in verbos_envio_estritos)
+        tem_pdf_exp = "pdf" in msg or any(t in msg for t in ["documento", "arquivo"])
         tem_proposta = any(t in msg for t in ["proposta", "orçamento", "orcamento", "cotação", "cotacao"])
 
-        verbos_envio = [
-            "envia", "envie", "enviar", "manda", "mande", "mandar", "passa", "passe", "passar",
-            "encaminha", "encaminhar", "receber", "quero", "gostaria", "ver", "tem como", "pode mandar",
-            "pode enviar", "consegue enviar", "consegue mandar", "me manda", "me envia", "me passa"
-        ]
-        tem_verbo_envio = any(v in msg for v in verbos_envio)
+        if any(re.search(p, msg) for p in padroes_consulta_texto) and not tem_verbo_envio_estrito and not tem_pdf_exp:
+            return False
 
-        # 1. Se citar expressamente "pdf" com intenção de receber/ver/mandar
-        if tem_pdf and (tem_verbo_envio or any(v in msg for v in ["tem", "pode", "consegue", "baixa"])):
+        # 1. Se citar expressamente "pdf" com intenção de receber/mandar/ver
+        if "pdf" in msg and (tem_verbo_envio_estrito or any(v in msg for v in ["quero", "gostaria", "pode", "tem", "consegue", "baixa", "ver", "passa"])):
             return True
 
         # 2. Se citar "documento" / "arquivo" / "baixar" da proposta
-        if tem_doc and tem_proposta and (tem_verbo_envio or any(v in msg for v in ["tem", "pode", "consegue"])):
+        if any(t in msg for t in ["documento", "arquivo", "baixar", "download"]) and tem_proposta and (tem_verbo_envio_estrito or any(v in msg for v in ["quero", "gostaria", "pode", "consegue"])):
             return True
 
-        # 3. Se citar número ou identificador de proposta (ex: "proposta 18", "proposta #18", "proposta n 18", "orçamento 18")
-        padrao_proposta_com_numero = re.search(r"\b(?:proposta|or[cç]amento|cota[cç][aã]o)\s*(?:n[ºo°#]?\s*|\s*#\s*)?(\d+)\b", msg)
-        if padrao_proposta_com_numero and tem_verbo_envio:
-            return True
-
-        # Se citar expressamente número de proposta com termo de proposta na frase
-        if tem_proposta and re.search(r"\b#?\d+\b", msg) and tem_verbo_envio:
-            return True
+        # 3. Se citar número ou identificador de proposta e pedir o envio (ex: "Pode me enviar a proposta 18?", "Envia a proposta 18", "Manda a 18")
+        padrao_proposta_com_numero = re.search(r"\b(?:proposta|or[cç]amento|cota[cç][aã]o)?\s*(?:n[ºo°#]?\s*|\s*#\s*)?(\d+)\b", msg)
+        if padrao_proposta_com_numero and (tem_verbo_envio_estrito or any(v in msg for v in ["pode mandar", "pode enviar", "consegue mandar", "consegue enviar"])):
+            if tem_proposta or "proposta" in msg or "#" in msg:
+                return True
 
         # 4. Se o cliente já possui propostas cadastradas e pede o envio de "a proposta" / "minha proposta"
-        # Ex: "pode me enviar a proposta?", "me envia a proposta", "manda a proposta", "quero a proposta"
+        # Ex: "pode me enviar a proposta?", "me envia a proposta", "manda a proposta"
         propostas_cadastradas = (contexto.get("propostas") or []) if contexto else []
-        if propostas_cadastradas and tem_proposta and tem_verbo_envio:
+        if propostas_cadastradas and tem_proposta and tem_verbo_envio_estrito:
             if not any(palavra_nova in msg for palavra_nova in ["nova proposta", "novo orçamento", "outra proposta", "outro orçamento", "elaborar nova", "fazer outra"]):
                 return True
 
@@ -813,6 +819,7 @@ class AgentOrchestrator:
             r"\b(status\s+d[oa]\s+(?:proposta|pedido|neg[oó]cio|contrato))\b",
             r"\b(valor\s+d[oa]\s+(?:meu\s+|minha\s+)?(?:contrato|proposta))\b",
             r"\b(o\s+que\s+(?:eu\s+)?contratei)\b",
+            r"\b(ver|olhar|consultar|mostrar|mostra|exibir|listar|saber|dados|detalhes)\s+.*?\b(proposta|propostas|contrato|contratos)\b",
         ]
         eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais) or any(re.search(p, msg_limpa) for p in padroes_comerciais_regex)
 
@@ -1406,7 +1413,9 @@ class AgentOrchestrator:
             prefixo_cliente = (
                 f"Cliente em atendimento: {nome_exibicao or 'Cliente'}. "
                 "Responda diretamente em primeira pessoa com simpatia, naturalidade e precisão absoluta. "
-                "Informe os números, valores, produtos e status das propostas e contratos dele conforme o dossiê fornecido.\n"
+                "Apresente claramente por mensagem de texto as propostas e contratos dele (número #ID, produto/serviço, valor e status) com base no dossiê fornecido.\n"
+                "Ao final da resposta, informe com gentileza que se ele desejar receber o documento em PDF de alguma proposta, "
+                "basta solicitar por aqui mesmo (por exemplo: 'Pode me enviar a proposta 18' ou 'Me envia a proposta').\n"
             )
 
             try:
