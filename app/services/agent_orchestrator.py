@@ -181,6 +181,16 @@ class AgentOrchestrator:
             contratos_linhas = cursor.fetchall()
             contratos = [dict(ct) for ct in contratos_linhas]
 
+            # 2.3. Busca catálogo de produtos e serviços ativos da empresa
+            cursor.execute(f"""
+                SELECT id, nome, preco, descricao, ativo
+                FROM produtos
+                WHERE empresa_id = {ph} AND ativo = {ph}
+                ORDER BY id ASC
+            """, (empresa_id, True))
+            produtos_catalogo_linhas = cursor.fetchall()
+            produtos_catalogo = [dict(pr) for pr in produtos_catalogo_linhas]
+
             # 3. Status de atendimento (bot vs humano)
             cursor.execute(
                 f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)",
@@ -207,6 +217,7 @@ class AgentOrchestrator:
                 "contratos": contratos,
                 "negocio_ativo": negocio_ativo,
                 "produtos_vinculados": produtos_vinculados,
+                "produtos_catalogo": produtos_catalogo,
                 "status_atendimento": conv_status.get("status") if conv_status else "bot",
                 "atendente_id": conv_status.get("atendente_id") if conv_status else None,
                 "config_empresa": config_empresa
@@ -380,6 +391,38 @@ class AgentOrchestrator:
             blocos.append("• Você não possui nenhuma pendência, proposta em aberto ou contrato no momento.")
 
         return "\n".join(blocos)
+
+    def formatar_catalogo_produtos(self, contexto: dict) -> str:
+        """
+        Formata o catálogo oficial de produtos e serviços ativos da empresa para que a IA
+        possa apresentar descrições ricas, escopo, valores e adiantar o lado do consultor.
+        """
+        produtos = contexto.get("produtos_catalogo") or []
+        if not produtos:
+            return ""
+
+        produtos_vinculados = [p.lower() for p in (contexto.get("produtos_vinculados") or [])]
+        contratos = [c.get("produto_nome", "").lower() for c in (contexto.get("contratos") or []) if c.get("produto_nome")]
+        propostas = [pr.get("produto_nome", "").lower() for pr in (contexto.get("propostas") or []) if pr.get("produto_nome")]
+        ja_conhece = set(produtos_vinculados + contratos + propostas)
+
+        linhas = ["=== [CATÁLOGO OFICIAL DE PRODUTOS E SERVIÇOS DA EMPRESA] ==="]
+        for p in produtos:
+            nome = p.get("nome") or "Produto"
+            desc = p.get("descricao") or "Solução corporativa especializada da empresa."
+            preco = float(p.get("preco") or 0.0)
+            preco_str = f"R$ {preco:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if preco > 0 else "Sob consulta / Plano Personalizado"
+
+            ja_tem = " [PRODUTO JÁ CONTRATADO/EM PROCESSO PELO CLIENTE]" if any(nome.lower() in item or item in nome.lower() for item in ja_conhece) else ""
+            linhas.append(f"• {nome}{ja_tem}:\n  - Descrição: {desc}\n  - Valor de referência: {preco_str}")
+
+        linhas.append(
+            "\nDIRETRIZ CRÍTICA DE ATENDIMENTO:\n"
+            "Quando o cliente perguntar sobre outros produtos, serviços ou demonstrar interesse em conhecer mais da empresa, "
+            "apresente detalhadamente as soluções disponíveis acima com suas descrições e valor agregado para adiantar o lado do consultor. "
+            "Tire dúvidas, explique o escopo e pergunte qual delas melhor atende à necessidade dele, sem transferir prematuramente para o consultor humano."
+        )
+        return "\n".join(linhas)
 
     def obter_pergunta_anterior(self, chat_id: str, empresa_id: int = 1) -> Optional[str]:
         """
@@ -569,19 +612,27 @@ class AgentOrchestrator:
                         "enviada uma proposta", "equipe comercial", "consultor comercial"
                     ])
                     if ofertou_proposta_ou_humano:
-                        respostas_afirmativas = {
-                            "sim", "sim!", "sim por favor", "sim pf", "quero", "quero sim", "quero sim por favor",
-                            "gostaria", "gostaria sim", "gostaria por favor", "pode ser", "com certeza", "claro",
-                            "claro com certeza", "vamos", "vamos la", "vamos lá", "bora", "pode mandar", "pode enviar",
-                            "manda", "envia", "manda aí", "manda ai", "ok", "beleza", "isso", "por favor",
-                            "quero a proposta", "manda a proposta", "gostaria da proposta", "proposta",
-                            "quero entender melhor", "entender melhor", "falar com consultor", "falar com atendente",
-                            "atendente humano", "consultor humano", "prefiro falar com atendente", "com atendente",
-                            "sim gostaria", "sim quero", "sim pode ser", "sim claro", "pode ser sim",
-                            "pode", "pode sim", "fechado", "com certeza quero", "manda ver", "manda bala"
-                        }
-                        if msg_sem_pont in respostas_afirmativas or any(msg.startswith(prefix) for prefix in ["sim", "quero", "gostaria", "pode ser", "claro", "pode mandar", "pode enviar"]):
-                            return True, "proposta"
+                        termos_duvida_ou_catalogo = [
+                            "outro", "outros", "outra", "outras", "produto", "produtos", "serviço", "serviços",
+                            "servico", "servicos", "catálogo", "catalogo", "conhecer", "saber mais", "como funciona",
+                            "funciona", "diferença", "diferenca", "plano", "planos", "oque", "o que"
+                        ]
+                        eh_interesse_catalogo_ou_produtos = any(t in msg for t in termos_duvida_ou_catalogo)
+
+                        if not eh_interesse_catalogo_ou_produtos:
+                            respostas_afirmativas = {
+                                "sim", "sim!", "sim por favor", "sim pf", "quero", "quero sim", "quero sim por favor",
+                                "gostaria", "gostaria sim", "gostaria por favor", "pode ser", "com certeza", "claro",
+                                "claro com certeza", "vamos", "vamos la", "vamos lá", "bora", "pode mandar", "pode enviar",
+                                "manda", "envia", "manda aí", "manda ai", "ok", "beleza", "isso", "por favor",
+                                "quero a proposta", "manda a proposta", "gostaria da proposta", "proposta",
+                                "quero entender melhor", "entender melhor", "falar com consultor", "falar com atendente",
+                                "atendente humano", "consultor humano", "prefiro falar com atendente", "com atendente",
+                                "sim gostaria", "sim quero", "sim pode ser", "sim claro", "pode ser sim",
+                                "pode", "pode sim", "fechado", "com certeza quero", "manda ver", "manda bala"
+                            }
+                            if msg_sem_pont in respostas_afirmativas or any(msg_sem_pont.startswith(prefix) for prefix in ["sim", "pode mandar", "pode enviar", "claro com certeza"]):
+                                return True, "proposta"
             except Exception as e:
                 logger.debug(f"[Orquestrador] Erro ao checar histórico para CTA de proposta: {e}")
 
@@ -1133,9 +1184,16 @@ class AgentOrchestrator:
         # --- AÇÃO: CONSULTA COMERCIAL (PROPOSTAS, CONTRATOS E STATUS DO CLIENTE) ---
         if intencao == "CONSULTA_COMERCIAL":
             dossie = self.formatar_dossie_comercial_cliente(contexto)
+            catalogo = self.formatar_catalogo_produtos(contexto)
             from app.routes.telegram import buscar_contexto_relevante
             contexto_publico, docs_usados = buscar_contexto_relevante(pergunta=mensagem, empresa_id=empresa_id)
-            contexto_total = f"{dossie}\n\n[INFORMAÇÕES ADICIONAIS DA BASE DE CONHECIMENTO]:\n{contexto_publico}" if contexto_publico else dossie
+
+            blocos_ctx = [dossie]
+            if catalogo:
+                blocos_ctx.append(catalogo)
+            if contexto_publico:
+                blocos_ctx.append(f"[INFORMAÇÕES ADICIONAIS DA BASE DE CONHECIMENTO]:\n{contexto_publico}")
+            contexto_total = "\n\n".join(blocos_ctx)
 
             historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
 
@@ -1175,16 +1233,23 @@ class AgentOrchestrator:
                 "contexto_publico": contexto_total
             }
 
-        # --- AÇÃO: PERGUNTA LEGÍTIMA (RAG DA BASE DE CONHECIMENTO + CONTEXTO CLIENTE) ---
+        # --- AÇÃO: PERGUNTA LEGÍTIMA (RAG DA BASE DE CONHECIMENTO + CATÁLOGO + CONTEXTO CLIENTE) ---
         from app.routes.telegram import buscar_contexto_relevante
         contexto_publico, docs_usados = buscar_contexto_relevante(pergunta=mensagem, empresa_id=empresa_id)
+        catalogo = self.formatar_catalogo_produtos(contexto)
 
-        # Se o cliente já tem propostas ou contratos, enriquece o contexto com o dossiê dele
+        blocos_ctx = []
         if contexto.get("propostas") or contexto.get("contratos") or contexto.get("negocio_ativo"):
             dossie = self.formatar_dossie_comercial_cliente(contexto)
-            contexto_total = f"{dossie}\n\n[INFORMAÇÕES DA EMPRESA]:\n{contexto_publico}" if contexto_publico else dossie
-        else:
-            contexto_total = contexto_publico
+            blocos_ctx.append(dossie)
+
+        if catalogo:
+            blocos_ctx.append(catalogo)
+
+        if contexto_publico:
+            blocos_ctx.append(f"[INFORMAÇÕES DA EMPRESA]:\n{contexto_publico}")
+
+        contexto_total = "\n\n".join(blocos_ctx) if blocos_ctx else contexto_publico
 
         historico_recente = obter_ultimas_interacoes(telegram_chat_id=chat_id, limite=3, empresa_id=empresa_id)
 
