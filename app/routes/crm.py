@@ -181,8 +181,9 @@ def gerar_template_proposta_html(
 <div class="card">
   <div class="header">
     <div>
-      <h1 class="title">Proposta Comercial #{proposta_id}</h1>
-      <div style="font-size:14px; color:#64748b; margin-top:4px;">{empresa_nome}</div>
+      <h1 class="title">Proposta Comercial</h1>
+      <div style="font-size:16px; font-weight:700; color:#16a34a; margin-top:6px;">{produto_nome}</div>
+      <div style="font-size:13px; color:#64748b; margin-top:2px;">{empresa_nome}</div>
     </div>
     <span class="badge">Válida até {data_validade}</span>
   </div>
@@ -217,7 +218,7 @@ def gerar_template_proposta_html(
   </div>
 
   <div class="footer">
-    Documento gerado automaticamente pelo CRM FluxIA em nome de {empresa_nome}.
+    Documento oficial emitido pela plataforma em nome de {empresa_nome}.
   </div>
 </div>
 </body>
@@ -225,31 +226,61 @@ def gerar_template_proposta_html(
     return html
 
 
-def disparar_email_proposta(destinatario: str, assunto: str, html_corpo: str, empresa_nome: str) -> tuple[bool, str]:
-    """Envia a proposta por e-mail via smtplib se configurado no ambiente."""
+def disparar_email_proposta(
+    destinatario: str,
+    assunto: str,
+    html_corpo: str,
+    empresa_nome: str,
+    empresa_id: int = 1,
+    pdf_bytes: Optional[bytes] = None,
+    nome_arquivo_pdf: Optional[str] = None
+) -> tuple[bool, str]:
+    """Envia a proposta por e-mail via smtplib da empresa ou do ambiente, com anexo PDF quando disponível."""
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
 
-    host = os.getenv("SMTP_HOST")
-    port = int(os.getenv("SMTP_PORT") or 587)
-    user = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASSWORD")
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    row = None
+    try:
+        cursor.execute(f"SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_remetente_nome, smtp_ativo FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        row = cursor.fetchone()
+    except Exception as e:
+        logger.warning(f"[Propostas] Erro ao consultar SMTP da empresa {empresa_id}: {e}")
+    finally:
+        conexao.close()
+
+    host = (row.get("smtp_host") if row else None) or os.getenv("SMTP_HOST")
+    port = int((row.get("smtp_port") if row else None) or os.getenv("SMTP_PORT") or 587)
+    user = (row.get("smtp_user") if row else None) or os.getenv("SMTP_USER")
+    password = (row.get("smtp_password") if row else None) or os.getenv("SMTP_PASSWORD")
+    remetente = (row.get("smtp_remetente_nome") if row else None) or empresa_nome or "FluxIA"
 
     if not host or not user or not password:
-        logger.info(f"[Propostas] SMTP não configurado (HOST/USER/PASSWORD). Proposta salva e envio pulado.")
-        return False, "SMTP não configurado no servidor (variáveis SMTP_HOST/USER). A proposta foi gerada, salva e integrada à base de conhecimento."
+        logger.info(f"[Propostas] SMTP não configurado para empresa {empresa_id}. Envio de e-mail pulado.")
+        return False, "SMTP não configurado para a empresa (configure em Configurações > Envio de E-mails (SMTP) para habilitar envios reais). A proposta foi gerada, salva e integrada à base de conhecimento."
 
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed")
         msg["Subject"] = assunto
-        msg["From"] = f"{empresa_nome} <{user}>"
+        msg["From"] = f"{remetente} <{user}>"
         msg["To"] = destinatario
 
+        msg_body = MIMEMultipart("alternative")
         part_html = MIMEText(html_corpo, "html", "utf-8")
-        msg.attach(part_html)
+        msg_body.attach(part_html)
+        msg.attach(msg_body)
 
-        server = smtplib.SMTP(host, port, timeout=12)
+        if pdf_bytes:
+            nome_anexo = nome_arquivo_pdf or "Proposta_Comercial.pdf"
+            part_pdf = MIMEApplication(pdf_bytes, _subtype="pdf")
+            part_pdf.add_header("Content-Disposition", "attachment", filename=nome_anexo)
+            msg.attach(part_pdf)
+
+        server = smtplib.SMTP(host, port, timeout=14)
         server.starttls()
         server.login(user, password)
         server.sendmail(user, [destinatario], msg.as_string())
@@ -1878,12 +1909,21 @@ Status: Emitida para o cliente"""
         email_sucesso = False
         msg_email = "Proposta gerada e registrada no sistema."
         if dados.enviar_email and email_cliente:
-            assunto = f"Proposta Comercial #{proposta_id} - {neg.get('empresa_nome') or 'FluxIA'}"
+            assunto = f"Proposta Comercial - {neg.get('produto_nome') or 'Solução'} - {neg.get('empresa_nome') or 'FluxIA'}"
+            emp_id = neg.get("empresa_id") or 1
+            from app.services.proposal_pdf_service import gerar_pdf_proposta_bytes
+            pdf_bytes = gerar_pdf_proposta_bytes(proposta_id=proposta_id, empresa_id=emp_id)
+            clean_prod = re.sub(r'[^a-zA-Z0-9]', '_', neg.get('produto_nome') or 'Solucao')[:25]
+            clean_cli = re.sub(r'[^a-zA-Z0-9]', '_', (neg.get('cliente_nome') or email_cliente.split('@')[0]))[:20]
+            nome_arq = f"Proposta_Comercial_{clean_prod}_{clean_cli}.pdf"
             email_sucesso, msg_email = disparar_email_proposta(
                 destinatario=email_cliente,
                 assunto=assunto,
                 html_corpo=html_proposta,
-                empresa_nome=neg.get("empresa_nome") or "FluxIA"
+                empresa_nome=neg.get("empresa_nome") or "FluxIA",
+                empresa_id=emp_id,
+                pdf_bytes=pdf_bytes,
+                nome_arquivo_pdf=nome_arq
             )
             novo_status_envio = "enviada" if email_sucesso else "pendente_envio"
             cursor.execute(f"UPDATE propostas SET status_envio = {ph} WHERE id = {ph}", (novo_status_envio, proposta_id))
@@ -2184,12 +2224,20 @@ Status: Proposta Oficial Gerada"""
         email_sucesso = False
         msg_extra = "Proposta gerada com sucesso e integrada à base de conhecimento!"
         if dados.enviar_email and cliente_email:
-            assunto = f"Proposta Comercial #{proposta_id} - {empresa_nome}"
+            assunto = f"Proposta Comercial - {produto_nome} - {empresa_nome}"
+            from app.services.proposal_pdf_service import gerar_pdf_proposta_bytes
+            pdf_bytes = gerar_pdf_proposta_bytes(proposta_id=proposta_id, empresa_id=target_empresa)
+            clean_prod = re.sub(r'[^a-zA-Z0-9]', '_', produto_nome)[:25]
+            clean_cli = re.sub(r'[^a-zA-Z0-9]', '_', cliente_nome)[:20]
+            nome_arq = f"Proposta_Comercial_{clean_prod}_{clean_cli}.pdf"
             email_sucesso, msg_mail = disparar_email_proposta(
                 destinatario=cliente_email,
                 assunto=assunto,
                 html_corpo=html_proposta,
-                empresa_nome=empresa_nome
+                empresa_nome=empresa_nome,
+                empresa_id=target_empresa,
+                pdf_bytes=pdf_bytes,
+                nome_arquivo_pdf=nome_arq
             )
             novo_status = "enviado" if email_sucesso else "falha_envio"
             cursor.execute(f"UPDATE propostas SET status_envio = {ph} WHERE id = {ph}", (novo_status, proposta_id))

@@ -19,7 +19,13 @@ CONFIGURACAO_PADRAO = {
     "ia_coletar_dados_obrigatorio": True,
     "followup_ativo": True,
     "followup_horas_inatividade": 24,
-    "followup_mensagem_personalizada": "Olá, {nome}! Tudo bem? Passando para saber se ficou alguma dúvida sobre {produto} ou se podemos prosseguir com o seu atendimento!"
+    "followup_mensagem_personalizada": "Olá, {nome}! Tudo bem? Passando para saber se ficou alguma dúvida sobre {produto} ou se podemos prosseguir com o seu atendimento!",
+    "smtp_host": None,
+    "smtp_port": 587,
+    "smtp_user": None,
+    "smtp_password": None,
+    "smtp_remetente_nome": None,
+    "smtp_ativo": False
 }
 
 
@@ -48,7 +54,8 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario,
                    telegram_bot_token, telegram_bot_username, telegram_webhook_ativo,
                    ia_prompt_sistema, ia_coletar_dados_obrigatorio,
-                   followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada
+                   followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada,
+                   smtp_host, smtp_port, smtp_user, smtp_password, smtp_remetente_nome, smtp_ativo
             FROM configuracoes_empresa
             WHERE empresa_id = {ph}
             ORDER BY id ASC
@@ -71,6 +78,13 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             fo_horas = linha.get("followup_horas_inatividade") if isinstance(linha, dict) else linha["followup_horas_inatividade"]
             fo_msg = linha.get("followup_mensagem_personalizada") if isinstance(linha, dict) else linha["followup_mensagem_personalizada"]
 
+            s_host = linha.get("smtp_host") if isinstance(linha, dict) else linha["smtp_host"]
+            s_port = linha.get("smtp_port") if isinstance(linha, dict) else linha["smtp_port"]
+            s_user = linha.get("smtp_user") if isinstance(linha, dict) else linha["smtp_user"]
+            s_pwd = linha.get("smtp_password") if isinstance(linha, dict) else linha["smtp_password"]
+            s_rem = linha.get("smtp_remetente_nome") if isinstance(linha, dict) else linha["smtp_remetente_nome"]
+            s_ativo = linha.get("smtp_ativo") if isinstance(linha, dict) else linha["smtp_ativo"]
+
             return {
                 "empresa_id": linha["empresa_id"],
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
@@ -91,7 +105,14 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
                 "ia_coletar_dados_obrigatorio": bool(ia_coletar) if ia_coletar is not None else CONFIGURACAO_PADRAO["ia_coletar_dados_obrigatorio"],
                 "followup_ativo": bool(fo_ativo) if fo_ativo is not None else CONFIGURACAO_PADRAO["followup_ativo"],
                 "followup_horas_inatividade": int(fo_horas) if fo_horas is not None else CONFIGURACAO_PADRAO["followup_horas_inatividade"],
-                "followup_mensagem_personalizada": fo_msg if fo_msg is not None else CONFIGURACAO_PADRAO["followup_mensagem_personalizada"]
+                "followup_mensagem_personalizada": fo_msg if fo_msg is not None else CONFIGURACAO_PADRAO["followup_mensagem_personalizada"],
+                "smtp_host": s_host,
+                "smtp_port": int(s_port or 587),
+                "smtp_user": s_user,
+                "smtp_password_mascarada": mascarar_api_key(s_pwd),
+                "smtp_remetente_nome": s_rem,
+                "smtp_ativo": bool(s_ativo),
+                "possui_smtp_proprio": bool(s_host and s_user and s_pwd)
             }
 
         padrao = CONFIGURACAO_PADRAO.copy()
@@ -100,6 +121,8 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
         padrao["possui_chave_propria"] = False
         padrao["telegram_bot_token_mascarada"] = ""
         padrao["possui_bot_proprio"] = False
+        padrao["smtp_password_mascarada"] = ""
+        padrao["possui_smtp_proprio"] = False
         return padrao
     except Exception as e:
         logger.error(f"[CompanyService] Erro ao buscar configurações da empresa {empresa_id}: {e}")
@@ -637,5 +660,128 @@ def salvar_configuracao_followup(
         raise e
     finally:
         conexao.close()
+
+
+def salvar_configuracao_smtp(
+    empresa_id: int,
+    smtp_host: Optional[str],
+    smtp_port: int,
+    smtp_user: Optional[str],
+    smtp_password: Optional[str],
+    smtp_remetente_nome: Optional[str],
+    smtp_ativo: bool = True
+) -> dict:
+    """
+    Atualiza as configurações de SMTP da empresa para envio oficial de propostas por e-mail.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+
+    try:
+        cursor.execute(f"SELECT id, smtp_password FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        existente = cursor.fetchone()
+
+        # Preserva senha anterior caso usuário não tenha preenchido uma nova
+        senha_final = smtp_password.strip() if (smtp_password and smtp_password.strip()) else None
+        if not senha_final and existente:
+            senha_final = existente.get("smtp_password") if isinstance(existente, dict) else existente["smtp_password"]
+
+        if existente:
+            cursor.execute(f"""
+                UPDATE configuracoes_empresa
+                SET smtp_host = {ph},
+                    smtp_port = {ph},
+                    smtp_user = {ph},
+                    smtp_password = {ph},
+                    smtp_remetente_nome = {ph},
+                    smtp_ativo = {ph}
+                WHERE empresa_id = {ph}
+            """, (smtp_host.strip() if smtp_host else None,
+                  smtp_port or 587,
+                  smtp_user.strip() if smtp_user else None,
+                  senha_final,
+                  smtp_remetente_nome.strip() if smtp_remetente_nome else None,
+                  smtp_ativo,
+                  empresa_id))
+        else:
+            cursor.execute(f"""
+                INSERT INTO configuracoes_empresa (
+                    empresa_id, numero_suporte_humano, mensagem_suporte,
+                    smtp_host, smtp_port, smtp_user, smtp_password, smtp_remetente_nome, smtp_ativo
+                )
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            """, (
+                empresa_id,
+                CONFIGURACAO_PADRAO["numero_suporte_humano"],
+                CONFIGURACAO_PADRAO["mensagem_suporte"],
+                smtp_host.strip() if smtp_host else None,
+                smtp_port or 587,
+                smtp_user.strip() if smtp_user else None,
+                senha_final,
+                smtp_remetente_nome.strip() if smtp_remetente_nome else None,
+                smtp_ativo
+            ))
+
+        conexao.commit()
+        return obter_configuracao_empresa(empresa_id)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[CompanyService] Erro ao salvar configurações de SMTP da empresa {empresa_id}: {e}")
+        raise e
+    finally:
+        conexao.close()
+
+
+def testar_conexao_smtp(empresa_id: int, email_destino: str) -> tuple[bool, str]:
+    """
+    Testa a conexão SMTP e envia um e-mail de teste para validar credenciais.
+    """
+    import os
+    import smtplib
+    from email.mime.text import MIMEText
+
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_remetente_nome, smtp_ativo FROM configuracoes_empresa WHERE empresa_id = {ph}", (empresa_id,))
+        row = cursor.fetchone()
+    finally:
+        conexao.close()
+
+    host = (row.get("smtp_host") if row else None) or os.getenv("SMTP_HOST")
+    port = int((row.get("smtp_port") if row else None) or os.getenv("SMTP_PORT") or 587)
+    user = (row.get("smtp_user") if row else None) or os.getenv("SMTP_USER")
+    password = (row.get("smtp_password") if row else None) or os.getenv("SMTP_PASSWORD")
+    remetente_nome = (row.get("smtp_remetente_nome") if row else None) or "FluxIA CRM"
+
+    if not host or not user or not password:
+        return False, "Host SMTP, Usuário/E-mail e Senha de Aplicativo precisam estar devidamente preenchidos."
+
+    try:
+        server = smtplib.SMTP(host, port, timeout=12)
+        server.starttls()
+        server.login(user, password)
+
+        corpo = (
+            "Olá!\n\n"
+            "Este é um e-mail de teste automático enviado a partir do CRM FluxIA.\n"
+            "Se você está recebendo esta mensagem, significa que seu servidor SMTP está configurado "
+            "corretamente e pronto para enviar propostas comerciais em PDF aos clientes da sua empresa!\n\n"
+            "Equipe FluxIA."
+        )
+        msg = MIMEText(corpo, "plain", "utf-8")
+        msg["Subject"] = f"✓ Teste de Envio SMTP - {remetente_nome}"
+        msg["From"] = f"{remetente_nome} <{user}>"
+        msg["To"] = email_destino
+
+        server.sendmail(user, [email_destino], msg.as_string())
+        server.quit()
+        return True, f"E-mail de teste enviado com sucesso para {email_destino}!"
+    except Exception as e:
+        logger.error(f"[CompanyService] Falha no teste SMTP para empresa {empresa_id}: {e}")
+        return False, f"Falha na comunicação SMTP: {str(e)}"
+
 
 

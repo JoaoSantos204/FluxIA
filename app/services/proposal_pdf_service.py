@@ -153,7 +153,7 @@ def gerar_pdf_proposta_bytes(proposta_id: int, empresa_id: int) -> Optional[byte
             Paragraph("Soluções Inteligentes em CRM e Automação de Atendimento", style_sub_empresa),
         ]
         col_dir = [
-            Paragraph(f"PROPOSTA COMERCIAL #{proposta_id:04d}", style_titulo_doc),
+            Paragraph("PROPOSTA COMERCIAL", style_titulo_doc),
             Paragraph(f"Emissão: {data_formatada} | Validade: {validade_dias} dias", style_meta_doc),
         ]
 

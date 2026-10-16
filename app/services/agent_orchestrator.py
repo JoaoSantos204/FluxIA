@@ -343,10 +343,9 @@ class AgentOrchestrator:
                 prod = p.get("produto_nome") or "Geral"
                 status = p.get("status_envio") or "Registrada"
                 cond = p.get("condicoes_pagamento") or "Conforme negociação"
-                validade = f"{p.get('validade_dias')} dias" if p.get("validade_dias") else "Não informada"
-                dt = str(p.get("criado_em") or "")[:10]
-                itens = f" | Descrição: {p.get('descricao_itens')}" if p.get("descricao_itens") else ""
-                blocos.append(f"- Proposta #{p.get('id')}: Produto: {prod} | Valor: {val} | Status: {status} | Pagamento: {cond} | Validade: {validade} | Data: {dt}{itens}")
+                validade = f"{p.get('validade_dias')} dias" if p.get('validade_dias') else "Não informada"
+                itens = f" | Descrição: {p.get('descricao_itens')}" if p.get('descricao_itens') else ""
+                blocos.append(f"- Proposta Comercial: Solução: {prod} | Valor: {val} | Status: {status} | Pagamento: {cond} | Validade: {validade} | Data: {dt}{itens}")
         else:
             blocos.append("PROPOSTAS: Nenhuma proposta formal registrada para este cliente no momento.")
 
@@ -358,7 +357,7 @@ class AgentOrchestrator:
                 status = c.get("status") or "Ativo"
                 prod = c.get("produto_nome") or "Serviço Contratado"
                 dt_ass = str(c.get("data_assinatura") or "")[:10]
-                blocos.append(f"- Contrato #{c.get('id')}: Serviço: {prod} | Valor: {val} | Status: {status} | Assinatura: {dt_ass or 'Pendente'}")
+                blocos.append(f"- Contrato Comercial: Serviço: {prod} | Valor: {val} | Status: {status} | Assinatura: {dt_ass or 'Pendente'}")
         else:
             blocos.append("CONTRATOS: Nenhum contrato ativo registrado para este cliente no momento.")
 
@@ -367,11 +366,11 @@ class AgentOrchestrator:
         for p in propostas:
             st = (p.get("status_envio") or "").lower()
             if st not in ["recusada", "cancelada"]:
-                itens_abertos.append(f"• Proposta em Aberto #{p.get('id')}: {p.get('produto_nome') or 'Solução'} (Valor: R$ {float(p.get('valor') or 0):,.2f}, Status: {p.get('status_envio') or 'Registrada'})")
+                itens_abertos.append(f"• Proposta em Aberto: {p.get('produto_nome') or 'Solução'} (Valor: R$ {float(p.get('valor') or 0):,.2f}, Status: {p.get('status_envio') or 'Registrada'})")
         for ct in contratos:
             st = (ct.get("status") or "").lower()
             if st not in ["cancelado", "rescindido"]:
-                itens_abertos.append(f"• Contrato Vigente #{ct.get('id')}: {ct.get('produto_nome') or 'Serviço'} (Valor: R$ {float(ct.get('valor_contrato') or 0):,.2f}, Status: {ct.get('status') or 'Ativo'})")
+                itens_abertos.append(f"• Contrato Vigente: {ct.get('produto_nome') or 'Serviço'} (Valor: R$ {float(ct.get('valor_contrato') or 0):,.2f}, Status: {ct.get('status') or 'Ativo'})")
 
         blocos.append("\n=== SEUS ITENS EM ABERTO CONOSCO ===")
         if itens_abertos:
@@ -381,9 +380,10 @@ class AgentOrchestrator:
 
         blocos.append(
             "\nDIRETRIZ DE PRIVACIDADE E SIGILO INTERNO:\n"
-            "Apresente apenas os Contratos e as Propostas Comerciais formais do cliente. "
+            "Apresente apenas os Contratos e as Propostas Comerciais formais do cliente identificando-os pelo NOME DO PRODUTO/SERVIÇO, datas e valores.\n"
+            "NUNCA cite códigos numéricos internos ou IDs de banco de dados (ex: #18, ID do produto, ID da proposta, ID do contrato) para o cliente. "
             "NUNCA cite termos internos de controle do CRM como 'negócio', 'estágio', 'funil', 'pipeline' ou 'valor estimado'. "
-            "Essas informações são exclusivamente para gerenciamento interno e não devem ser expostas ao cliente."
+            "Essas informações são exclusivamente para gerenciamento interno do CRM e não devem ser expostas ao cliente."
         )
 
         return "\n".join(blocos)
@@ -1184,57 +1184,25 @@ class AgentOrchestrator:
             primeiro_nome = nome_exibicao.split()[0] if nome_exibicao else ""
             saudacao = f"{primeiro_nome}, " if primeiro_nome else ""
 
-            # Extrai ID numérico específico citado na mensagem (ex: "proposta 18", "#18", "a 18")
+            # 1. Tenta identificar se o cliente citou o nome de algum produto/serviço
+            for pr in propostas_cliente:
+                p_nome = (pr.get("produto_nome") or "").lower()
+                if p_nome and len(p_nome) > 3 and p_nome in mensagem.lower():
+                    proposta_alvo = pr
+                    break
+
+            # 2. Se o usuário citou número específico por engano
             match_num = re.search(r"(?:proposta|or[cç]amento)?\s*(?:n[ºo°#]?\s*|\s*#\s*)?(\d+)", mensagem, re.IGNORECASE)
             id_citado = int(match_num.group(1)) if match_num else None
 
-            proposta_alvo = None
-
-            if id_citado:
-                # 1. Procura na lista recente do cliente
+            if not proposta_alvo and id_citado:
                 for pr in propostas_cliente:
                     if pr.get("id") == id_citado:
                         proposta_alvo = pr
                         break
 
-                # 2. Se não estiver no cache recente de 5, busca diretamente no banco de dados para este cliente/empresa
-                if not proposta_alvo:
-                    conexao = conectar()
-                    cursor = _cursor(conexao)
-                    ph = _placeholder()
-                    try:
-                        cursor.execute(f"""
-                            SELECT p.id, p.valor, p.condicoes_pagamento, p.validade_dias, p.status_envio,
-                                   p.descricao_itens, p.criado_em, COALESCE(prod.nome, prod_n.nome) AS produto_nome
-                            FROM propostas p
-                            LEFT JOIN produtos prod ON p.produto_id = prod.id
-                            LEFT JOIN negocios n ON p.negocio_id = n.id
-                            LEFT JOIN produtos prod_n ON n.produto_id = prod_n.id
-                            WHERE p.id = {ph} AND (p.empresa_id = {ph} OR p.empresa_id IS NULL)
-                        """, (id_citado, empresa_id))
-                        row = cursor.fetchone()
-                        if row:
-                            proposta_alvo = dict(row)
-                    finally:
-                        conexao.close()
-
-                # Se o usuário citou um ID específico que realmente não existe ou não pertence a ele:
-                if not proposta_alvo:
-                    props_disponiveis = [f"• Proposta #{p['id']}: {p.get('produto_nome') or 'Solução'}" for p in propostas_cliente]
-                    lista_txt = "\n".join(props_disponiveis) if props_disponiveis else "Você ainda não possui propostas formais registradas."
-                    msg_nao_encontrada = (
-                        f"Não encontrei a Proposta Comercial #{id_citado} vinculada ao seu cadastro.\n\n"
-                        f"Propostas disponíveis no seu histórico:\n{lista_txt}\n\n"
-                        "Gostaria que eu envie o PDF de alguma delas, ou prefere falar com um consultor?"
-                    )
-                    return msg_nao_encontrada, {
-                        "intencao": "ENVIO_PDF_PROPOSTA",
-                        "cadastrado": contexto["cadastrado_completo"],
-                        "documento_enviado": False,
-                        "documentos_usados": []
-                    }
-            else:
-                # Se não citou número, seleciona a proposta mais recente do cliente
+            if not proposta_alvo:
+                # Se não especificou produto ou número, seleciona a proposta mais recente do cliente
                 if propostas_cliente:
                     proposta_alvo = propostas_cliente[0]
 
@@ -1246,8 +1214,9 @@ class AgentOrchestrator:
 
                 pdf_bytes = gerar_pdf_proposta_bytes(proposta_id=id_especifico, empresa_id=empresa_id)
                 if pdf_bytes:
-                    nome_arq = f"Proposta_{id_especifico}_{empresa_id}.pdf"
-                    legenda = f"📄 Proposta Comercial #{id_especifico} - {prod_alvo} ({val_fmt})"
+                    clean_p = re.sub(r'[^a-zA-Z0-9]', '_', prod_alvo)[:25]
+                    nome_arq = f"Proposta_Comercial_{clean_p}.pdf"
+                    legenda = f"📄 Proposta Comercial - {prod_alvo} ({val_fmt})"
                     enviou = enviar_documento_telegram(
                         chat_id=chat_id,
                         arquivo_bytes=pdf_bytes,
@@ -1257,12 +1226,13 @@ class AgentOrchestrator:
                     )
                     if enviou:
                         nota_outras = ""
-                        if not id_citado and len(propostas_cliente) > 1:
-                            outras_props = [f"#{p['id']}" for p in propostas_cliente if p['id'] != id_especifico]
-                            nota_outras = f"\n\n*(Você também possui a(s) proposta(s) {', '.join(outras_props)}. Se desejar o PDF de alguma delas, basta me pedir pelo número!)*"
+                        if len(propostas_cliente) > 1:
+                            outras_props = [f"• {p.get('produto_nome') or 'Solução'}" for p in propostas_cliente if p['id'] != id_especifico]
+                            if outras_props:
+                                nota_outras = f"\n\n*(Você também possui a(s) proposta(s): {', '.join(outras_props)}. Se desejar o PDF de alguma delas, basta me pedir pelo nome do produto ou serviço!)*"
 
                         msg_resposta = (
-                            f"📄 {saudacao}acabei de te enviar o documento em PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) logo acima!{nota_outras}\n\n"
+                            f"📄 {saudacao}acabei de te enviar o documento em PDF da sua **Proposta Comercial** ({prod_alvo}) logo acima!{nota_outras}\n\n"
                             "Você pode baixar e visualizar todo o detalhamento do escopo, investimento e condições oficiais.\n\n"
                             "Se desejar tirar qualquer dúvida, solicitar algum ajuste ou aprovar a proposta, basta me responder por aqui mesmo!"
                         )
@@ -1276,7 +1246,7 @@ class AgentOrchestrator:
                     else:
                         logger.error(f"[Orquestrador] Falha ao enviar documento da proposta #{id_especifico} no Telegram.")
                         msg_falha = (
-                            f"📄 {saudacao}o PDF da sua **Proposta Comercial #{id_especifico}** ({prod_alvo}) foi gerado com sucesso, "
+                            f"📄 {saudacao}o PDF da sua **Proposta Comercial** ({prod_alvo}) foi gerado com sucesso, "
                             "mas houve uma oscilação na entrega do arquivo pelo Telegram.\n\n"
                             "Por favor, tente solicitar novamente em alguns instantes."
                         )
@@ -1458,9 +1428,9 @@ class AgentOrchestrator:
             prefixo_cliente = (
                 f"Cliente em atendimento: {nome_exibicao or 'Cliente'}. "
                 "Responda diretamente em primeira pessoa com simpatia, naturalidade e precisão absoluta. "
-                "Apresente claramente por mensagem de texto as propostas e contratos dele (número #ID, produto/serviço, valor e status) com base no dossiê fornecido.\n"
+                "Apresente claramente por mensagem de texto as propostas e contratos dele (identificando pelo nome do produto/serviço, valor e status) com base no dossiê fornecido, sem nunca citar IDs numéricos de banco de dados.\n"
                 "Ao final da resposta, informe com gentileza que se ele desejar receber o documento em PDF de alguma proposta, "
-                "basta solicitar por aqui mesmo (por exemplo: 'Pode me enviar a proposta 18' ou 'Me envia a proposta').\n"
+                "basta solicitar por aqui mesmo (indicando o nome do produto ou serviço).\n"
             )
 
             try:

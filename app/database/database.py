@@ -455,6 +455,24 @@ def _criar_banco_postgres(cursor):
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='followup_mensagem_personalizada') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN followup_mensagem_personalizada TEXT;
             END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_host') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_host TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_port') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_port INTEGER DEFAULT 587;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_user') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_user TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_password') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_password TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_remetente_nome') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_remetente_nome TEXT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_ativo') THEN
+                ALTER TABLE configuracoes_empresa ADD COLUMN smtp_ativo BOOLEAN DEFAULT FALSE;
+            END IF;
         END $$;
     """)
 

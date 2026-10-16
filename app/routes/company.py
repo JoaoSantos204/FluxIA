@@ -20,7 +20,9 @@ from app.services.company_service import (
     cadastrar_empresa,
     deletar_empresa,
     salvar_configuracao_ia_regras,
-    salvar_configuracao_followup
+    salvar_configuracao_followup,
+    salvar_configuracao_smtp,
+    testar_conexao_smtp
 )
 from app.services.security_service import verificar_admin_api_key, validar_perfil_admin_ou_master
 
@@ -85,6 +87,25 @@ class FollowupConfigRequest(BaseModel):
     followup_ativo: bool = Field(default=True, description="Ativar agendador de follow-up")
     followup_horas_inatividade: int = Field(default=24, ge=1, le=720, description="Horas de inatividade antes do disparo")
     followup_mensagem_personalizada: Optional[str] = Field(default=None, description="Modelo de mensagem ou diretrizes customizadas")
+    usuario_id: Optional[int] = None
+    usuario_perfil: Optional[str] = None
+
+
+class SmtpConfigRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    smtp_host: Optional[str] = Field(default=None, description="Servidor SMTP (ex: smtp.gmail.com, smtp.office365.com)")
+    smtp_port: int = Field(default=587, description="Porta SMTP (ex: 587 ou 465)")
+    smtp_user: Optional[str] = Field(default=None, description="Usuário/E-mail de autenticação")
+    smtp_password: Optional[str] = Field(default=None, description="Senha de aplicativo ou token")
+    smtp_remetente_nome: Optional[str] = Field(default=None, description="Nome de exibição do remetente")
+    smtp_ativo: bool = Field(default=True, description="Habilitar envio oficial de propostas por SMTP")
+    usuario_id: Optional[int] = None
+    usuario_perfil: Optional[str] = None
+
+
+class SmtpTesteRequest(BaseModel):
+    empresa_id: int = Field(default=1, description="ID da empresa")
+    email_destino: str = Field(..., description="E-mail de destino para teste")
     usuario_id: Optional[int] = None
     usuario_perfil: Optional[str] = None
 
@@ -505,5 +526,73 @@ def remover_empresa(empresa_id: int):
     return {
         "mensagem": f"Empresa {empresa_id} removida com sucesso."
     }
+
+
+@router.post("/configuracoes/smtp")
+def salvar_configuracao_smtp_endpoint(
+    dados: SmtpConfigRequest,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Salva as credenciais do servidor SMTP da empresa para envio de propostas comerciais por e-mail.
+    """
+    validar_perfil_admin_ou_master(
+        usuario_id=dados.usuario_id or x_user_id,
+        usuario_perfil=dados.usuario_perfil,
+        empresa_id=dados.empresa_id
+    )
+
+    try:
+        config = salvar_configuracao_smtp(
+            empresa_id=dados.empresa_id,
+            smtp_host=dados.smtp_host,
+            smtp_port=dados.smtp_port,
+            smtp_user=dados.smtp_user,
+            smtp_password=dados.smtp_password,
+            smtp_remetente_nome=dados.smtp_remetente_nome,
+            smtp_ativo=dados.smtp_ativo
+        )
+        return {
+            "mensagem": "Configurações de SMTP salvas com sucesso!",
+            "configuracoes": config
+        }
+    except Exception as e:
+        logger.error(f"[CompanyRoute] Erro ao salvar SMTP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao salvar configurações de SMTP: {str(e)}"
+        )
+
+
+@router.post("/configuracoes/smtp/teste")
+def testar_configuracao_smtp_endpoint(
+    dados: SmtpTesteRequest,
+    x_user_id: Optional[int] = Header(None, alias="X-User-Id")
+):
+    """
+    Testa a conexão com o servidor SMTP configurado enviando um e-mail de teste.
+    """
+    validar_perfil_admin_ou_master(
+        usuario_id=dados.usuario_id or x_user_id,
+        usuario_perfil=dados.usuario_perfil,
+        empresa_id=dados.empresa_id
+    )
+
+    sucesso, msg = testar_conexao_smtp(
+        empresa_id=dados.empresa_id,
+        email_destino=dados.email_destino.strip()
+    )
+
+    if not sucesso:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg
+        )
+
+    return {
+        "sucesso": True,
+        "mensagem": msg
+    }
+
 
 

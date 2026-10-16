@@ -1562,6 +1562,66 @@
             </div>
           </div>
 
+          <!-- SERVIDOR SMTP & ENVIO DE E-MAILS / PROPOSTAS -->
+          <div class="config-card">
+            <div class="cc-title">
+              <div class="cc-icon" style="background:#059669; color:white;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+              Envio de E-mails & Propostas (Servidor SMTP)
+            </div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+              Configure as credenciais SMTP da empresa para que o CRM envie as propostas comerciais oficiais em PDF diretamente para o e-mail dos clientes.
+            </div>
+
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:10px; margin-bottom:10px;">
+              <div class="config-field">
+                <div class="cf-label">Servidor SMTP (Host)</div>
+                <input class="cf-input" id="config-smtp-host" placeholder="Ex: smtp.gmail.com, smtp.office365.com" />
+              </div>
+              <div class="config-field">
+                <div class="cf-label">Porta</div>
+                <input class="cf-input" id="config-smtp-port" type="number" value="587" placeholder="587" />
+              </div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label">Usuário / E-mail Remetente</div>
+              <input class="cf-input" id="config-smtp-user" placeholder="seu-email@suaempresa.com.br" />
+            </div>
+
+            <div class="config-field" style="margin-bottom:10px;">
+              <div class="cf-label">Senha de Aplicativo / Token SMTP</div>
+              <input type="password" class="cf-input" id="config-smtp-password" placeholder="Senha de app ou token gerado" />
+              <div id="smtp-password-status" style="font-size:11px; margin-top:3px; color:var(--text-muted);">Consultando...</div>
+            </div>
+
+            <div class="config-field" style="margin-bottom:12px;">
+              <div class="cf-label">Nome de Exibição do Remetente</div>
+              <input class="cf-input" id="config-smtp-remetente-nome" placeholder="Ex: Atendimento Comercial | Minha Empresa" />
+            </div>
+
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <button class="btn-green" style="flex:1; justify-content:center; padding:10px;" onclick="salvarConfiguracaoSMTP()">
+                Salvar Configurações SMTP
+              </button>
+            </div>
+
+            <!-- TESTE DE ENVIO -->
+            <div style="padding:10px; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid var(--border);">
+              <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+                Testar Envio em Tempo Real
+              </div>
+              <div style="display:flex; gap:8px;">
+                <input class="cf-input" id="config-smtp-teste-email" placeholder="Digite seu e-mail para receber o teste..." style="flex:1; font-size:12px;" />
+                <button class="btn-secondary" style="font-size:12px; padding:8px 14px; white-space:nowrap;" onclick="testarEnvioSMTP()">
+                  Enviar Teste
+                </button>
+              </div>
+              <div id="smtp-teste-status" style="font-size:11px; margin-top:4px; display:none;"></div>
+            </div>
+          </div>
+
           <div class="config-card">
             <div class="cc-title">
               <div class="cc-icon fi-blue"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
@@ -5179,9 +5239,110 @@ async function carregarConfiguracoesEmpresa() {
       foMsgInput.value = data.followup_mensagem_personalizada || '';
     }
 
+    // Configurações SMTP da Empresa
+    const smtpHostInput = document.getElementById('config-smtp-host');
+    const smtpPortInput = document.getElementById('config-smtp-port');
+    const smtpUserInput = document.getElementById('config-smtp-user');
+    const smtpPwdInput = document.getElementById('config-smtp-password');
+    const smtpPwdStatus = document.getElementById('smtp-password-status');
+    const smtpRemInput = document.getElementById('config-smtp-remetente-nome');
+
+    if (smtpHostInput) smtpHostInput.value = data.smtp_host || '';
+    if (smtpPortInput) smtpPortInput.value = data.smtp_port || 587;
+    if (smtpUserInput) smtpUserInput.value = data.smtp_user || '';
+    if (smtpRemInput) smtpRemInput.value = data.smtp_remetente_nome || '';
+    if (smtpPwdInput && smtpPwdStatus) {
+      if (data.smtp_password_mascarada) {
+        smtpPwdInput.placeholder = data.smtp_password_mascarada;
+        smtpPwdInput.value = '';
+        smtpPwdStatus.innerHTML = `<span style="color:#34d399;">Senha cadastrada (${data.smtp_password_mascarada})</span>`;
+      } else {
+        smtpPwdInput.placeholder = 'Senha de app ou token gerado';
+        smtpPwdInput.value = '';
+        smtpPwdStatus.innerHTML = `<span style="color:var(--text-muted);">Nenhuma senha SMTP configurada</span>`;
+      }
+    }
+
     carregarStatusWebhook();
   } catch (err) {
     if (geminiStatus) geminiStatus.innerHTML = `<span style="color:#ef4444;">Erro: ${err.message}</span>`;
+  }
+}
+
+async function salvarConfiguracaoSMTP() {
+  const host = document.getElementById('config-smtp-host') ? document.getElementById('config-smtp-host').value.trim() : '';
+  const port = document.getElementById('config-smtp-port') ? parseInt(document.getElementById('config-smtp-port').value) || 587 : 587;
+  const user = document.getElementById('config-smtp-user') ? document.getElementById('config-smtp-user').value.trim() : '';
+  const pwd = document.getElementById('config-smtp-password') ? document.getElementById('config-smtp-password').value.trim() : '';
+  const remetente = document.getElementById('config-smtp-remetente-nome') ? document.getElementById('config-smtp-remetente-nome').value.trim() : '';
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await apiFetch('/empresa/configuracoes/smtp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        smtp_host: host || null,
+        smtp_port: port,
+        smtp_user: user || null,
+        smtp_password: pwd || null,
+        smtp_remetente_nome: remetente || null,
+        smtp_ativo: true,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar SMTP');
+    mostrarToast('Configurações de SMTP salvas com sucesso!', 'success');
+    carregarConfiguracoesEmpresa();
+  } catch (err) {
+    mostrarToast('Erro ao salvar SMTP: ' + err.message, 'error');
+  }
+}
+
+async function testarEnvioSMTP() {
+  const emailDestino = document.getElementById('config-smtp-teste-email') ? document.getElementById('config-smtp-teste-email').value.trim() : '';
+  const statusEl = document.getElementById('smtp-teste-status');
+  if (!emailDestino) {
+    mostrarToast('Digite um e-mail de destino para o teste.', 'error');
+    return;
+  }
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = '<span style="color:#38bdf8;">Enviando e-mail de teste...</span>';
+  }
+
+  const empresaId = obterEmpresaAtivaId();
+  const uid = usuarioAtual ? usuarioAtual.id : null;
+  const perfil = usuarioAtual ? usuarioAtual.perfil : 'admin';
+
+  try {
+    const res = await apiFetch('/empresa/configuracoes/smtp/teste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        email_destino: emailDestino,
+        usuario_id: uid,
+        usuario_perfil: perfil
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha no teste');
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:#34d399;">✓ ${data.mensagem}</span>`;
+    }
+    mostrarToast('E-mail de teste enviado com sucesso!', 'success');
+  } catch (err) {
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:#ef4444;">✗ ${err.message}</span>`;
+    }
+    mostrarToast('Falha no envio de teste: ' + err.message, 'error');
   }
 }
 
