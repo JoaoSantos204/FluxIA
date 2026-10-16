@@ -5874,13 +5874,7 @@ async function carregarListaConversasChatRAG() {
     const data = await res.json();
     listaConversasRAG = data.conversas || [];
 
-    const isNovaAtiva = !conversaAtivaRAGId;
-    let html = `
-      <div class="rag-history-item ${isNovaAtiva ? 'active' : ''}" onclick="iniciarNovaConversaRAG()" style="cursor:pointer; font-weight:600; font-size:12px; display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:8px; margin-bottom:8px; background:${isNovaAtiva ? 'rgba(83,74,183,0.15)' : 'var(--bg)'}; border:1px solid ${isNovaAtiva ? '#534AB7' : 'var(--border)'}; color:var(--text);">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span>+ Nova Conversa</span>
-      </div>
-    `;
+    let html = '';
 
     if (listaConversasRAG.length === 0) {
       html += `<div style="padding:20px 10px; text-align:center; color:var(--text-muted); font-size:11px;">Nenhuma conversa anterior salva neste ambiente.</div>`;
