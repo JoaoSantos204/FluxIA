@@ -940,9 +940,9 @@
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px;">
               <div class="config-field">
-                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Produto do Catálogo</div>
-                <select class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-produto-select" onchange="aoSelecionarProdutoTela(this)">
-                  <option value="">-- Ou especifique personalizado abaixo --</option>
+                <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Produto do Catálogo *</div>
+                <select class="login-input" style="padding:10px 12px; background:var(--bg); color:var(--text); border:1px solid var(--border);" id="tela-prop-produto-select" onchange="aoSelecionarProdutoTela(this)" required>
+                  <option value="">-- Selecione o Produto do Catálogo (Obrigatório) * --</option>
                 </select>
               </div>
               <div class="config-field">
@@ -3960,7 +3960,7 @@ async function abrirModalCriarProposta() {
 
     const selProd = document.getElementById('proposta-produto-select');
     if (selProd) {
-      selProd.innerHTML = '<option value="">-- Ou especifique personalizado abaixo --</option>' + produtosParaPropostaCache.map(p => `
+      selProd.innerHTML = '<option value="">-- Selecione o Produto do Catálogo (Obrigatório) * --</option>' + produtosParaPropostaCache.map(p => `
         <option value="${p.id}" data-nome="${escapeHtml(p.nome || '')}" data-preco="${p.preco || 0}" data-desc="${escapeHtml(p.descricao || '')}">
           ${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}
         </option>
@@ -4017,7 +4017,7 @@ async function carregarDadosFormularioPropostaTela() {
 
     const selProd = document.getElementById('tela-prop-produto-select');
     if (selProd) {
-      selProd.innerHTML = '<option value="">-- Ou especifique personalizado abaixo --</option>' + produtosParaPropostaCache.map(p => `
+      selProd.innerHTML = '<option value="">-- Selecione o Produto do Catálogo (Obrigatório) * --</option>' + produtosParaPropostaCache.map(p => `
         <option value="${p.id}" data-nome="${escapeHtml(p.nome || '')}" data-preco="${p.preco || 0}" data-desc="${escapeHtml(p.descricao || '')}">
           ${escapeHtml(p.nome)} — ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco || 0)}
         </option>
@@ -4097,6 +4097,12 @@ async function previsualizarPropostaTela() {
     if (inp) inp.focus();
     return;
   }
+  if (!payload.produto_id) {
+    mostrarToast('Selecione um produto do catálogo para gerar a prévia da proposta.', 'error');
+    const sel = document.getElementById('tela-prop-produto-select');
+    if (sel) sel.focus();
+    return;
+  }
 
   const iframe = document.getElementById('tela-prop-preview-iframe');
   if (iframe) {
@@ -4130,6 +4136,12 @@ async function salvarEGerarPropostaTela() {
     mostrarToast('Informe o nome do cliente / empresa.', 'error');
     const inp = document.getElementById('tela-prop-cliente-nome');
     if (inp) inp.focus();
+    return;
+  }
+  if (!payload.produto_id) {
+    mostrarToast('É obrigatório vincular um produto do catálogo à proposta comercial.', 'error');
+    const sel = document.getElementById('tela-prop-produto-select');
+    if (sel) sel.focus();
     return;
   }
   if (!payload.valor || payload.valor <= 0) {
@@ -4235,6 +4247,12 @@ async function previsualizarPropostaDireta() {
     alert('Informe o nome do cliente para gerar a pré-visualização.');
     return;
   }
+  if (!payload.produto_id) {
+    alert('Selecione um produto cadastrado no catálogo para gerar a pré-visualização.');
+    const sel = document.getElementById('proposta-produto-select');
+    if (sel) sel.focus();
+    return;
+  }
 
   const empresaId = obterEmpresaAtivaId();
   try {
@@ -4258,6 +4276,12 @@ async function salvarEGerarPropostaDireta() {
   const payload = obterDadosFormularioProposta();
   if (!payload.cliente_nome) {
     alert('Informe o nome do cliente / destinatário.');
+    return;
+  }
+  if (!payload.produto_id) {
+    alert('É obrigatório vincular um produto do catálogo à proposta comercial.');
+    const sel = document.getElementById('proposta-produto-select');
+    if (sel) sel.focus();
     return;
   }
   if (!payload.valor || payload.valor <= 0) {
@@ -7109,9 +7133,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
           <div class="config-field">
-            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Selecionar Produto do Catálogo</div>
-            <select class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-produto-select" onchange="aoSelecionarProdutoDropdown(this)">
-              <option value="">-- Ou especifique personalizado abaixo --</option>
+            <div class="cf-label" style="font-size:11px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Selecionar Produto do Catálogo *</div>
+            <select class="login-input" style="padding:8px 12px; background:var(--surface); color:var(--text); border:1px solid var(--border);" id="proposta-produto-select" onchange="aoSelecionarProdutoDropdown(this)" required>
+              <option value="">-- Selecione o Produto do Catálogo (Obrigatório) * --</option>
             </select>
           </div>
           <div class="config-field">

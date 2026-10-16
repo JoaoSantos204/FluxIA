@@ -1803,6 +1803,12 @@ def gerar_e_enviar_proposta(negocio_id: int, dados: GerarPropostaRequest):
         if not neg:
             raise HTTPException(status_code=404, detail="Negócio não encontrado.")
 
+        if not neg.get("produto_id"):
+            raise HTTPException(
+                status_code=400,
+                detail="Este negócio não possui um produto vinculado. Associe um produto do catálogo ao negócio antes de gerar a proposta comercial."
+            )
+
         email_cliente = (neg.get("cliente_email") or "").strip()
         if not email_cliente and dados.enviar_email:
             raise HTTPException(
@@ -2026,35 +2032,24 @@ def criar_proposta_direta(dados: PropostaDirectCreate, request: Request = None):
                 """, (target_empresa, cliente_nome, cliente_email or None, cliente_telefone or None))
                 cliente_id = cursor.fetchone()["id"]
 
-        # 3. Localizar ou criar produto
+        # 3. Validar e vincular produto obrigatório do catálogo
         produto_id = dados.produto_id
-        produto_nome = (dados.produto_nome or "Solução Especializada").strip()
-        produto_desc = (dados.descricao_itens or "").strip()
+        if not produto_id:
+            raise HTTPException(
+                status_code=400,
+                detail="É obrigatório vincular um produto cadastrado no catálogo para criar a proposta comercial."
+            )
 
-        if produto_id:
-            cursor.execute(f"SELECT id, nome, descricao FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (produto_id, target_empresa))
-            prod_row = cursor.fetchone()
-            if prod_row:
-                produto_nome = prod_row["nome"]
-                if not produto_desc:
-                    produto_desc = prod_row.get("descricao") or ""
-            else:
-                produto_id = None
+        cursor.execute(f"SELECT id, nome, descricao, preco FROM produtos WHERE id = {ph} AND empresa_id = {ph} AND ativo = TRUE", (produto_id, target_empresa))
+        prod_row = cursor.fetchone()
+        if not prod_row:
+            raise HTTPException(
+                status_code=400,
+                detail="O produto selecionado não foi encontrado no catálogo da sua empresa ou está inativo."
+            )
 
-        if not produto_id and produto_nome:
-            cursor.execute(f"SELECT id, descricao FROM produtos WHERE empresa_id = {ph} AND nome = {ph} LIMIT 1", (target_empresa, produto_nome))
-            p_exist = cursor.fetchone()
-            if p_exist:
-                produto_id = p_exist["id"]
-                if not produto_desc:
-                    produto_desc = p_exist.get("descricao") or ""
-            else:
-                cursor.execute(f"""
-                    INSERT INTO produtos (empresa_id, nome, descricao, preco, ativo)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, TRUE)
-                    RETURNING id
-                """, (target_empresa, produto_nome, produto_desc or None, float(dados.valor)))
-                produto_id = cursor.fetchone()["id"]
+        produto_nome = prod_row["nome"]
+        produto_desc = (dados.descricao_itens or "").strip() or (prod_row.get("descricao") or "")
 
         # 4. Localizar ou criar negócio no CRM
         cursor.execute(f"""
@@ -2226,15 +2221,30 @@ def previa_proposta_direta(dados: PropostaDirectCreate, request: Request = None)
                 raise
     target_empresa = operador["empresa_id"] if (operador and operador["perfil"] != "master") else (dados.empresa_id or 1)
 
+    if not dados.produto_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Selecione um produto cadastrado no catálogo para gerar a pré-visualização da proposta."
+        )
+
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
     empresa_nome = "FluxIA"
+    produto_nome = dados.produto_nome or "Solução Especializada"
+    produto_desc = dados.descricao_itens or ""
     try:
         cursor.execute(f"SELECT nome FROM empresas WHERE id = {ph}", (target_empresa,))
         row = cursor.fetchone()
         if row:
             empresa_nome = row["nome"]
+
+        cursor.execute(f"SELECT nome, descricao FROM produtos WHERE id = {ph} AND empresa_id = {ph}", (dados.produto_id, target_empresa))
+        p_row = cursor.fetchone()
+        if p_row:
+            produto_nome = p_row["nome"]
+            if not produto_desc:
+                produto_desc = p_row.get("descricao") or ""
     finally:
         conexao.close()
 
@@ -2242,8 +2252,8 @@ def previa_proposta_direta(dados: PropostaDirectCreate, request: Request = None)
         cliente_nome=dados.cliente_nome or "Cliente Exemplo",
         cliente_email=dados.cliente_email or "",
         cliente_telefone=dados.cliente_telefone or "",
-        produto_nome=dados.produto_nome or "Solução Especializada",
-        produto_descricao=dados.descricao_itens or "",
+        produto_nome=produto_nome,
+        produto_descricao=produto_desc,
         valor=float(dados.valor or 0),
         condicoes=dados.condicoes_pagamento or "À vista via PIX ou em 12x",
         validade_dias=dados.validade_dias or 15,
