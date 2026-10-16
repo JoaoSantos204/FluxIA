@@ -341,6 +341,32 @@ def _criar_banco_postgres(cursor):
         )
     """)
 
+    # 17. Conversas e Mensagens da IA Interna do Portal (Copiloto / Chat RAG)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversas_chat_portal (
+            id SERIAL PRIMARY KEY,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+            titulo VARCHAR(255) NOT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS mensagens_chat_portal (
+            id SERIAL PRIMARY KEY,
+            conversa_id INTEGER NOT NULL REFERENCES conversas_chat_portal(id) ON DELETE CASCADE,
+            remetente VARCHAR(20) NOT NULL CHECK (remetente IN ('usuario', 'ia')),
+            texto TEXT NOT NULL,
+            fonte VARCHAR(50),
+            teve_contexto BOOLEAN DEFAULT FALSE,
+            documentos_utilizados TEXT,
+            modelo_usado VARCHAR(100),
+            telemetria_id INTEGER,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_conversas_chat_portal_usr ON conversas_chat_portal(usuario_id, empresa_id, atualizado_em DESC);
+        CREATE INDEX IF NOT EXISTS idx_mensagens_chat_portal_conv ON mensagens_chat_portal(conversa_id, id ASC);
+    """)
+
     # Migrações idempotentes para colunas de bancos já existentes
     cursor.execute("""
         DO $$

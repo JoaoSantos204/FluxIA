@@ -242,9 +242,18 @@ class AIService:
         if historico:
             linhas_hist = []
             for interacao in historico:
-                usuario_msg = interacao.get("mensagem_usuario", "")
-                ia_msg = interacao.get("resposta_ia", "")
-                linhas_hist.append(f"Colaborador: {usuario_msg}\nCopiloto: {ia_msg}")
+                remetente = interacao.get("remetente") or interacao.get("role")
+                texto = interacao.get("texto") or interacao.get("content")
+                if remetente and texto:
+                    nome_papel = "Colaborador" if remetente in ("usuario", "user", "human") else "Copiloto"
+                    linhas_hist.append(f"{nome_papel}: {texto}")
+                else:
+                    usuario_msg = interacao.get("mensagem_usuario", "")
+                    ia_msg = interacao.get("resposta_ia", "")
+                    if usuario_msg:
+                        linhas_hist.append(f"Colaborador: {usuario_msg}")
+                    if ia_msg:
+                        linhas_hist.append(f"Copiloto: {ia_msg}")
             partes.append("--- HISTÓRICO RECENTE ---\n" + "\n\n".join(linhas_hist))
 
         partes.append(f"--- PERGUNTA DO COLABORADOR ---\n{pergunta}")

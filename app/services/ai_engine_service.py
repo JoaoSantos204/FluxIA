@@ -203,12 +203,20 @@ class MultiVendorAIEngine:
 
         if historico:
             for item in historico:
-                u_msg = item.get("mensagem_usuario", "")
-                ia_msg = item.get("resposta_ia", "")
-                if u_msg:
-                    mensagens.append(HumanMessage(content=u_msg))
-                if ia_msg:
-                    mensagens.append(AIMessage(content=ia_msg))
+                remetente = item.get("remetente") or item.get("role")
+                texto = item.get("texto") or item.get("content")
+                if remetente and texto:
+                    if remetente in ("usuario", "user", "human"):
+                        mensagens.append(HumanMessage(content=texto))
+                    elif remetente in ("ia", "assistant", "ai", "bot"):
+                        mensagens.append(AIMessage(content=texto))
+                else:
+                    u_msg = item.get("mensagem_usuario", "")
+                    ia_msg = item.get("resposta_ia", "")
+                    if u_msg:
+                        mensagens.append(HumanMessage(content=u_msg))
+                    if ia_msg:
+                        mensagens.append(AIMessage(content=ia_msg))
 
         partes_usuario.append(f"--- PERGUNTA DO USUÁRIO ---\n{pergunta}")
         mensagens.append(HumanMessage(content="\n\n".join(partes_usuario)))
