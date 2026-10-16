@@ -1284,7 +1284,7 @@
         <div class="metric-card" style="padding:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div class="section-title">Base de Conhecimento & Catálogos Mais Utilizados</div>
-            <span style="font-size:11px; color:var(--text-muted);">Fontes consultadas nas respostas</span>
+            <span style="font-size:11px; color:var(--text-muted);">Share de uso da base (% do total de consultas)</span>
           </div>
           <div id="aud-documentos-container">
             <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:12px;">Carregando ranking de documentos...</div>
@@ -4756,7 +4756,7 @@ async function carregarAuditoriaIA() {
                 <th style="padding:8px 6px;">#</th>
                 <th style="padding:8px 6px;">Documento / Catálogo</th>
                 <th style="padding:8px 6px; text-align:center;">Consultas</th>
-                <th style="padding:8px 6px; text-align:center;">Participação</th>
+                <th style="padding:8px 6px; text-align:center;" title="Fatia no volume total de consultas à base de conhecimento (sempre <= 100%)">Participação</th>
                 <th style="padding:8px 6px; text-align:right;">Última Utilização</th>
               </tr>
             </thead>
@@ -4790,27 +4790,54 @@ async function carregarAuditoriaIA() {
       }
     }
 
-    // 3. Renderiza Distribuição por Provedores / Modelos
+    // 3. Renderiza Distribuição por Provedores / Modelos Especificados
     const provContainer = document.getElementById('aud-provedores-container');
     if (provContainer) {
+      const modAtend = (data.modelos && data.modelos.atendimento) || {};
+      const modJuiz = (data.modelos && data.modelos.auditor_juiz) || {};
+
+      const nomeAtend = modAtend.modelo_ativo || 'gemini-3.5-flash-lite';
+      const fallbackAtend = modAtend.modelo_fallback || 'gemini-3.6-flash';
+      const nomeJuiz = modJuiz.modelo_juiz || 'gemini-3.5-flash-lite';
+      const fallbackJuiz = modJuiz.modelo_fallback || 'gpt-4o-mini';
+
       provContainer.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+          <!-- Card 1: Modelo de Atendimento -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
             <div>
-              <strong style="color:var(--text); font-size:13px;">GOOGLE GEMINI FLASH</strong>
-              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Atendimento Telegram & Portal · Resposta rápida</div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <strong style="color:var(--text); font-size:13px;">Google Gemini Flash (Atendimento)</strong>
+                <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8; font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px;">Atendimento</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                <strong>Modelo Ativo:</strong> <code style="font-size:11px; color:#38bdf8; font-weight:700;">${escapeHtml(nomeAtend)}</code> · <span>Fallback: <code>${escapeHtml(fallbackAtend)}</code></span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                Canais Telegram & Portal Web · Resposta rápida com busca vetorial RAG
+              </div>
             </div>
-            <div style="text-align:right;">
+            <div style="text-align:right; min-width:110px;">
               <span class="contract-status-badge cs-signed" style="font-size:10px;">Ativo (Orquestrado)</span>
             </div>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
+
+          <!-- Card 2: Modelo Juiz (LLM-as-a-Judge) -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">
             <div>
-              <strong style="color:var(--text); font-size:13px;">AUDITOR ONLINE (LLM-as-a-Judge)</strong>
-              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Verificação de catálogo, preços e anti-alucinação</div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <strong style="color:var(--text); font-size:13px;">Auditor Online (LLM-as-a-Judge)</strong>
+                <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px;">Juiz Avaliador</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                <strong>Modelo Juiz:</strong> <code style="font-size:11px; color:#10b981; font-weight:700;">${escapeHtml(nomeJuiz)}</code> · <span>Fallback: <code>${escapeHtml(fallbackJuiz)} (OpenAI)</code></span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                Auditoria contínua de fidelidade, catálogo de produtos, preços e anti-alucinação
+              </div>
             </div>
-            <div style="text-align:right;">
-              <span class="contract-status-badge cs-signed" style="font-size:10px;">Contínuo</span>
+            <div style="text-align:right; min-width:110px;">
+              <span class="contract-status-badge cs-signed" style="font-size:10px;">Juiz Contínuo</span>
             </div>
           </div>
         </div>
@@ -4834,7 +4861,7 @@ async function carregarAuditoriaIA() {
                   <th style="padding:10px 8px; min-width:220px;">Resposta Gerada</th>
                   <th style="padding:10px 8px; text-align:center;">Tokens / Custo</th>
                   <th style="padding:10px 8px; text-align:center;">Aderência</th>
-                  <th style="padding:10px 8px; min-width:200px;">Parecer da Auditoria</th>
+                  <th style="padding:10px 8px; min-width:220px;">Parecer da Auditoria</th>
                   <th style="padding:10px 8px; text-align:center;">Ação</th>
                 </tr>
               </thead>
@@ -4858,6 +4885,7 @@ async function carregarAuditoriaIA() {
                   const perguntaText = it.pergunta || 'Interação de atendimento';
                   const respostaText = it.resposta || 'Processado via LLM';
                   const justificativaText = it.justificativa_avaliacao || 'Resposta alinhada com as diretrizes da empresa.';
+                  const juizModeloFmt = it.avaliador_modelo || 'gemini-3.5-flash-lite';
 
                   return `
                     <tr style="border-bottom:1px solid var(--border);">
@@ -4876,8 +4904,11 @@ async function carregarAuditoriaIA() {
                       <td style="padding:10px 8px; text-align:center; white-space:nowrap;">
                         ${badgeAderencia}
                       </td>
-                      <td style="padding:10px 8px; max-width:220px; font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(justificativaText)}">
-                        ${escapeHtml(justificativaText)}
+                      <td style="padding:10px 8px; max-width:240px; font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(justificativaText)}">
+                        <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(justificativaText)}</div>
+                        <div style="font-size:10px; color:#10b981; margin-top:2px;">
+                          Juiz: <code style="font-size:10px; background:rgba(16,185,129,0.12); color:#10b981; padding:1px 4px; border-radius:3px; font-weight:600;">${escapeHtml(juizModeloFmt)}</code>
+                        </div>
                       </td>
                       <td style="padding:10px 8px; text-align:center; white-space:nowrap;">
                         <button class="btn-secondary" onclick="abrirModalDetalhesAuditoria(${idx})" style="padding:4px 8px; font-size:11px; border-radius:6px;">
@@ -4908,6 +4939,8 @@ function abrirModalDetalhesAuditoria(idx) {
   document.getElementById('aud-modal-data').textContent = it.criado_em ? (typeof formatarDataFuso === 'function' ? formatarDataFuso(it.criado_em) : new Date(it.criado_em).toLocaleString('pt-BR')) : 'Recente';
   document.getElementById('aud-modal-canal').textContent = (it.canal === 'telegram') ? 'Telegram' : 'Portal Web';
   document.getElementById('aud-modal-modelo').textContent = `${(it.vendor || 'google').toUpperCase()} · ${it.modelo || 'gemini-3.5-flash-lite'}`;
+  const elJuiz = document.getElementById('aud-modal-juiz');
+  if (elJuiz) elJuiz.textContent = it.avaliador_modelo || 'gemini-3.5-flash-lite';
   document.getElementById('aud-modal-tokens').textContent = `${(it.tokens_total || 0).toLocaleString('pt-BR')} (Entrada: ${it.tokens_prompt || 0} | Saída: ${it.tokens_completion || 0})`;
   document.getElementById('aud-modal-custo').textContent = `R$ ${(it.custo_estimado_brl || 0).toFixed(4)} ($ ${(it.custo_estimado_usd || 0).toFixed(6)} USD)`;
   document.getElementById('aud-modal-latencia').textContent = `${it.latencia_ms || 0} ms`;
@@ -7237,8 +7270,12 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size:12px; font-weight:600; color:#38bdf8;" id="aud-modal-canal">-</div>
         </div>
         <div>
-          <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Modelo</div>
+          <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Modelo Atendimento</div>
           <div style="font-size:12px; font-weight:600; color:var(--text);" id="aud-modal-modelo">-</div>
+        </div>
+        <div>
+          <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Modelo Juiz</div>
+          <div style="font-size:12px; font-weight:600; color:#10b981;" id="aud-modal-juiz">-</div>
         </div>
         <div>
           <div style="font-size:10px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Custo (R$)</div>

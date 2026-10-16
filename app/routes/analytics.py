@@ -122,11 +122,12 @@ def documentos_mais_usados(
                 if not ranking[nome]["ultima_utilizacao"] and data_criado:
                     ranking[nome]["ultima_utilizacao"] = data_criado
 
+        total_todas_consultas = sum(dados["total_consultas"] for dados in ranking.values())
         resultado = []
         for nome, dados in ranking.items():
             qtd = dados["total_consultas"]
             media = round(dados["soma_similaridade"] / qtd, 3) if qtd > 0 else 0.0
-            taxa_part = round((qtd / total_com_contexto) * 100, 1) if total_com_contexto > 0 else 0.0
+            taxa_part = round((qtd / total_todas_consultas) * 100, 1) if total_todas_consultas > 0 else 0.0
             resultado.append({
                 "nome_arquivo": nome,
                 "total_consultas": qtd,
@@ -139,6 +140,7 @@ def documentos_mais_usados(
         return {
             "total_documentos_rankeados": len(resultado),
             "total_consultas_com_contexto": total_com_contexto,
+            "total_consultas_documentos": total_todas_consultas,
             "ranking": resultado
         }
     finally:
@@ -545,9 +547,10 @@ def obter_auditoria_consolidada_ia(
                     doc_map[nome]["ultima_utilizacao"] = dt
 
         ranking_documentos = []
+        total_todas_consultas = sum(dados["total_consultas"] for dados in doc_map.values())
         for nome, dados in doc_map.items():
             qtd = dados["total_consultas"]
-            taxa_part = round((qtd / total_ctx) * 100.0, 1) if total_ctx > 0 else 0.0
+            taxa_part = round((qtd / total_todas_consultas) * 100.0, 1) if total_todas_consultas > 0 else 0.0
             ranking_documentos.append({
                 "nome_arquivo": nome,
                 "total_consultas": qtd,
@@ -582,7 +585,8 @@ def obter_auditoria_consolidada_ia(
                     ELSE e.score_fidelidade
                 END AS score_aderencia_pct,
                 e.possivel_alucinacao,
-                e.justificativa_avaliacao
+                e.justificativa_avaliacao,
+                e.avaliador_modelo
             FROM ia_telemetria_execucao t
             LEFT JOIN ia_evaluations e ON e.telemetria_id = t.id
             {where_t}
@@ -597,6 +601,7 @@ def obter_auditoria_consolidada_ia(
             custo_item_usd = float(it.get("custo_estimado_usd") or 0.0)
             it["custo_estimado_brl"] = round(custo_item_usd * 5.60, 4)
             it["score_aderencia_pct"] = round(float(it.get("score_aderencia_pct") or 100.0), 1)
+            it["avaliador_modelo"] = it.get("avaliador_modelo") or "gemini-3.5-flash-lite"
             itens.append(it)
 
         return {
@@ -614,6 +619,23 @@ def obter_auditoria_consolidada_ia(
                 "total_alucinacoes": total_alucinacoes
             },
             "ranking_documentos": ranking_documentos[:15],
+            "modelos": {
+                "atendimento": {
+                    "provedor": "Google Gemini",
+                    "modelo_ativo": "gemini-3.5-flash-lite",
+                    "modelo_fallback": "gemini-3.6-flash",
+                    "papel": "Atendimento inteligente Telegram & Portal Web (RAG)",
+                    "status": "Ativo (Orquestrado)"
+                },
+                "auditor_juiz": {
+                    "provedor": "Google Gemini (Fallback: OpenAI)",
+                    "modelo_juiz": "gemini-3.5-flash-lite",
+                    "modelo_fallback": "gpt-4o-mini",
+                    "metodologia": "LLM-as-a-Judge",
+                    "papel": "Auditoria de fidelidade, catálogo de produtos, preços e anti-alucinação",
+                    "status": "Juiz Contínuo"
+                }
+            },
             "interacoes": itens,
             "paginacao": {
                 "pagina": pagina_val,
