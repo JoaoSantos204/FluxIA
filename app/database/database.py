@@ -336,9 +336,22 @@ def _criar_banco_postgres(cursor):
             atendente_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
             resposta_atendente TEXT,
             canal VARCHAR(50) DEFAULT 'telegram',
+            nao_lido BOOLEAN DEFAULT FALSE,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+
+        CREATE TABLE IF NOT EXISTS ticket_mensagens (
+            id SERIAL PRIMARY KEY,
+            ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+            empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            remetente VARCHAR(20) NOT NULL CHECK (remetente IN ('cliente', 'atendente', 'sistema')),
+            atendente_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            texto TEXT NOT NULL,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_ticket_mensagens_ticket ON ticket_mensagens(ticket_id, id ASC);
+        CREATE INDEX IF NOT EXISTS idx_ticket_mensagens_empresa ON ticket_mensagens(empresa_id);
     """)
 
     # 17. Conversas e Mensagens da IA Interna do Portal (Copiloto / Chat RAG)
@@ -472,6 +485,15 @@ def _criar_banco_postgres(cursor):
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='configuracoes_empresa' AND column_name='smtp_ativo') THEN
                 ALTER TABLE configuracoes_empresa ADD COLUMN smtp_ativo BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tickets' AND column_name='nao_lido') THEN
+                ALTER TABLE tickets ADD COLUMN nao_lido BOOLEAN DEFAULT FALSE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='ticket_id_ativo') THEN
+                ALTER TABLE conversas_telegram ADD COLUMN ticket_id_ativo INTEGER REFERENCES tickets(id) ON DELETE SET NULL;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversas_telegram' AND column_name='ultimo_humano_em') THEN
+                ALTER TABLE conversas_telegram ADD COLUMN ultimo_humano_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
             END IF;
         END $$;
     """)

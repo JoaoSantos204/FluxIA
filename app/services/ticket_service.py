@@ -129,21 +129,29 @@ def criar_ticket_automatico(
                 UPDATE tickets
                 SET ultima_mensagem_cliente = {ph},
                     resumo_conversa = {ph},
+                    nao_lido = TRUE,
                     atualizado_em = CURRENT_TIMESTAMP
                 WHERE id = {ph}
                 RETURNING id, titulo, tipo, status, prioridade, resumo_conversa, criado_em
             """, (ultima_mensagem_cliente, resumo_ia, ticket_existente["id"]))
             row = cursor.fetchone()
+
+            if ultima_mensagem_cliente:
+                cursor.execute(f"""
+                    INSERT INTO ticket_mensagens (ticket_id, empresa_id, remetente, texto)
+                    VALUES ({ph}, {ph}, 'cliente', {ph})
+                """, (ticket_existente["id"], empresa_id, ultima_mensagem_cliente))
+
             conexao.commit()
             return dict(row)
 
         cursor.execute(f"""
             INSERT INTO tickets (
                 empresa_id, cliente_id, telegram_chat_id, titulo, tipo, status,
-                prioridade, resumo_conversa, ultima_mensagem_cliente, canal
+                prioridade, resumo_conversa, ultima_mensagem_cliente, canal, nao_lido
             ) VALUES (
                 {ph}, {ph}, {ph}, {ph}, {ph}, 'aberto',
-                {ph}, {ph}, {ph}, 'telegram'
+                {ph}, {ph}, {ph}, 'telegram', TRUE
             )
             RETURNING id, titulo, tipo, status, prioridade, resumo_conversa, criado_em
         """, (
@@ -157,6 +165,13 @@ def criar_ticket_automatico(
             ultima_mensagem_cliente
         ))
         row = cursor.fetchone()
+
+        if row and ultima_mensagem_cliente:
+            cursor.execute(f"""
+                INSERT INTO ticket_mensagens (ticket_id, empresa_id, remetente, texto)
+                VALUES ({ph}, {ph}, 'cliente', {ph})
+            """, (row["id"], empresa_id, ultima_mensagem_cliente))
+
         conexao.commit()
         return dict(row)
 
@@ -207,7 +222,7 @@ def listar_tickets(
                 t.titulo, t.tipo, t.status, t.prioridade,
                 t.resumo_conversa, t.ultima_mensagem_cliente,
                 t.atendente_id, t.resposta_atendente, t.canal,
-                t.criado_em, t.atualizado_em,
+                t.nao_lido, t.criado_em, t.atualizado_em,
                 c.nome AS cliente_nome,
                 c.telefone AS cliente_telefone,
                 c.email AS cliente_email,
@@ -287,7 +302,8 @@ def responder_ticket(
 ) -> Dict[str, Any]:
     """
     Envia a resposta do atendente humano diretamente para o cliente via Telegram,
-    registra no histórico de conversas, vincula o operador e atualiza o ticket.
+    registra no histórico de mensagens do ticket (ticket_mensagens),
+    registra no histórico geral, vincula o operador e define o ticket ativo da sessão.
     """
     from app.routes.telegram import enviar_mensagem_telegram
 
@@ -311,34 +327,44 @@ def responder_ticket(
                 empresa_id=empresa_id
             )
 
-            # 2. Grava no histórico de conversas
+            # 2. Grava no histórico geral de conversas
             salvar_interacao(
                 telegram_chat_id=chat_id,
                 mensagem_usuario="",
-                resposta_ia=texto_resposta,
+                resposta_ia=f"[Operador]: {texto_resposta}",
                 lida=True,
                 empresa_id=empresa_id
             )
 
-            # 3. Define atendimento como humano na tabela de conversas
+            # 3. Define atendimento como humano e vincula este ticket como o TICKET ATIVO da sessão
             cursor.execute(f"""
-                INSERT INTO conversas_telegram (chat_id, status, atendente_id, empresa_id)
-                VALUES ({ph}, 'humano', {ph}, {ph})
+                INSERT INTO conversas_telegram (chat_id, status, atendente_id, empresa_id, ticket_id_ativo, ultimo_humano_em)
+                VALUES ({ph}, 'humano', {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)
                 ON CONFLICT (chat_id) DO UPDATE SET 
                     status = 'humano', 
-                    atendente_id = {ph}, 
+                    atendente_id = EXCLUDED.atendente_id, 
+                    empresa_id = EXCLUDED.empresa_id,
+                    ticket_id_ativo = EXCLUDED.ticket_id_ativo,
+                    ultimo_humano_em = CURRENT_TIMESTAMP,
                     atualizado_em = CURRENT_TIMESTAMP
-            """, (chat_id, atendente_id, empresa_id, atendente_id))
+            """, (chat_id, atendente_id, empresa_id, ticket_id))
 
-        # 4. Atualiza o ticket
+        # 4. Registra no histórico específico do ticket (ticket_mensagens)
+        cursor.execute(f"""
+            INSERT INTO ticket_mensagens (ticket_id, empresa_id, remetente, atendente_id, texto)
+            VALUES ({ph}, {ph}, 'atendente', {ph}, {ph})
+        """, (ticket_id, empresa_id, atendente_id, texto_resposta))
+
+        # 5. Atualiza o ticket marcando como lido (operador já respondeu)
         cursor.execute(f"""
             UPDATE tickets
             SET status = {ph},
                 atendente_id = {ph},
                 resposta_atendente = {ph},
+                nao_lido = FALSE,
                 atualizado_em = CURRENT_TIMESTAMP
             WHERE id = {ph}
-            RETURNING id, status, atendente_id, resposta_atendente, atualizado_em
+            RETURNING id, status, atendente_id, resposta_atendente, nao_lido, atualizado_em
         """, (novo_status, atendente_id, texto_resposta, ticket_id))
         atualizado = cursor.fetchone()
         conexao.commit()
@@ -353,13 +379,93 @@ def responder_ticket(
         conexao.close()
 
 
+def adicionar_mensagem_cliente_ticket(
+    ticket_id: int,
+    empresa_id: int,
+    mensagem_cliente: str
+):
+    """
+    Anexa uma nova mensagem do cliente ao histórico específico do ticket,
+    marcando-o como não lido para alertar o operador no menu lateral.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            INSERT INTO ticket_mensagens (ticket_id, empresa_id, remetente, texto)
+            VALUES ({ph}, {ph}, 'cliente', {ph})
+        """, (ticket_id, empresa_id, mensagem_cliente))
+
+        cursor.execute(f"""
+            UPDATE tickets
+            SET ultima_mensagem_cliente = {ph},
+                nao_lido = TRUE,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = {ph} AND empresa_id = {ph}
+        """, (mensagem_cliente, ticket_id, empresa_id))
+
+        conexao.commit()
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[TicketService] Falha ao adicionar mensagem do cliente ao ticket {ticket_id}: {e}")
+    finally:
+        conexao.close()
+
+
+def listar_mensagens_ticket(ticket_id: int, empresa_id: int) -> List[Dict[str, Any]]:
+    """Lista o histórico completo de mensagens do ticket (cliente e atendente)."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            SELECT tm.id, tm.ticket_id, tm.empresa_id, tm.remetente, tm.atendente_id, tm.texto, tm.criado_em,
+                   u.nome AS atendente_nome
+            FROM ticket_mensagens tm
+            LEFT JOIN usuarios u ON u.id = tm.atendente_id
+            WHERE tm.ticket_id = {ph} AND tm.empresa_id = {ph}
+            ORDER BY tm.id ASC
+        """, (ticket_id, empresa_id))
+        linhas = cursor.fetchall()
+        res = []
+        for r in linhas:
+            item = dict(r)
+            item["criado_em"] = str(item["criado_em"]) if item.get("criado_em") else ""
+            res.append(item)
+        return res
+    finally:
+        conexao.close()
+
+
+def marcar_ticket_como_lido(ticket_id: int, empresa_id: int) -> bool:
+    """Marca o ticket como lido pelo atendente, decrementando o badge de alerta."""
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            UPDATE tickets
+            SET nao_lido = FALSE, atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = {ph} AND empresa_id = {ph}
+        """, (ticket_id, empresa_id))
+        conexao.commit()
+        return True
+    finally:
+        conexao.close()
+
+
 def atualizar_status_ticket(
     ticket_id: int,
     novo_status: str,
     empresa_id: int,
     atendente_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Atualiza o status de um ticket (aberto, em_atendimento, resolvido)."""
+    """
+    Atualiza o status de um ticket (aberto, em_atendimento, resolvido).
+    Se o ticket for resolvido e ele era o ticket ativo da sessão de atendimento humano,
+    devolve automaticamente a conversa do cliente para o modo IA ('bot').
+    """
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
@@ -372,27 +478,43 @@ def atualizar_status_ticket(
             set_clauses.append(f"atendente_id = {ph}")
             params.append(atendente_id)
 
+        if novo_status == "resolvido":
+            set_clauses.append("nao_lido = FALSE")
+
         params.extend([ticket_id, empresa_id])
 
         cursor.execute(f"""
             UPDATE tickets
             SET {', '.join(set_clauses)}
             WHERE id = {ph} AND empresa_id = {ph}
-            RETURNING id, status, atendente_id, atualizado_em
+            RETURNING id, status, atendente_id, telegram_chat_id, atualizado_em
         """, tuple(params))
         row = cursor.fetchone()
-        conexao.commit()
 
         if not row:
             raise ValueError("Ticket não encontrado.")
 
+        # Se resolvido, verifica se deve devolver a conversa ao bot
+        if novo_status == "resolvido":
+            chat_id = row.get("telegram_chat_id")
+            if chat_id:
+                cursor.execute(f"""
+                    UPDATE conversas_telegram
+                    SET status = 'bot',
+                        atendente_id = NULL,
+                        ticket_id_ativo = NULL,
+                        atualizado_em = CURRENT_TIMESTAMP
+                    WHERE chat_id = {ph} AND (ticket_id_ativo = {ph} OR ticket_id_ativo IS NULL)
+                """, (chat_id, ticket_id))
+
+        conexao.commit()
         return dict(row)
     finally:
         conexao.close()
 
 
 def obter_metricas_tickets(empresa_id: int) -> Dict[str, int]:
-    """Retorna contadores de tickets para badges e dashboard."""
+    """Retorna contadores de tickets para badges e dashboard, incluindo contagem de não lidos."""
     conexao = conectar()
     cursor = _cursor(conexao)
     ph = _placeholder()
@@ -403,18 +525,50 @@ def obter_metricas_tickets(empresa_id: int) -> Dict[str, int]:
                 COUNT(*) AS total,
                 COUNT(CASE WHEN status = 'aberto' THEN 1 END) AS abertos,
                 COUNT(CASE WHEN status = 'em_atendimento' THEN 1 END) AS em_atendimento,
-                COUNT(CASE WHEN status = 'resolvido' THEN 1 END) AS resolvidos
+                COUNT(CASE WHEN status = 'resolvido' THEN 1 END) AS resolvidos,
+                COUNT(CASE WHEN (status = 'aberto' OR (nao_lido = TRUE AND status != 'resolvido')) THEN 1 END) AS nao_lidos
             FROM tickets
             WHERE empresa_id = {ph}
         """, (empresa_id,))
         row = cursor.fetchone()
         if not row:
-            return {"total": 0, "abertos": 0, "em_atendimento": 0, "resolvidos": 0}
+            return {"total": 0, "abertos": 0, "em_atendimento": 0, "resolvidos": 0, "nao_lidos": 0}
         return {
             "total": int(row["total"] or 0),
             "abertos": int(row["abertos"] or 0),
             "em_atendimento": int(row["em_atendimento"] or 0),
-            "resolvidos": int(row["resolvidos"] or 0)
+            "resolvidos": int(row["resolvidos"] or 0),
+            "nao_lidos": int(row["nao_lidos"] or 0)
         }
+    finally:
+        conexao.close()
+
+
+def verificar_timeouts_conversas_humano(minutos_inatividade: int = 30) -> int:
+    """
+    Varre conversas em modo 'humano' que ficaram inativas por mais de 'minutos_inatividade'
+    e devolve-as automaticamente para o modo IA ('bot'). Retorna a quantidade devolvida.
+    """
+    conexao = conectar()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
+    try:
+        cursor.execute(f"""
+            UPDATE conversas_telegram
+            SET status = 'bot',
+                atendente_id = NULL,
+                ticket_id_ativo = NULL,
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE status = 'humano'
+              AND (COALESCE(ultimo_humano_em, atualizado_em) < (CURRENT_TIMESTAMP - INTERVAL '{int(minutos_inatividade)} minutes'))
+            RETURNING chat_id
+        """)
+        linhas = cursor.fetchall()
+        conexao.commit()
+        return len(linhas)
+    except Exception as e:
+        conexao.rollback()
+        logger.error(f"[TicketService] Erro ao verificar timeout de conversas humanas: {e}")
+        return 0
     finally:
         conexao.close()

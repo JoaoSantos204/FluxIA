@@ -191,12 +191,45 @@ class AgentOrchestrator:
             produtos_catalogo_linhas = cursor.fetchall()
             produtos_catalogo = [dict(pr) for pr in produtos_catalogo_linhas]
 
-            # 3. Status de atendimento (bot vs humano)
+            # 2.4. Busca chamados / tickets abertos ou em andamento do cliente nesta empresa
+            cursor.execute(f"""
+                SELECT id, titulo, tipo, status, prioridade, criado_em, atualizado_em, ultima_mensagem_cliente, atendente_id
+                FROM tickets
+                WHERE telegram_chat_id = {ph} AND empresa_id = {ph} AND status != 'resolvido'
+                ORDER BY id DESC
+            """, (str(chat_id), empresa_id))
+            tickets_abertos_linhas = cursor.fetchall()
+            tickets_abertos = [dict(tk) for tk in tickets_abertos_linhas]
+
+            # 3. Status de atendimento (bot vs humano) e controle de inatividade
             cursor.execute(
-                f"SELECT status, atendente_id FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)",
+                f"SELECT status, atendente_id, ticket_id_ativo, ultimo_humano_em, atualizado_em FROM conversas_telegram WHERE chat_id = {ph} AND (empresa_id = {ph} OR empresa_id IS NULL)",
                 (str(chat_id), empresa_id)
             )
             conv_status = cursor.fetchone()
+
+            status_atendimento = conv_status.get("status") if conv_status else "bot"
+            atendente_id = conv_status.get("atendente_id") if conv_status else None
+            ticket_id_ativo = conv_status.get("ticket_id_ativo") if conv_status else None
+
+            # Timeout de inatividade do atendente humano (ex: 30 minutos sem mensagens)
+            if status_atendimento == "humano" and conv_status:
+                from datetime import datetime, timezone
+                ultimo_humano = conv_status.get("ultimo_humano_em") or conv_status.get("atualizado_em")
+                if ultimo_humano:
+                    agora = datetime.now(ultimo_humano.tzinfo) if ultimo_humano.tzinfo else datetime.now()
+                    diff_minutos = (agora - ultimo_humano).total_seconds() / 60.0
+                    if diff_minutos >= 30:
+                        logger.info(f"[Orquestrador] Chat {chat_id} inativo por {diff_minutos:.1f}min no modo humano. Retornando automaticamente ao Bot.")
+                        cursor.execute(f"""
+                            UPDATE conversas_telegram
+                            SET status = 'bot', atendente_id = NULL, ticket_id_ativo = NULL, atualizado_em = CURRENT_TIMESTAMP
+                            WHERE chat_id = {ph}
+                        """, (str(chat_id),))
+                        conexao.commit()
+                        status_atendimento = "bot"
+                        atendente_id = None
+                        ticket_id_ativo = None
 
             # 4. Configuração da empresa
             config_empresa = obter_configuracao_empresa(empresa_id)
@@ -215,11 +248,13 @@ class AgentOrchestrator:
                 "negocios": negocios,
                 "propostas": propostas,
                 "contratos": contratos,
+                "tickets_abertos": tickets_abertos,
+                "ticket_id_ativo": ticket_id_ativo,
                 "negocio_ativo": negocio_ativo,
                 "produtos_vinculados": produtos_vinculados,
                 "produtos_catalogo": produtos_catalogo,
-                "status_atendimento": conv_status.get("status") if conv_status else "bot",
-                "atendente_id": conv_status.get("atendente_id") if conv_status else None,
+                "status_atendimento": status_atendimento,
+                "atendente_id": atendente_id,
                 "config_empresa": config_empresa
             }
         finally:
@@ -759,6 +794,81 @@ class AgentOrchestrator:
         ]
         return any(re.search(p, msg) for p in padroes)
 
+    def classificar_intencao_via_llm(
+        self,
+        mensagem: str,
+        contexto: dict,
+        dados_contato_extraidos: dict
+    ) -> Optional[dict]:
+        """
+        Classificação Semântica Inteligente via LLM (Opção 1):
+        Analisa a mensagem do usuário com o Gemini em todas as interações para identificar
+        com precisão e flexibilidade intenções de transbordo, consultas a tickets abertos,
+        produtos, propostas, contratos ou assuntos fora do escopo corporativo.
+        """
+        try:
+            empresa_id = contexto.get("empresa_id", 1)
+            client = self.ai_service.obter_client(empresa_id)
+            if not client:
+                return None
+
+            nome_cli = contexto.get("nome") or "Cliente"
+            tem_tel = contexto.get("tem_telefone_valido", False)
+            tickets_abertos = contexto.get("tickets_abertos", [])
+
+            tickets_resumo = []
+            for t in tickets_abertos:
+                tickets_resumo.append(f"• ID #{t['id']}: '{t['titulo']}' (Tipo: {t.get('tipo', 'suporte')}, Status: {t.get('status', 'aberto')})")
+            tickets_txt = "\n".join(tickets_resumo) if tickets_resumo else "Nenhum chamado aberto no momento."
+
+            prompt = f"""
+            Você é o Classificador Semântico Central da plataforma FluxIA.
+            Sua missão é determinar a intenção exata da mensagem do cliente no Telegram.
+
+            DADOS DE CONTEXTO DO CLIENTE:
+            - Nome: {nome_cli}
+            - Telefone/WhatsApp válido cadastrado: {tem_tel}
+            - Chamados/Tickets ABERTOS deste cliente no sistema:
+            {tickets_txt}
+
+            MENSAGEM DO CLIENTE:
+            "{mensagem}"
+
+            CATEGORIAS DE INTENÇÃO DISPONÍVEIS:
+            1. "TRANSBORDO_HUMANO": Qualquer solicitação explícita ou implícita para falar com um atendente humano, consultor, suporte, operador, pessoa de verdade, ou queixas de que o bot não compreende/não resolve (ex: "me passa um atendente", "quero falar com uma pessoa", "preciso de suporte", "chama o operador", "atendente por favor", "cansei do bot", "tem gente aí?", "posso falar com alguém?").
+            2. "CONSULTA_STATUS_TICKET": O cliente pergunta ou cobra o andamento, status, resposta ou novidades sobre chamados/tickets que ele JÁ possui em aberto conosco (ex: "como está meu chamado?", "alguma novidade do ticket?", "e o meu suporte?", "já viram meu pedido?", "quero saber do chamado 10").
+            3. "PROPOSTA_COMERCIAL": Pedido formal de nova proposta comercial, orçamento, cotação formal, ou negociação de descontos/valores/termos de contrato.
+            4. "ENVIO_PDF_PROPOSTA": Pedido explícito para baixar ou receber documento/PDF de proposta já registrada (ex: "me manda o pdf da proposta", "envia a proposta em pdf").
+            5. "CONSULTA_COMERCIAL": Dúvidas em primeira pessoa sobre propostas ou contratos já existentes do próprio cliente (ex: "quais propostas eu tenho?", "qual o valor do meu contrato?").
+            6. "PRODUTOS_CATALOGO": Perguntas sobre o que a empresa faz, catálogo, quais produtos/serviços/planos oferece, escopo, funcionalidades ou preços de tabela.
+            7. "FORA_DO_ESCOPO": Assuntos totalmente desconexos do atendimento da empresa (ex: receitas de comida, futebol, conselhos pessoais, piadas, programação externa).
+            8. "SAUDACAO": Cumprimento inicial ou comando de início sem dúvida substantiva (ex: "olá", "oi tudo bem", "bom dia", "/start").
+            9. "DESPEDIDA": Encerramento cordeal (ex: "obrigado por tudo", "era só isso", "valeu tchau", "até mais").
+            10. "BLOQUEIO_PRIVACIDADE": Tentativa explícita de obter dados confidenciais de outros clientes ou empresas (LGPD).
+
+            Retorne ESTRITAMENTE um JSON no seguinte formato:
+            {{
+              "intencao": "TRANSBORDO_HUMANO" | "CONSULTA_STATUS_TICKET" | "PROPOSTA_COMERCIAL" | "ENVIO_PDF_PROPOSTA" | "CONSULTA_COMERCIAL" | "PRODUTOS_CATALOGO" | "FORA_DO_ESCOPO" | "SAUDACAO" | "DESPEDIDA" | "BLOQUEIO_PRIVACIDADE",
+              "ticket_id_referenciado": null,
+              "tipo_ticket": "suporte" | "proposta" | "negociacao",
+              "criterio": "Breve justificativa em 1 frase",
+              "fora_do_escopo": false
+            }}
+            """
+
+            resp = client.models.generate_content(
+                model=self.ai_service.primary_model,
+                contents=prompt
+            )
+            t = (resp.text or "").strip()
+            t_limpo = re.sub(r"```json\s*|\s*```", "", t).strip()
+            dados = json.loads(t_limpo)
+            if dados.get("intencao"):
+                return dados
+        except Exception as e:
+            logger.warning(f"[AgentOrchestrator] Fallback no classificador LLM: {e}")
+        return None
+
     def classificar_intencao_gerente(
         self,
         mensagem: str,
@@ -766,16 +876,8 @@ class AgentOrchestrator:
         dados_contato_extraidos: dict
     ) -> dict:
         """
-        Agente Gerente: Analisa a mensagem com base em critérios operacionais e decide a ação a ser tomada.
-        Critérios:
-        - BLOQUEIO_PRIVACIDADE: Tentativa de obter dados de outros clientes ou carteira geral (LGPD estrita).
-        - COLETA_CONTATO: Cliente ainda não possui cadastro completo (nome e telefone) e a pergunta exige contato prévio.
-        - DESPEDIDA: Encerramento ou agradecimento final (tchau, até mais, obrigado por tudo, era só isso, pode encerrar).
-        - SAUDACAO: Apenas saudação inicial (oi, olá, bom dia) sem pergunta substantiva.
-        - TRANSBORDO_HUMANO: Solicitação explícita de atendente/suporte humano.
-        - ENVIO_PDF_PROPOSTA: Solicitação de envio do documento da proposta em formato PDF.
-        - CONSULTA_COMERCIAL: Dúvida em primeira pessoa sobre itens em aberto, propostas, contratos, negócios em andamento.
-        - PERGUNTA_CONHECIMENTO: Pergunta legítima sobre produtos, serviços, preços, regras ou informações corporativas.
+        Agente Gerente: Analisa a mensagem prioritariamente via LLM (Opção 1)
+        com fallback heurístico de alta resiliência caso a API externa oscile.
         """
         msg_limpa = mensagem.strip().lower()
         msg_sem_pont = re.sub(r"[^\w\s]", "", msg_limpa).strip()
@@ -787,165 +889,58 @@ class AgentOrchestrator:
                 "criterio": "Tentativa de consulta a dados de outros clientes ou carteira de clientes (LGPD)"
             }
 
-        # 0.1 Solicitação de Envio do Documento da Proposta em PDF ou Envio de Proposta Existente
+        # 0.1 Se acabou de fornecer os dados de contato faltantes nesta mensagem
+        if dados_contato_extraidos.get("tem_contato"):
+            tem_nome_agora = bool(dados_contato_extraidos.get("nome") or contexto["tem_nome_valido"])
+            tem_tel_agora = bool(dados_contato_extraidos.get("telefone") or contexto["tem_telefone_valido"])
+            if tem_nome_agora and tem_tel_agora:
+                return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
+
+        # 1. CLASSIFICAÇÃO SEMÂNTICA PRINCIPAL VIA LLM (Opção 1 - Todas as Mensagens)
+        classificacao_llm = self.classificar_intencao_via_llm(
+            mensagem=mensagem,
+            contexto=contexto,
+            dados_contato_extraidos=dados_contato_extraidos
+        )
+
+        if classificacao_llm:
+            intencao_llm = classificacao_llm.get("intencao")
+            logger.info(f"[Orquestrador LLM] Mensagem: '{mensagem}' -> Intenção: {intencao_llm} ({classificacao_llm.get('criterio')})")
+
+            # Valida exigência de contato obrigatório para demandas comerciais
+            if intencao_llm in ["PROPOSTA_COMERCIAL", "CONSULTA_COMERCIAL"]:
+                if not contexto.get("tem_telefone_valido"):
+                    return {
+                        "intencao": "COLETA_CONTATO",
+                        "criterio": "Demanda comercial identificada por IA exigindo telefone para contato e elaboração"
+                    }
+
+            return classificacao_llm
+
+        # ------------------------------------------------------------------------
+        # 2. FALLBACK HEURÍSTICO (Ativado apenas se a chamada LLM oscilar ou timeout)
+        # ------------------------------------------------------------------------
         if self.eh_pedido_pdf_proposta(mensagem, contexto=contexto):
             return {
                 "intencao": "ENVIO_PDF_PROPOSTA",
                 "criterio": "Cliente solicitou envio da proposta comercial em PDF ou envio de proposta já cadastrada"
             }
 
-        # 1. Comandos Diretos e Transbordo Humano
         termos_transbordo = [
-            "/suporte", "suporte", "/support", "falar com atendente", "falar com um atendente",
-            "atendente humano", "falar com humano", "falar com uma pessoa",
-            "atendimento humano", "transferir para atendente", "consultor humano",
-            "chamar atendente", "preciso de um atendente"
+            "/suporte", "suporte", "/support", "atendente", "falar com atendente", "falar com um atendente",
+            "atendente humano", "falar com humano", "falar com uma pessoa", "passar para atendente",
+            "atendimento humano", "transferir para atendente", "consultor humano", "passar para um atendente",
+            "chamar atendente", "preciso de um atendente", "me passa um atendente", "falar com atendente humano"
         ]
         if any(t in msg_limpa for t in termos_transbordo):
-            return {"intencao": "TRANSBORDO_HUMANO", "criterio": "Solicitação explícita de atendente/suporte humano"}
+            return {"intencao": "TRANSBORDO_HUMANO", "criterio": "Solicitação explícita de atendente/suporte humano (fallback)"}
 
-        # 2. Despedida / Fechamento de conversa / Encerramento
-        despedidas_exatas = {
-            "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
-            "valeu", "valeu!", "valeu obrigado", "muito obrigado por tudo", "muito obrigada por tudo",
-            "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
-            "pode encerrar", "encerrar", "obrigado tenha um bom dia", "obrigado boa tarde", "obrigado boa noite",
-            "nao preciso de mais nada", "não preciso de mais nada", "finalizar", "pode finalizar", "encerrar atendimento",
-            "fim", "fechar", "ok obrigado tchau", "obrigado tchau", "valeu tchau", "só isso", "so isso",
-            "tudo certo obrigado", "tudo certo obrigada"
-        }
-        termos_despedida = [
-            "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
-            "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
-            "pode encerrar", "encerrar atendimento", "muito obrigado por tudo", "muito obrigada por tudo",
-            "não preciso de mais nada", "nao preciso de mais nada", "pode finalizar", "finalizar atendimento",
-            "fechar atendimento", "encerrar a conversa", "pode encerrar a conversa", "por hoje era só"
-        ]
-        if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in termos_despedida):
-            return {"intencao": "DESPEDIDA", "criterio": "Usuário encerrou o diálogo ou despediu-se cordialmente"}
-
-        # 3. Termos comerciais, itens em aberto e de primeira pessoa (propostas, contratos, negócios)
-        termos_comerciais = [
-            "minha proposta", "minhas propostas", "quais propostas", "qual proposta", "tenho proposta",
-            "possuo proposta", "proposta que tenho", "propostas que tenho", "propostas possuo",
-            "meu contrato", "meus contratos", "qual o contrato", "quais contratos", "tenho contrato",
-            "possuo contrato", "contrato que tenho", "contratos que tenho", "valor do contrato",
-            "valor do meu contrato", "qual o valor do contrato", "qual o valor do contrato que tenho",
-            "meu negócio", "meu negocio", "andamento do meu", "status da proposta", "status do meu pedido",
-            "status do negócio", "o que eu contratei", "o que contratei", "meu plano contratado",
-            "segunda via do contrato", "quais propostas possuo com vocês", "quais contratos possuo com vocês",
-            # Consultas específicas sobre itens em aberto e pendências
-            "itens em aberto", "item em aberto", "o que tenho em aberto", "o que está em aberto", "tenho em aberto",
-            "itens abertos", "meus itens em aberto", "quais itens tenho em aberto", "quais itens possuo em aberto",
-            "itens que tenho em aberto", "o que tenho pendente", "minhas pendências", "quais pendências",
-            "meus processos em aberto", "o que está pendente no meu atendimento", "negócios em andamento"
-        ]
-        padroes_comerciais_regex = [
-            r"\b(minha|minhas|meu|meus|qual|quais|tenho|possuo|algum|alguma)\s+.*?\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\b",
-            r"\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\s+.*?\b(que\s+tenho|que\s+possuo|em\s+aberto|abertos?|ativo|ativos|vigente|vigentes|pendente|pendentes|meu|minha|meus|minhas)\b",
-            r"\b(itens?|item)\s+.*?\b(em\s+aberto|abertos?|pendentes?)\b",
-            r"\b(o\s+que\s+(?:eu\s+)?tenho\s+(?:em\s+aberto|pendente))\b",
-            r"\b(minhas?\s+pend[eê]ncias?)\b",
-            r"\b(status\s+d[oa]\s+(?:proposta|pedido|neg[oó]cio|contrato))\b",
-            r"\b(valor\s+d[oa]\s+(?:meu\s+|minha\s+)?(?:contrato|proposta))\b",
-            r"\b(o\s+que\s+(?:eu\s+)?contratei)\b",
-            r"\b(ver|olhar|consultar|mostrar|mostra|exibir|listar|saber|dados|detalhes)\s+.*?\b(proposta|propostas|contrato|contratos)\b",
-        ]
-        eh_consulta_comercial = any(t in msg_limpa for t in termos_comerciais) or any(re.search(p, msg_limpa) for p in padroes_comerciais_regex)
-
-        # 3. Solicitação de Proposta Comercial ou Negociação de Contrato (Demanda Humana Exclusiva)
-        eh_prop_neg, tipo_prop_neg = self.eh_solicitacao_proposta_ou_negociacao(
-            mensagem,
-            chat_id=contexto.get("chat_id"),
-            empresa_id=contexto.get("empresa_id", 1)
-        )
-        if eh_prop_neg:
-            if not contexto.get("tem_telefone_valido"):
-                return {
-                    "intencao": "COLETA_CONTATO",
-                    "criterio": f"Solicitação de {tipo_prop_neg} formal exigindo WhatsApp/telefone para contato e elaboração"
-                }
-            return {
-                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
-                "tipo_ticket": tipo_prop_neg,
-                "criterio": f"Solicitação de {tipo_prop_neg} formal encaminhada para geração imediata de ticket no CRM e atendimento via Telegram"
-            }
-
-        # 4. Se acabou de fornecer os dados faltantes nesta mensagem
-        if dados_contato_extraidos.get("tem_contato"):
-            tem_nome_agora = bool(dados_contato_extraidos.get("nome") or contexto["tem_nome_valido"])
-            tem_tel_agora = bool(dados_contato_extraidos.get("telefone") or contexto["tem_telefone_valido"])
-            if tem_nome_agora and tem_tel_agora:
-                # Remove os dados de contato e saudações comuns para ver se restou uma dúvida
-                msg_resto = msg_limpa
-                if dados_contato_extraidos.get("nome"):
-                    msg_resto = msg_resto.replace(dados_contato_extraidos["nome"].lower(), "")
-                if dados_contato_extraidos.get("telefone"):
-                    digitos_tel = re.sub(r"\D", "", dados_contato_extraidos["telefone"])
-                    msg_resto = msg_resto.replace(dados_contato_extraidos["telefone"].lower(), "").replace(digitos_tel, "")
-                msg_resto = re.sub(r"(?i)(me chamo|meu nome [eé]|sou o|sou a|whats(?:app)?|zap|celular|telefone|fone|contato|olá|ola|oi|bom dia|boa tarde|boa noite)", "", msg_resto)
-                msg_resto = re.sub(r"[^\w\s]", "", msg_resto).strip()
-                palavras_resto = msg_resto.split()
-
-                if eh_prop_neg:
-                    return {
-                        "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
-                        "tipo_ticket": tipo_prop_neg,
-                        "criterio": "Dados de contato fornecidos junto com pedido de proposta/negociação"
-                    }
-
-                if eh_consulta_comercial:
-                    return {"intencao": "CONSULTA_COMERCIAL", "criterio": "Dados de contato fornecidos junto com consulta comercial"}
-
-                tem_pergunta = (
-                    "?" in mensagem or
-                    any(w in msg_resto for w in ["quanto", "como", "qual", "quais", "preço", "preco", "plano", "planos", "valor", "valores", "serviço", "serviços", "duvida", "dúvida", "informação", "informacao", "saber"]) or
-                    len(palavras_resto) >= 4
-                )
-                if tem_pergunta:
-                    return {"intencao": "PERGUNTA_CONHECIMENTO", "criterio": "Dados de contato fornecidos junto com dúvida"}
-                return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
-
-        # 5. Saudação Simples e Início de Conversa (/start, oi, olá, boa tarde): responde cordial sem pedir número
         if self.eh_saudacao_simples(mensagem):
-            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial ou comando de início sem perguntas adicionais"}
+            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial (fallback)"}
 
-        # 6. Processos base da empresa (horário de funcionamento, localização, endereço, sobre a empresa, etc.): responde direto sem exigir número
-        if self.eh_pergunta_processo_base(mensagem):
-            return {
-                "intencao": "PERGUNTA_CONHECIMENTO",
-                "criterio": "Pergunta sobre processo base da empresa (horário/localização/endereço/funcionamento) respondida livremente"
-            }
-
-        # 7. Consulta Comercial e Itens em Aberto do próprio cliente (propostas e contratos existentes)
-        if eh_consulta_comercial:
-            if not contexto.get("tem_telefone_valido"):
-                return {
-                    "intencao": "COLETA_CONTATO",
-                    "criterio": "Consulta de itens em aberto, propostas ou contratos exigindo telefone/WhatsApp para identificação segura"
-                }
-            return {
-                "intencao": "CONSULTA_COMERCIAL",
-                "criterio": "Consulta sobre histórico comercial, itens em aberto, propostas ou contratos do próprio cliente"
-            }
-
-        # 8. Dúvidas sobre produtos, serviços, preços, planos, valores ou contratação (fora do institucional básico)
-        # Solicita o telefone/WhatsApp somente após o cliente manifestar interesse em produtos/serviços/comercial
-        if self.eh_pergunta_comercial_ou_produtos(mensagem):
-            if not contexto.get("tem_telefone_valido"):
-                return {
-                    "intencao": "COLETA_CONTATO",
-                    "criterio": "Dúvida sobre produtos, planos ou serviços exigindo telefone para atendimento comercial personalizado"
-                }
-            return {
-                "intencao": "PERGUNTA_CONHECIMENTO",
-                "criterio": "Apresentação de produtos e soluções do catálogo para cliente já identificado"
-            }
-
-        # 9. Perguntas gerais ou institucionais para a base de conhecimento: responde diretamente sem exigir telefone
         return {
             "intencao": "PERGUNTA_CONHECIMENTO",
-            "criterio": "Pergunta substantiva respondida pela base de conhecimento da empresa sem exigir telefone"
+            "criterio": "Pergunta substantiva respondida pela base de conhecimento (fallback)"
         }
 
     def executar_orquestracao(
@@ -967,8 +962,19 @@ class AgentOrchestrator:
         contexto = self.obter_contexto_cliente(chat_id=chat_id, empresa_id=empresa_id, nome_sugerido=nome_telegram)
         config_empresa = contexto["config_empresa"]
 
-        # Se já estiver em modo humano, a orquestração não responde (apenas armazena)
+        # Se já estiver em modo humano, a orquestração não responde (apenas armazena para o atendente)
         if contexto["status_atendimento"] == "humano":
+            ticket_id_ativo = contexto.get("ticket_id_ativo")
+            if ticket_id_ativo:
+                try:
+                    from app.services.ticket_service import adicionar_mensagem_cliente_ticket
+                    adicionar_mensagem_cliente_ticket(
+                        ticket_id=ticket_id_ativo,
+                        empresa_id=empresa_id,
+                        mensagem_cliente=mensagem
+                    )
+                except Exception as e:
+                    logger.warning(f"[Orquestrador] Erro ao gravar mensagem no ticket #{ticket_id_ativo}: {e}")
             return "", {"modo": "humano", "acao": "nenhuma"}
 
         # 2. Extração de contato
@@ -1279,10 +1285,15 @@ class AgentOrchestrator:
             ph = _placeholder()
             try:
                 cursor.execute(f"""
-                    INSERT INTO conversas_telegram (chat_id, status, empresa_id)
-                    VALUES ({ph}, 'humano', {ph})
-                    ON CONFLICT (chat_id) DO UPDATE SET status = 'humano', atualizado_em = CURRENT_TIMESTAMP
-                """, (chat_id, empresa_id))
+                    INSERT INTO conversas_telegram (chat_id, status, empresa_id, ticket_id_ativo, ultimo_humano_em)
+                    VALUES ({ph}, 'humano', {ph}, {ph}, CURRENT_TIMESTAMP)
+                    ON CONFLICT (chat_id) DO UPDATE SET 
+                        status = 'humano',
+                        empresa_id = EXCLUDED.empresa_id,
+                        ticket_id_ativo = EXCLUDED.ticket_id_ativo,
+                        ultimo_humano_em = CURRENT_TIMESTAMP,
+                        atualizado_em = CURRENT_TIMESTAMP
+                """, (chat_id, empresa_id, ticket_id))
                 conexao.commit()
             finally:
                 conexao.close()
@@ -1304,19 +1315,6 @@ class AgentOrchestrator:
 
         # --- AÇÃO: TRANSBORDO HUMANO ---
         if intencao == "TRANSBORDO_HUMANO":
-            conexao = conectar()
-            cursor = _cursor(conexao)
-            ph = _placeholder()
-            try:
-                cursor.execute(f"""
-                    INSERT INTO conversas_telegram (chat_id, status, empresa_id)
-                    VALUES ({ph}, 'humano', {ph})
-                    ON CONFLICT (chat_id) DO UPDATE SET status = 'humano', atualizado_em = CURRENT_TIMESTAMP
-                """, (chat_id, empresa_id))
-                conexao.commit()
-            finally:
-                conexao.close()
-
             # Criação automática do ticket de suporte para atendimento direto pelo Telegram
             from app.services.ticket_service import criar_ticket_automatico
             ticket = criar_ticket_automatico(
@@ -1333,6 +1331,24 @@ class AgentOrchestrator:
             ticket_id = ticket.get("id") if ticket else None
             ticket_str = f" (**Ticket #{ticket_id}**)" if ticket_id else ""
 
+            conexao = conectar()
+            cursor = _cursor(conexao)
+            ph = _placeholder()
+            try:
+                cursor.execute(f"""
+                    INSERT INTO conversas_telegram (chat_id, status, empresa_id, ticket_id_ativo, ultimo_humano_em)
+                    VALUES ({ph}, 'humano', {ph}, {ph}, CURRENT_TIMESTAMP)
+                    ON CONFLICT (chat_id) DO UPDATE SET 
+                        status = 'humano',
+                        empresa_id = EXCLUDED.empresa_id,
+                        ticket_id_ativo = EXCLUDED.ticket_id_ativo,
+                        ultimo_humano_em = CURRENT_TIMESTAMP,
+                        atualizado_em = CURRENT_TIMESTAMP
+                """, (chat_id, empresa_id, ticket_id))
+                conexao.commit()
+            finally:
+                conexao.close()
+
             msg_transbordo = (
                 f"👤 {nome_exibicao + ', ' if nome_exibicao else ''}seu atendimento foi transferido para a nossa equipe!\n\n"
                 f"🎫 Já abri um chamado prioritário{ticket_str} para que um dos nossos atendentes dê continuidade ao seu atendimento. "
@@ -1347,27 +1363,13 @@ class AgentOrchestrator:
             }
 
         # --- AÇÃO: SOLICITAÇÃO DE PROPOSTA OU NEGOCIAÇÃO DE CONTRATO (GERAÇÃO DE TICKET IA) ---
-        if intencao == "SOLICITACAO_PROPOSTA_NEGOCIACAO":
+        if intencao in ["SOLICITACAO_PROPOSTA_NEGOCIACAO", "PROPOSTA_COMERCIAL"]:
             tipo_ticket = classificacao.get("tipo_ticket", "proposta")
             titulo_ticket = (
                 "Solicitação de Proposta Comercial"
                 if tipo_ticket == "proposta"
                 else "Negociação de Valores / Termos de Contrato"
             )
-
-            # Marca a conversa como humano para que o operador dê continuidade pelo Telegram via Ticket
-            conexao = conectar()
-            cursor = _cursor(conexao)
-            ph = _placeholder()
-            try:
-                cursor.execute(f"""
-                    INSERT INTO conversas_telegram (chat_id, status, empresa_id)
-                    VALUES ({ph}, 'humano', {ph})
-                    ON CONFLICT (chat_id) DO UPDATE SET status = 'humano', atualizado_em = CURRENT_TIMESTAMP
-                """, (chat_id, empresa_id))
-                conexao.commit()
-            finally:
-                conexao.close()
 
             from app.services.ticket_service import criar_ticket_automatico
             ticket = criar_ticket_automatico(
@@ -1382,6 +1384,25 @@ class AgentOrchestrator:
                 prioridade="alta"
             )
             ticket_id = ticket.get("id", 1)
+
+            # Marca a conversa como humano para que o operador dê continuidade pelo Telegram via Ticket
+            conexao = conectar()
+            cursor = _cursor(conexao)
+            ph = _placeholder()
+            try:
+                cursor.execute(f"""
+                    INSERT INTO conversas_telegram (chat_id, status, empresa_id, ticket_id_ativo, ultimo_humano_em)
+                    VALUES ({ph}, 'humano', {ph}, {ph}, CURRENT_TIMESTAMP)
+                    ON CONFLICT (chat_id) DO UPDATE SET 
+                        status = 'humano',
+                        empresa_id = EXCLUDED.empresa_id,
+                        ticket_id_ativo = EXCLUDED.ticket_id_ativo,
+                        ultimo_humano_em = CURRENT_TIMESTAMP,
+                        atualizado_em = CURRENT_TIMESTAMP
+                """, (chat_id, empresa_id, ticket_id))
+                conexao.commit()
+            finally:
+                conexao.close()
 
             saudacao_nome = f", {nome_exibicao}" if nome_exibicao else ""
             if tipo_ticket == "proposta":
@@ -1400,12 +1421,103 @@ class AgentOrchestrator:
                 )
 
             return msg_resposta, {
-                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                "intencao": intencao,
                 "ticket_id": ticket_id,
                 "status": "humano",
                 "tipo": tipo_ticket,
                 "cadastrado": contexto["cadastrado_completo"],
                 "remover_teclado": True,
+                "documentos_usados": []
+            }
+
+        # --- AÇÃO: CONSULTA DE STATUS DE TICKET / CHAMADO ABERTO ---
+        if intencao == "CONSULTA_STATUS_TICKET":
+            tickets_abertos = contexto.get("tickets_abertos", [])
+            ticket_ref_id = classificacao.get("ticket_id_referenciado")
+            from app.services.ticket_service import adicionar_mensagem_cliente_ticket
+
+            if not tickets_abertos:
+                msg_status = (
+                    f"Olá{f', {nome_exibicao}' if nome_exibicao else ''}! Não encontrei nenhum chamado ou ticket aberto para você no momento.\n\n"
+                    "Se você precisa de ajuda com algum assunto ou gostaria de abrir um novo atendimento com nossa equipe, basta me avisar!"
+                )
+                return msg_status, {
+                    "intencao": "CONSULTA_STATUS_TICKET",
+                    "cadastrado": contexto["cadastrado_completo"],
+                    "documentos_usados": []
+                }
+
+            # Se especificou um ticket ou há apenas 1 ticket aberto
+            ticket_alvo = None
+            if ticket_ref_id:
+                for t in tickets_abertos:
+                    if str(t["id"]) == str(ticket_ref_id):
+                        ticket_alvo = t
+                        break
+            if not ticket_alvo and len(tickets_abertos) == 1:
+                ticket_alvo = tickets_abertos[0]
+
+            if ticket_alvo:
+                # Anexa a pergunta do cliente ao histórico do ticket e atualiza como não lido
+                adicionar_mensagem_cliente_ticket(
+                    ticket_id=ticket_alvo["id"],
+                    empresa_id=empresa_id,
+                    mensagem_cliente=mensagem
+                )
+                status_traduzido = "Aberto (Aguardando Atendente)" if ticket_alvo.get("status") == "aberto" else "Em Andamento com a Equipe"
+                msg_status = (
+                    f"🎫 **Atualização sobre seu Chamado #{ticket_alvo['id']}**\n\n"
+                    f"• **Assunto:** {ticket_alvo['titulo']}\n"
+                    f"• **Status Atual:** {status_traduzido}\n"
+                    f"• **Prioridade:** {ticket_alvo.get('prioridade', 'Alta').capitalize()}\n\n"
+                    "Acabei de registrar a sua mensagem diretamente neste chamado e notifiquei nossos atendentes com prioridade. "
+                    "Eles entrarão em contato por aqui mesmo assim que houver novidades!"
+                )
+                return msg_status, {
+                    "intencao": "CONSULTA_STATUS_TICKET",
+                    "ticket_id": ticket_alvo["id"],
+                    "cadastrado": contexto["cadastrado_completo"],
+                    "documentos_usados": []
+                }
+            else:
+                # Mais de um ticket em aberto
+                linhas_tickets = []
+                for t in tickets_abertos:
+                    status_fmt = "Aberto" if t.get("status") == "aberto" else "Em Andamento"
+                    linhas_tickets.append(f"• **Ticket #{t['id']}**: {t['titulo']} ({status_fmt})")
+                    # Marca todos como contendo mensagem do cliente para alertar o operador
+                    adicionar_mensagem_cliente_ticket(
+                        ticket_id=t["id"],
+                        empresa_id=empresa_id,
+                        mensagem_cliente=mensagem
+                    )
+
+                txt_lista = "\n".join(linhas_tickets)
+                msg_status = (
+                    f"Identifiquei que você possui **{len(tickets_abertos)} chamados em aberto** no momento:\n\n"
+                    f"{txt_lista}\n\n"
+                    "Acabei de notificar a equipe sobre a sua mensagem. Você gostaria de saber o andamento de algum ticket específico? "
+                    "Basta me informar o número do chamado!"
+                )
+                return msg_status, {
+                    "intencao": "CONSULTA_STATUS_TICKET",
+                    "cadastrado": contexto["cadastrado_completo"],
+                    "documentos_usados": []
+                }
+
+        # --- AÇÃO: FORA DO ESCOPO CORPORATIVO ---
+        if intencao == "FORA_DO_ESCOPO":
+            cfg_nome = config_empresa.get("nome_empresa") or ""
+            ref_empresa = f"da {cfg_nome}" if cfg_nome else "da nossa empresa"
+            msg_fora = (
+                f"Como assistente virtual {ref_empresa}, sou especializado em tirar dúvidas sobre nossos serviços, "
+                "produtos, planos comerciais, propostas e suporte ao cliente.\n\n"
+                "Para assuntos fora desse contexto, recomendo consultar fontes especializadas. "
+                "Posso te ajudar com alguma dúvida sobre nossas soluções?"
+            )
+            return msg_fora, {
+                "intencao": "FORA_DO_ESCOPO",
+                "cadastrado": contexto["cadastrado_completo"],
                 "documentos_usados": []
             }
 

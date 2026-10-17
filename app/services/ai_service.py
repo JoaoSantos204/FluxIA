@@ -62,15 +62,11 @@ def montar_system_prompt(config_suporte: dict | None = None) -> str:
             * Faça um atendimento consultivo e envolvente: ao final da apresentação, pergunte de forma aberta e consultiva sobre o cenário dele (ex: "Qual dessas opções faz mais sentido para o seu momento atual?", "Gostaria de entender mais a fundo como funciona alguma delas?").
             * NUNCA jogue o cliente de imediato para o consultor humano sem antes explicar e detalhar os produtos! A ideia é adiantar o atendimento para que ele já compreenda as soluções.
 
-    6. Limites de Atuação: Quando Encaminhar para Proposta ou Consultor Humano:
+    6. Limites de Atuação e Atendimento Humano:
         - Você tem autonomia total para explicar produtos, tirar dúvidas, demonstrar funcionalidades e falar de valores de referência.
-        - O encaminhamento para consultor humano ou abertura de chamado (ticket de proposta/negociação) deve acontecer APENAS quando:
-            (a) O cliente solicitar formalmente uma proposta comercial, orçamento ou cotação;
-            (b) O cliente demonstrar intenção direta de fechar, contratar ou assinar contrato de um produto;
-            (c) O cliente quiser negociar descontos, formas especiais de parcelamento ou cláusulas contratuais;
-            (d) O cliente pedir explicitamente para falar com um consultor ou atendente humano.
-        - Nesses momentos de avanço, informe com simpatia que um chamado prioritário (Ticket) foi registrado para a equipe comercial especializada e que o consultor dará sequência diretamente por aqui nesta mesma conversa no Telegram.
-        - NUNCA forneça telefones externos. O atendimento é 100% pelo próprio Telegram.
+        - Quando o cliente solicitar atendimento humano, proposta personalizada ou suporte, o sistema cuidará da abertura oficial do chamado (Ticket) no CRM.
+        - NUNCA invente números de chamado ou tickets fictícios no texto se eles não constarem expressamente no contexto.
+        - NUNCA forneça telefones externos. Todo o atendimento é realizado 100% pelo próprio Telegram.
     """
 
 

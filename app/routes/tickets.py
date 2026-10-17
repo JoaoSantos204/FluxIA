@@ -9,7 +9,9 @@ from app.services.ticket_service import (
     responder_ticket,
     atualizar_status_ticket,
     obter_metricas_tickets,
-    criar_ticket_automatico
+    criar_ticket_automatico,
+    listar_mensagens_ticket,
+    marcar_ticket_como_lido
 )
 
 logger = logging.getLogger(__name__)
@@ -91,6 +93,41 @@ def obter_ticket_endpoint(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket não encontrado.")
     return {"sucesso": True, "ticket": ticket}
+
+
+@router.get("/{ticket_id}/mensagens")
+def obter_mensagens_ticket_endpoint(
+    ticket_id: int,
+    empresa_id: int = Query(1, description="ID da empresa")
+):
+    """Retorna o histórico cronológico completo de mensagens trocadas dentro deste ticket."""
+    try:
+        mensagens = listar_mensagens_ticket(ticket_id=ticket_id, empresa_id=empresa_id)
+        # Ao abrir as mensagens, marca automaticamente como lido
+        marcar_ticket_como_lido(ticket_id=ticket_id, empresa_id=empresa_id)
+        return {
+            "sucesso": True,
+            "ticket_id": ticket_id,
+            "total": len(mensagens),
+            "mensagens": mensagens
+        }
+    except Exception as e:
+        logger.error(f"[TicketsRoute] Erro ao listar mensagens do ticket {ticket_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{ticket_id}/marcar-lido")
+def marcar_ticket_lido_endpoint(
+    ticket_id: int,
+    empresa_id: int = Query(1, description="ID da empresa")
+):
+    """Marca o ticket como lido para atualizar contadores e badges."""
+    try:
+        marcar_ticket_como_lido(ticket_id=ticket_id, empresa_id=empresa_id)
+        return {"sucesso": True, "ticket_id": ticket_id, "nao_lido": False}
+    except Exception as e:
+        logger.error(f"[TicketsRoute] Erro ao marcar ticket como lido: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{ticket_id}/responder")

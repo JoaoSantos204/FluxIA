@@ -19,6 +19,7 @@ from app.routes.crm import router as crm_router
 from app.routes.analytics import router as analytics_router
 from app.routes.tickets import router as tickets_router
 from app.services.followup_service import executar_followup_automatico
+from app.services.ticket_service import verificar_timeouts_conversas_humano
 
 # Criação da Aplicação (Ponto Central)
 app = FastAPI(
@@ -42,7 +43,7 @@ def iniciar_aplicacao():
     criar_banco()
     configurar_comandos_bot_telegram()
 
-    # Agenda a rotina periódica de follow-up a cada 1 hora
+    # Agenda a rotina periódica de follow-up e timeout de atendimento humano
     try:
         scheduler.add_job(
             executar_followup_automatico,
@@ -52,8 +53,16 @@ def iniciar_aplicacao():
             replace_existing=True,
             kwargs={"horas_inatividade": 24}
         )
+        scheduler.add_job(
+            verificar_timeouts_conversas_humano,
+            trigger="interval",
+            minutes=5,
+            id="job_timeout_conversas_humano",
+            replace_existing=True,
+            kwargs={"minutos_inatividade": 30}
+        )
         scheduler.start()
-        print("[OK] APScheduler iniciado com sucesso para rotina de follow-up (1x/hora).")
+        print("[OK] APScheduler iniciado com sucesso (Follow-up 1x/hora e Timeout Humano 5min/30min max).")
     except Exception as e:
         print(f"[Aviso] Falha ao iniciar APScheduler: {e}")
 

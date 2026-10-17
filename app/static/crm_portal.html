@@ -6521,15 +6521,20 @@ async function carregarMetricasTickets() {
     if (elTotal) elTotal.textContent = data.total || 0;
 
     if (badgeSidebar) {
-      const abertos = data.abertos || 0;
-      badgeSidebar.textContent = abertos;
-      badgeSidebar.style.display = abertos > 0 ? 'inline-block' : 'none';
+      const naoLidos = (data.nao_lidos !== undefined && data.nao_lidos > 0) ? data.nao_lidos : (data.abertos || 0);
+      badgeSidebar.textContent = naoLidos;
+      badgeSidebar.style.display = naoLidos > 0 ? 'inline-block' : 'none';
+      if (data.nao_lidos > 0) {
+        badgeSidebar.style.background = '#ef4444';
+      } else {
+        badgeSidebar.style.background = 'var(--primary)';
+      }
     }
 
     if (badgeHeader) {
-      const abertos = data.abertos || 0;
-      badgeHeader.textContent = `${abertos} Pendente${abertos === 1 ? '' : 's'}`;
-      badgeHeader.className = abertos > 0 ? 'contract-status-badge cs-pending' : 'contract-status-badge cs-signed';
+      const pendentes = (data.abertos || 0) + (data.em_atendimento || 0);
+      badgeHeader.textContent = `${pendentes} Pendente${pendentes === 1 ? '' : 's'}`;
+      badgeHeader.className = pendentes > 0 ? 'contract-status-badge cs-pending' : 'contract-status-badge cs-signed';
     }
   } catch (e) {
     console.debug('Erro ao carregar métricas de tickets:', e);
@@ -6623,16 +6628,18 @@ function renderizarTicketsIA(tickets) {
     const dataCriacao = formatarDataFuso(t.criado_em);
 
     return `
-      <div class="ticket-card" id="card-ticket-${t.id}" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:14px; transition:border-color 0.2s, box-shadow 0.2s;">
+      <div class="ticket-card" id="card-ticket-${t.id}" style="background:var(--surface); border:1px solid ${t.nao_lido ? 'rgba(239,68,68,0.45)' : 'var(--border)'}; border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:14px; transition:border-color 0.2s, box-shadow 0.2s;">
         <!-- Topo do Card -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div style="display:flex; align-items:center; gap:8px;">
             ${statusBadge}
+            ${t.nao_lido ? `<span id="badge-nao-lido-${t.id}" style="background:rgba(239,68,68,0.18); color:#ef4444; border:1px solid rgba(239,68,68,0.35); font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">🔴 Nova Mensagem</span>` : ''}
             <span style="background:rgba(255,255,255,0.05); color:${tipoCor}; border:1px solid rgba(255,255,255,0.1); font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px;">${tipoTexto}</span>
             <span style="font-size:12px; font-weight:700; color:var(--text-muted);">Ticket #${t.id}</span>
           </div>
-          <div style="font-size:11px; color:var(--text-muted);">
-            Aberto em: <strong>${dataCriacao}</strong>
+          <div style="font-size:11px; color:var(--text-muted); display:flex; gap:10px; align-items:center;">
+            ${t.nao_lido ? `<button class="btn-secondary" onclick="marcarTicketLidoSilencioso(${t.id})" style="font-size:10px; padding:3px 8px; color:var(--text-muted); cursor:pointer;">Marcar como Lido</button>` : ''}
+            <span>Aberto em: <strong>${dataCriacao}</strong></span>
           </div>
         </div>
 
@@ -6674,20 +6681,23 @@ function renderizarTicketsIA(tickets) {
           <div style="color:var(--text); margin-top:4px; font-style:italic; font-size:13px;">"${formatarMarkdownParaHtml(t.ultima_mensagem_cliente)}"</div>
         </div>` : ''}
 
-        <!-- Histórico da Última Resposta do Operador (se já respondeu) -->
-        ${t.resposta_atendente ? `
-        <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); padding:10px 14px; border-radius:8px; font-size:12px;">
-          <div style="color:#10b981; font-weight:700; display:flex; justify-content:space-between;">
-            <span>Última resposta enviada pelo atendente (${t.atendente_nome || 'Operador'}):</span>
+        <!-- Histórico Completo de Mensagens do Ticket (Thread Isolada) -->
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn-secondary" id="btn-toggle-msg-${t.id}" onclick="toggleHistoricoMensagensTicket(${t.id})" style="font-size:11px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              💬 Histórico da Conversa deste Ticket ${t.nao_lido ? '• 🔔 Nova mensagem' : ''}
+            </button>
+            ${t.atendente_nome ? `<span style="font-size:11px; color:var(--text-muted);">Atendente: <strong>${t.atendente_nome}</strong></span>` : ''}
           </div>
-          <div style="color:var(--text); margin-top:4px; font-size:13px;">${formatarMarkdownParaHtml(t.resposta_atendente)}</div>
-        </div>` : ''}
+          <div id="box-historico-ticket-${t.id}" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:260px; overflow-y:auto; flex-direction:column; gap:8px;">
+          </div>
+        </div>
 
         <!-- Seção de Ação e Resposta Direta pelo Operador -->
         <div style="margin-top:4px; border-top:1px solid var(--border); padding-top:14px; display:flex; flex-direction:column; gap:8px;">
           <div style="font-size:12px; font-weight:600; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center;">
             <span>Responder ao cliente pelo Telegram através deste ticket:</span>
-            <span style="font-size:11px; color:#38bdf8;">Envia mensagem imediata e atualiza o ticket</span>
+            <span style="font-size:11px; color:#38bdf8;">Envia no Telegram e vincula o histórico a este ticket</span>
           </div>
           <div style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
             <textarea class="cf-input" id="resp-ticket-${t.id}" rows="2" placeholder="Digite a proposta, condições negociadas ou esclarecimento para enviar ao cliente..." style="flex:1; min-width:260px; resize:vertical; font-size:13px; padding:10px;"></textarea>
@@ -6697,7 +6707,7 @@ function renderizarTicketsIA(tickets) {
               </button>
               <div style="display:flex; gap:6px;">
                 ${t.status !== 'resolvido' ? `
-                <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'resolvido')" style="flex:1; font-size:11px; padding:5px 8px; color:#10b981;" title="Marcar como Concluído">
+                <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'resolvido')" style="flex:1; font-size:11px; padding:5px 8px; color:#10b981;" title="Marcar como Concluído (devolve para o bot)">
                   Marcar Resolvido
                 </button>` : `
                 <button class="btn-secondary" onclick="alterarStatusTicket(${t.id}, 'aberto')" style="flex:1; font-size:11px; padding:5px 8px; color:#ef4444;" title="Reabrir Chamado">
@@ -6710,6 +6720,70 @@ function renderizarTicketsIA(tickets) {
       </div>
     `;
   }).join('');
+}
+
+async function toggleHistoricoMensagensTicket(ticketId) {
+  const box = document.getElementById(`box-historico-ticket-${ticketId}`);
+  const btn = document.getElementById(`btn-toggle-msg-${ticketId}`);
+  if (!box) return;
+
+  if (box.style.display === 'flex') {
+    box.style.display = 'none';
+    if (btn) btn.innerHTML = '💬 Histórico da Conversa deste Ticket';
+    return;
+  }
+
+  box.style.display = 'flex';
+  box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Carregando histórico do chamado...</div>';
+  if (btn) btn.innerHTML = '🔼 Ocultar Histórico';
+
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    const res = await fetch(`/tickets/${ticketId}/mensagens?empresa_id=${empresaId}`);
+    if (!res.ok) throw new Error('Falha ao carregar mensagens');
+    const mensagens = await res.json();
+
+    if (!mensagens || mensagens.length === 0) {
+      box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Nenhuma mensagem registrada no histórico deste chamado.</div>';
+    } else {
+      box.innerHTML = mensagens.map(m => {
+        const isCliente = m.remetente === 'cliente';
+        const horaFmt = m.criado_em ? formatarDataFuso(m.criado_em) : '';
+        const autor = isCliente ? 'Cliente' : (m.atendente_nome || 'Operador / Atendente');
+        const bg = isCliente ? 'rgba(34,158,217,0.12)' : 'rgba(16,185,129,0.12)';
+        const border = isCliente ? 'rgba(34,158,217,0.25)' : 'rgba(16,185,129,0.25)';
+        const align = isCliente ? 'flex-start' : 'flex-end';
+        return `
+          <div style="display:flex; flex-direction:column; align-self:${align}; max-width:85%; background:${bg}; border:1px solid ${border}; border-radius:8px; padding:8px 12px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; gap:12px; font-size:10px; color:var(--text-muted); margin-bottom:4px; font-weight:700;">
+              <span>${autor}</span>
+              <span>${horaFmt}</span>
+            </div>
+            <div style="color:var(--text); white-space:pre-wrap; word-break:break-word; line-height:1.4;">${formatarMarkdownParaHtml(m.texto)}</div>
+          </div>
+        `;
+      }).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+
+    marcarTicketLidoSilencioso(ticketId);
+  } catch (err) {
+    box.innerHTML = `<div style="font-size:12px; color:#ef4444; padding:8px;">Erro ao carregar mensagens: ${err.message}</div>`;
+  }
+}
+
+async function marcarTicketLidoSilencioso(ticketId) {
+  const empresaId = obterEmpresaAtivaId();
+  try {
+    await fetch(`/tickets/${ticketId}/marcar-lido?empresa_id=${empresaId}`, { method: 'PATCH' });
+    const badgeNaoLido = document.getElementById(`badge-nao-lido-${ticketId}`);
+    if (badgeNaoLido) badgeNaoLido.style.display = 'none';
+    const card = document.getElementById(`card-ticket-${ticketId}`);
+    if (card) card.style.borderColor = 'var(--border)';
+    carregarMetricasTickets();
+  } catch (e) {
+    console.debug('Erro ao marcar ticket como lido:', e);
+  }
 }
 
 function filtrarTicketsPorStatus(status, btnEl) {
@@ -6931,6 +7005,8 @@ function trocarEmpresaAtiva(novaEmpresaId) {
   carregarPropostasCRM();
   carregarPipelinesAdmin();
   carregarContratosCRM();
+  carregarMetricasTickets();
+  carregarTicketsIA();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
