@@ -19,13 +19,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @tool
-def buscar_base_conhecimento(pergunta: str, empresa_id: int = 1) -> str:
+def buscar_base_conhecimento(pergunta: str, empresa_id: Optional[int] = None) -> str:
     """Busca informações e documentos corporativos na base de conhecimento da empresa via RAG semântico."""
+    if not empresa_id:
+        return "Identificador da empresa não informado. Não é possível consultar documentos sem isolamento de tenant."
     try:
         from app.services.semantic_search_service import buscar_chunks_semanticamente
         resultados = buscar_chunks_semanticamente(pergunta=pergunta, limite=3, empresa_id=empresa_id)
         if not resultados:
-            return "Nenhum documento relevante encontrado na base de conhecimento."
+            return "Nenhum documento relevante encontrado na base de conhecimento desta empresa."
         textos = [f"[Documento: {r.get('nome_arquivo', 'arquivo')}]:\n{r.get('conteudo', '')}" for r in resultados]
         return "\n\n".join(textos)
     except Exception as e:
@@ -197,9 +199,9 @@ class MultiVendorAIEngine:
         # Monta contexto e histórico nas mensagens
         partes_usuario = []
         if contexto and len(contexto.strip()) >= 10:
-            partes_usuario.append(f"--- CONTEXTO DA BASE DE CONHECIMENTO ---\n{contexto}")
+            partes_usuario.append(f"--- CONTEXTO DA BASE DE CONHECIMENTO DA EMPRESA (ID: {empresa_id}) ---\n{contexto}")
         else:
-            partes_usuario.append("--- CONTEXTO DA BASE DE CONHECIMENTO ---\n[Nenhum documento público correspondente foi encontrado para esta dúvida]")
+            partes_usuario.append(f"--- CONTEXTO DA BASE DE CONHECIMENTO DA EMPRESA (ID: {empresa_id}) ---\n[Nenhum documento público correspondente foi encontrado na base desta empresa para esta dúvida. Não invente horários, endereços ou procedimentos de outras empresas.]")
 
         if historico:
             for item in historico:

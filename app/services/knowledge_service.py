@@ -36,12 +36,16 @@ PALAVRAS_IRRELEVANTES = {
     "se",
 }
 
-def buscar_contexto(pergunta: str):
+def buscar_contexto(pergunta: str, empresa_id: int | None = None):
+    if not empresa_id:
+        return []
 
+    from app.database.database import _cursor, _placeholder
     conexao = conectar()
-    cursor = conexao.cursor()
+    cursor = _cursor(conexao)
+    ph = _placeholder()
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT
             c.id,
             c.documento_id,
@@ -51,8 +55,9 @@ def buscar_contexto(pergunta: str):
         FROM chunks c
         INNER JOIN documentos d
             ON c.documento_id = d.id
+        WHERE d.empresa_id = {ph}
         ORDER BY c.documento_id, c.numero_chunk
-    """)
+    """, (empresa_id,))
 
     chunks = cursor.fetchall()
 

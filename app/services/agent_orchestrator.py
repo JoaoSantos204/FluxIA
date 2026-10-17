@@ -1590,6 +1590,8 @@ class AgentOrchestrator:
 
         if contexto_publico:
             blocos_ctx.append(f"[INFORMAÇÕES DA EMPRESA]:\n{contexto_publico}")
+        else:
+            blocos_ctx.append(f"[BASE DE CONHECIMENTO DA EMPRESA]:\nNenhum documento público cadastrado sobre esta dúvida para esta empresa.")
 
         contexto_total = "\n\n".join(blocos_ctx) if blocos_ctx else contexto_publico
 

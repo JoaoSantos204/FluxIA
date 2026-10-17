@@ -5675,16 +5675,19 @@ async function registrarWebhookTelegram() {
   const urlSugerida = prompt('Confirme a URL pública do seu serviço para registrar o Webhook do Telegram:', urlAtual);
   if (!urlSugerida) return;
 
+  const empresaId = obterEmpresaAtivaId();
   try {
     const res = await fetch('/telegram/configurar-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: urlSugerida.trim() })
+      body: JSON.stringify({ url: urlSugerida.trim(), empresa_id: empresaId })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Falha ao registrar');
     alert(`Webhook configurado com sucesso!\nURL: ${data.url_registrada}`);
-    carregarStatusWebhook();
+    if (typeof carregarConfiguracoesEmpresa === 'function') {
+      carregarConfiguracoesEmpresa();
+    }
   } catch (e) {
     alert('Erro ao registrar webhook: ' + e.message);
   }
@@ -6741,7 +6744,8 @@ async function toggleHistoricoMensagensTicket(ticketId) {
   try {
     const res = await fetch(`/tickets/${ticketId}/mensagens?empresa_id=${empresaId}`);
     if (!res.ok) throw new Error('Falha ao carregar mensagens');
-    const mensagens = await res.json();
+    const resData = await res.json();
+    const mensagens = Array.isArray(resData) ? resData : (resData.mensagens || []);
 
     if (!mensagens || mensagens.length === 0) {
       box.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:10px;">Nenhuma mensagem registrada no histórico deste chamado.</div>';

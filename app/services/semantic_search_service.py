@@ -6,7 +6,15 @@ from app.services.similarity_service import calcular_similaridade
 
 LIMIAR_SIMILARIDADE = 0.70
 
-def buscar_chunks_semanticamente(pergunta: str, limite: int = 3, empresa_id: int | None = None):
+def buscar_chunks_semanticamente(
+    pergunta: str,
+    limite: int = 3,
+    empresa_id: int | None = None,
+    nivel_acesso: str | None = None
+):
+    # Isolamento multi-tenant estrito: nunca busca chunks sem empresa_id
+    if not empresa_id:
+        return []
 
     # Gera o embedding da pergunta
     embedding_pergunta = gerar_embedding(pergunta)
@@ -15,35 +23,28 @@ def buscar_chunks_semanticamente(pergunta: str, limite: int = 3, empresa_id: int
     cursor = _cursor(conexao)
     ph = _placeholder()
 
-    if empresa_id:
-        cursor.execute(f"""
-            SELECT
-                c.id,
-                c.documento_id,
-                c.numero_chunk,
-                c.conteudo,
-                c.embedding,
-                d.nome_arquivo
-            FROM chunks c
-            INNER JOIN documentos d
-                ON c.documento_id = d.id
-            WHERE c.embedding IS NOT NULL
-              AND d.empresa_id = {ph}
-        """, (empresa_id,))
-    else:
-        cursor.execute("""
-            SELECT
-                c.id,
-                c.documento_id,
-                c.numero_chunk,
-                c.conteudo,
-                c.embedding,
-                d.nome_arquivo
-            FROM chunks c
-            INNER JOIN documentos d
-                ON c.documento_id = d.id
-            WHERE c.embedding IS NOT NULL
-        """)
+    filtros = [f"c.embedding IS NOT NULL", f"d.empresa_id = {ph}"]
+    parametros = [empresa_id]
+
+    if nivel_acesso:
+        filtros.append(f"COALESCE(d.nivel_acesso, 'publico') = {ph}")
+        parametros.append(nivel_acesso.strip().lower())
+
+    where_sql = " AND ".join(filtros)
+
+    cursor.execute(f"""
+        SELECT
+            c.id,
+            c.documento_id,
+            c.numero_chunk,
+            c.conteudo,
+            c.embedding,
+            d.nome_arquivo
+        FROM chunks c
+        INNER JOIN documentos d
+            ON c.documento_id = d.id
+        WHERE {where_sql}
+    """, tuple(parametros))
 
     chunks = cursor.fetchall()
     conexao.close()

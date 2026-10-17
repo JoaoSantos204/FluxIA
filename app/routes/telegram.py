@@ -43,13 +43,16 @@ def calcular_similaridade_cosseno(vec1, vec2):
     return dot_product / (magnitude1 * magnitude2)
 
 
-def buscar_contexto_relevante(pergunta: str, empresa_id: int = 1, top_k: int = 3) -> tuple[str, list]:
+def buscar_contexto_relevante(pergunta: str, empresa_id: Optional[int] = None, top_k: int = 3) -> tuple[str, list]:
     """
     RAG Público Obrigatório para o Bot do Telegram:
     Força estritamente perfil 'cliente', garantindo que apenas documentos
-    com nivel_acesso = 'publico' sejam pesquisados. Nunca expõe dados internos.
+    com nivel_acesso = 'publico' da respectiva empresa sejam pesquisados. Nunca expõe dados internos ou de outras empresas.
     Retorna (contexto_texto, lista_documentos_usados).
     """
+    if not empresa_id or empresa_id <= 0:
+        return "", []
+
     try:
         embedding_pergunta = gerar_embedding(pergunta)
 
@@ -511,6 +514,7 @@ async def telegram_webhook(
 
     chat_id = str(mensagem["chat"]["id"])
 
+    veio_deep_link = False
     # Identificação por deep link (/start empresa_X ou /start emp_X)
     if texto_recebido.startswith("/start"):
         partes_cmd = texto_recebido.split()
@@ -519,8 +523,29 @@ async def telegram_webhook(
             if ref_param.startswith("empresa_") or ref_param.startswith("emp_"):
                 try:
                     empresa_id = int(ref_param.split("_")[-1])
+                    veio_deep_link = True
                 except ValueError:
                     pass
+
+    # Se a requisição veio pela rota genérica /webhook ou com empresa_id=1 sem deep link:
+    # Verifica se esse chat_id já pertence a um tenant específico no banco de dados
+    if not veio_deep_link and (not empresa_id or empresa_id == 1) and chat_id:
+        try:
+            con_temp = conectar()
+            cur_temp = _cursor(con_temp)
+            ph_t = _placeholder()
+            cur_temp.execute(f"SELECT empresa_id FROM conversas_telegram WHERE chat_id = {ph_t} AND empresa_id IS NOT NULL", (chat_id,))
+            r_c = cur_temp.fetchone()
+            if r_c and r_c.get("empresa_id"):
+                empresa_id = r_c["empresa_id"]
+            else:
+                cur_temp.execute(f"SELECT empresa_id FROM clientes WHERE telegram_chat_id = {ph_t} AND empresa_id IS NOT NULL ORDER BY id DESC LIMIT 1", (chat_id,))
+                r_cli = cur_temp.fetchone()
+                if r_cli and r_cli.get("empresa_id"):
+                    empresa_id = r_cli["empresa_id"]
+            con_temp.close()
+        except Exception:
+            pass
 
     # Extração de nome real do usuário do Telegram (from ou chat)
     remetente = mensagem.get("from") or {}
@@ -772,7 +797,7 @@ async def telegram_webhook(
 
 class WebhookConfigRequest(BaseModel):
     url: Optional[str] = None
-    empresa_id: Optional[int] = 1
+    empresa_id: Optional[int] = None
     usuario_id: Optional[int] = None
 
 
@@ -782,7 +807,13 @@ def configurar_webhook_telegram(dados: WebhookConfigRequest = Body(...), request
     Registra a URL do webhook no Telegram oficial para a empresa solicitada.
     Monta a URL usando RENDER_EXTERNAL_URL ou parâmetro informado.
     """
-    empresa_id = dados.empresa_id or 1
+    empresa_id = dados.empresa_id
+    if not empresa_id:
+        raise HTTPException(
+            status_code=400,
+            detail="O identificador da empresa (empresa_id) é obrigatório para registrar o webhook."
+        )
+
     token = obter_token_bot_empresa(empresa_id=empresa_id)
     if not token:
         raise HTTPException(

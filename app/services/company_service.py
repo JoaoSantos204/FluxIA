@@ -51,19 +51,21 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
     try:
         cursor.execute(f"""
-            SELECT empresa_id, numero_suporte_humano, mensagem_suporte, gemini_api_key, openai_api_key, provedor_ia_padrao, fuso_horario,
-                   telegram_bot_token, telegram_bot_username, telegram_webhook_ativo,
-                   ia_prompt_sistema, ia_coletar_dados_obrigatorio,
-                   followup_ativo, followup_horas_inatividade, followup_mensagem_personalizada,
-                   smtp_host, smtp_port, smtp_user, smtp_password, smtp_remetente_nome, smtp_ativo
-            FROM configuracoes_empresa
-            WHERE empresa_id = {ph}
-            ORDER BY id ASC
+            SELECT c.empresa_id, e.nome AS nome_empresa, c.numero_suporte_humano, c.mensagem_suporte, c.gemini_api_key, c.openai_api_key, c.provedor_ia_padrao, c.fuso_horario,
+                   c.telegram_bot_token, c.telegram_bot_username, c.telegram_webhook_ativo,
+                   c.ia_prompt_sistema, c.ia_coletar_dados_obrigatorio,
+                   c.followup_ativo, c.followup_horas_inatividade, c.followup_mensagem_personalizada,
+                   c.smtp_host, c.smtp_port, c.smtp_user, c.smtp_password, c.smtp_remetente_nome, c.smtp_ativo
+            FROM configuracoes_empresa c
+            LEFT JOIN empresas e ON e.id = c.empresa_id
+            WHERE c.empresa_id = {ph}
+            ORDER BY c.id ASC
             LIMIT 1
         """, (empresa_id,))
         linha = cursor.fetchone()
 
         if linha:
+            nome_emp = linha.get("nome_empresa") if isinstance(linha, dict) else linha["nome_empresa"]
             chave_gemini = linha.get("gemini_api_key") if isinstance(linha, dict) else linha["gemini_api_key"]
             chave_openai = linha.get("openai_api_key") if isinstance(linha, dict) else linha["openai_api_key"]
             provedor = linha.get("provedor_ia_padrao") if isinstance(linha, dict) else linha["provedor_ia_padrao"]
@@ -87,6 +89,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
 
             return {
                 "empresa_id": linha["empresa_id"],
+                "nome_empresa": nome_emp or f"Empresa #{empresa_id}",
                 "numero_suporte_humano": linha["numero_suporte_humano"] or CONFIGURACAO_PADRAO["numero_suporte_humano"],
                 "mensagem_suporte": linha["mensagem_suporte"] or CONFIGURACAO_PADRAO["mensagem_suporte"],
                 "gemini_api_key": chave_gemini,
@@ -116,6 +119,7 @@ def obter_configuracao_empresa(empresa_id: int = 1) -> dict:
             }
 
         padrao = CONFIGURACAO_PADRAO.copy()
+        padrao["nome_empresa"] = f"Empresa #{empresa_id}"
         padrao["gemini_api_key_mascarada"] = ""
         padrao["openai_api_key_mascarada"] = ""
         padrao["possui_chave_propria"] = False
