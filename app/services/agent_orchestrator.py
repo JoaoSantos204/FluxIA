@@ -896,6 +896,20 @@ class AgentOrchestrator:
             if tem_nome_agora and tem_tel_agora:
                 return {"intencao": "CADASTRO_CONCLUIDO", "criterio": "Dados de contato fornecidos com sucesso"}
 
+        # 0.2 Detecção Direta de Escolha de Chamado Aberto por Número / ID
+        if contexto.get("tickets_abertos"):
+            numeros_msg = re.findall(r"\b(\d+)\b", mensagem)
+            for n in numeros_msg:
+                for t in contexto["tickets_abertos"]:
+                    if str(t["id"]) == str(n):
+                        palavras = mensagem.strip().split()
+                        if len(palavras) <= 5 or re.search(r"\b(ticket|chamado|protocolo|voltar|aberto|numero|número|id)\b", mensagem, re.IGNORECASE):
+                            return {
+                                "intencao": "CONSULTA_STATUS_TICKET",
+                                "ticket_id_referenciado": t["id"],
+                                "criterio": f"Seleção do Chamado #{t['id']} pelo cliente"
+                            }
+
         # 1. CLASSIFICAÇÃO SEMÂNTICA PRINCIPAL VIA LLM (Opção 1 - Todas as Mensagens)
         classificacao_llm = self.classificar_intencao_via_llm(
             mensagem=mensagem,
@@ -906,6 +920,17 @@ class AgentOrchestrator:
         if classificacao_llm:
             intencao_llm = classificacao_llm.get("intencao")
             logger.info(f"[Orquestrador LLM] Mensagem: '{mensagem}' -> Intenção: {intencao_llm} ({classificacao_llm.get('criterio')})")
+
+            # Se for consulta de ticket e não extraiu o ID, busca número correspondente nos chamados abertos
+            if intencao_llm == "CONSULTA_STATUS_TICKET" and not classificacao_llm.get("ticket_id_referenciado"):
+                numeros_msg = re.findall(r"\b(\d+)\b", mensagem)
+                for n in numeros_msg:
+                    for t in contexto.get("tickets_abertos", []):
+                        if str(t["id"]) == str(n):
+                            classificacao_llm["ticket_id_referenciado"] = t["id"]
+                            break
+                    if classificacao_llm.get("ticket_id_referenciado"):
+                        break
 
             # Valida exigência de contato obrigatório para demandas comerciais
             if intencao_llm in ["PROPOSTA_COMERCIAL", "CONSULTA_COMERCIAL"]:
@@ -1454,53 +1479,83 @@ class AgentOrchestrator:
                     if str(t["id"]) == str(ticket_ref_id):
                         ticket_alvo = t
                         break
+
+            if not ticket_alvo:
+                numeros_msg = re.findall(r"\b(\d+)\b", mensagem)
+                for num_str in numeros_msg:
+                    for t in tickets_abertos:
+                        if str(t["id"]) == str(num_str):
+                            ticket_alvo = t
+                            ticket_ref_id = t["id"]
+                            break
+                    if ticket_alvo:
+                        break
+
             if not ticket_alvo and len(tickets_abertos) == 1:
                 ticket_alvo = tickets_abertos[0]
 
             if ticket_alvo:
-                # Anexa a pergunta do cliente ao histórico do ticket e atualiza como não lido
+                # Anexa a mensagem do cliente estritamente ao histórico DESTE chamado escolhido
+                pergunta_ant = self.obter_pergunta_anterior(chat_id=chat_id, empresa_id=empresa_id)
+                msg_gravar = mensagem
+                if len(mensagem.strip().split()) <= 3 and pergunta_ant:
+                    msg_gravar = f"Cliente selecionou o Chamado #{ticket_alvo['id']}. Mensagem: {mensagem} (Solicitação anterior: {pergunta_ant})"
+
                 adicionar_mensagem_cliente_ticket(
                     ticket_id=ticket_alvo["id"],
                     empresa_id=empresa_id,
-                    mensagem_cliente=mensagem
+                    mensagem_cliente=msg_gravar
                 )
+
+                # Vincula a conversa a este ticket ativo e direciona o atendimento para o modo humano
+                conexao = conectar()
+                cursor = _cursor(conexao)
+                ph = _placeholder()
+                try:
+                    cursor.execute(f"""
+                        UPDATE conversas_telegram
+                        SET ticket_id_ativo = {ph}, status = 'humano', ultimo_humano_em = CURRENT_TIMESTAMP, atualizado_em = CURRENT_TIMESTAMP
+                        WHERE chat_id = {ph}
+                    """, (ticket_alvo["id"], str(chat_id)))
+                    conexao.commit()
+                finally:
+                    conexao.close()
+
                 status_traduzido = "Aberto (Aguardando Atendente)" if ticket_alvo.get("status") == "aberto" else "Em Andamento com a Equipe"
                 msg_status = (
-                    f"🎫 **Atualização sobre seu Chamado #{ticket_alvo['id']}**\n\n"
+                    f"🎫 **Direcionado para o Chamado #{ticket_alvo['id']}**\n\n"
                     f"• **Assunto:** {ticket_alvo['titulo']}\n"
                     f"• **Status Atual:** {status_traduzido}\n"
                     f"• **Prioridade:** {ticket_alvo.get('prioridade', 'Alta').capitalize()}\n\n"
-                    "Acabei de registrar a sua mensagem diretamente neste chamado e notifiquei nossos atendentes com prioridade. "
-                    "Eles entrarão em contato por aqui mesmo assim que houver novidades!"
+                    "Acabei de registrar sua mensagem diretamente neste chamado e notifiquei o atendente responsável. "
+                    "Nossa equipe dará continuidade ao atendimento por aqui em instantes!"
                 )
                 return msg_status, {
                     "intencao": "CONSULTA_STATUS_TICKET",
                     "ticket_id": ticket_alvo["id"],
+                    "status": "humano",
                     "cadastrado": contexto["cadastrado_completo"],
                     "documentos_usados": []
                 }
             else:
-                # Mais de um ticket em aberto
+                # Mais de um ticket em aberto e o cliente NÃO especificou qual:
+                # NUNCA anexa a mensagem a todos os chamados! Pergunta expressamente ao cliente qual chamado ele deseja.
                 linhas_tickets = []
                 for t in tickets_abertos:
-                    status_fmt = "Aberto" if t.get("status") == "aberto" else "Em Andamento"
-                    linhas_tickets.append(f"• **Ticket #{t['id']}**: {t['titulo']} ({status_fmt})")
-                    # Marca todos como contendo mensagem do cliente para alertar o operador
-                    adicionar_mensagem_cliente_ticket(
-                        ticket_id=t["id"],
-                        empresa_id=empresa_id,
-                        mensagem_cliente=mensagem
-                    )
+                    status_fmt = "Aberto (Aguardando Atendente)" if t.get("status") == "aberto" else "Em Andamento com a Equipe"
+                    linhas_tickets.append(f"• **Ticket #{t['id']}**: {t['titulo']} *({status_fmt})*")
 
                 txt_lista = "\n".join(linhas_tickets)
+                exemplo_id = tickets_abertos[0]["id"]
                 msg_status = (
                     f"Identifiquei que você possui **{len(tickets_abertos)} chamados em aberto** no momento:\n\n"
                     f"{txt_lista}\n\n"
-                    "Acabei de notificar a equipe sobre a sua mensagem. Você gostaria de saber o andamento de algum ticket específico? "
-                    "Basta me informar o número do chamado!"
+                    f"Para qual desses chamados você gostaria de voltar ou dar andamento?\n"
+                    f"Por favor, me responda informando o número do chamado (por exemplo: **{exemplo_id}** ou **Ticket #{exemplo_id}**) para que eu possa direcionar sua mensagem e acionar o atendente correto!"
                 )
                 return msg_status, {
                     "intencao": "CONSULTA_STATUS_TICKET",
+                    "aguardando_escolha_ticket": True,
                     "cadastrado": contexto["cadastrado_completo"],
                     "documentos_usados": []
                 }
