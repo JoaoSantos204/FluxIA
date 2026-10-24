@@ -794,6 +794,70 @@ class AgentOrchestrator:
         ]
         return any(re.search(p, msg) for p in padroes)
 
+    def eh_interesse_compra_ou_contratacao(self, mensagem: str) -> bool:
+        """
+        Identifica se a mensagem expressa intenção direta de compra de produtos,
+        contratação de serviços/planos, solicitação de compra ou fechamento comercial.
+        """
+        if not mensagem:
+            return False
+        msg = mensagem.strip().lower()
+
+        padroes = [
+            # Intenção explícita de compra
+            r"\b(quero|gostaria|desejo|preciso|pretendo|como\s+(?:fa[cç]o\s+para\s+)?|onde)\s+(?:de\s+)?comprar\b",
+            r"\b(comprar|compra)\s+(?:um|o|a|os|as|esse|este|esta|algum|alguma)?\s*(?:produto|produtos|servi[cç]o|servi[cç]os|plano|planos|pacote|solu[cç][aã]o|sistema|ferramenta|bot|ia)?\b",
+            r"\b(solicita[cç][aã]o|solicito|pedido)\s+de\s+compra\b",
+            r"\b(interesse\s+em\s+comprar|interesse\s+no\s+produto|interesse\s+nos\s+produtos|interesse\s+no\s+plano)\b",
+            r"\b(tenho\s+interesse\s+em\s+(?:comprar|adquirir|contratar|fechar))\b",
+            # Intenção explícita de contratação
+            r"\b(quero|gostaria|desejo|preciso|pretendo|como\s+(?:fa[cç]o\s+para\s+)?)\s+contratar\b",
+            r"\b(contratar|contrata[cç][aã]o)\s+(?:o|a|os|as|esse|este|esta|um|uma)?\s*(?:servi[cç]o|servi[cç]os|plano|planos|produto|produtos|solu[cç][aã]o)?\b",
+            # Intenção de aquisição e adesão
+            r"\b(quero|gostaria|desejo|como\s+(?:fa[cç]o\s+para\s+)?)\s+(?:adquirir|assinar)\b",
+            r"\b(fazer\s+(?:a\s+)?ades[aã]o|ades[aã]o\s+ao\s+plano)\b",
+            # Fechamento de negócio / compra
+            r"\b(vamos\s+fechar|quero\s+fechar|fechar\s+neg[oó]cio|fechar\s+o\s+plano|fechar\s+compra|fechar\s+pedido)\b",
+            r"\b(quanto\s+custa\s+para\s+(?:fechar|comprar|contratar|adquirir))\b",
+            r"\b(qual\s+(?:o\s+)?valor\s+para\s+(?:fechar|comprar|contratar|adquirir))\b",
+        ]
+        return any(re.search(p, msg) for p in padroes)
+
+    def eh_consulta_comercial_cliente(self, mensagem: str) -> bool:
+        """
+        Verifica se o cliente está consultando seu histórico de contratos, propostas e pendências no CRM.
+        """
+        if not mensagem:
+            return False
+        msg_limpa = mensagem.strip().lower()
+
+        termos_comerciais = [
+            "minha proposta", "minhas propostas", "quais propostas", "qual proposta", "tenho proposta",
+            "possuo proposta", "proposta que tenho", "propostas que tenho", "propostas possuo",
+            "meu contrato", "meus contratos", "qual o contrato", "quais contratos", "tenho contrato",
+            "possuo contrato", "contrato que tenho", "contratos que tenho", "valor do contrato",
+            "valor do meu contrato", "qual o valor do contrato", "qual o valor do contrato que tenho",
+            "meu negócio", "meu negocio", "andamento do meu", "status da proposta", "status do meu pedido",
+            "status do negócio", "o que eu contratei", "o que contratei", "meu plano contratado",
+            "segunda via do contrato", "quais propostas possuo com vocês", "quais contratos possuo com vocês",
+            "itens em aberto", "item em aberto", "o que tenho em aberto", "o que está em aberto", "tenho em aberto",
+            "itens abertos", "meus itens em aberto", "quais itens tenho em aberto", "quais itens possuo em aberto",
+            "itens que tenho em aberto", "o que tenho pendente", "minhas pendências", "quais pendências",
+            "meus processos em aberto", "o que está pendente no meu atendimento", "negócios em andamento"
+        ]
+        padroes_comerciais_regex = [
+            r"\b(minha|minhas|meu|meus|qual|quais|tenho|possuo|algum|alguma)\s+.*?\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\b",
+            r"\b(proposta|propostas|contrato|contratos|neg[oó]cio|neg[oó]cios)\s+.*?\b(que\s+tenho|que\s+possuo|em\s+aberto|abertos?|ativo|ativos|vigente|vigentes|pendente|pendentes|meu|minha|meus|minhas)\b",
+            r"\b(itens?|item)\s+.*?\b(em\s+aberto|abertos?|pendentes?)\b",
+            r"\b(o\s+que\s+(?:eu\s+)?tenho\s+(?:em\s+aberto|pendente))\b",
+            r"\b(minhas?\s+pend[eê]ncias?)\b",
+            r"\b(status\s+d[oa]\s+(?:proposta|pedido|neg[oó]cio|contrato))\b",
+            r"\b(valor\s+d[oa]\s+(?:meu\s+|minha\s+)?(?:contrato|proposta))\b",
+            r"\b(o\s+que\s+(?:eu\s+)?contratei)\b",
+            r"\b(ver|olhar|consultar|mostrar|mostra|exibir|listar|saber|dados|detalhes)\s+.*?\b(proposta|propostas|contrato|contratos)\b",
+        ]
+        return any(t in msg_limpa for t in termos_comerciais) or any(re.search(p, msg_limpa) for p in padroes_comerciais_regex)
+
     def classificar_intencao_via_llm(
         self,
         mensagem: str,
@@ -837,10 +901,10 @@ class AgentOrchestrator:
             CATEGORIAS DE INTENÇÃO DISPONÍVEIS:
             1. "TRANSBORDO_HUMANO": Qualquer solicitação explícita ou implícita para falar com um atendente humano, consultor, suporte, operador, pessoa de verdade, ou queixas de que o bot não compreende/não resolve (ex: "me passa um atendente", "quero falar com uma pessoa", "preciso de suporte", "chama o operador", "atendente por favor", "cansei do bot", "tem gente aí?", "posso falar com alguém?").
             2. "CONSULTA_STATUS_TICKET": O cliente pergunta ou cobra o andamento, status, resposta ou novidades sobre chamados/tickets que ele JÁ possui em aberto conosco (ex: "como está meu chamado?", "alguma novidade do ticket?", "e o meu suporte?", "já viram meu pedido?", "quero saber do chamado 10").
-            3. "PROPOSTA_COMERCIAL": Pedido formal de nova proposta comercial, orçamento, cotação formal, ou negociação de descontos/valores/termos de contrato.
+            3. "PROPOSTA_COMERCIAL": Qualquer manifestação de interesse em comprar produto, contratar soluções/serviços, solicitação de compra, pedido formal de nova proposta comercial, orçamento, cotação formal, ou negociação de descontos/valores/termos de contrato.
             4. "ENVIO_PDF_PROPOSTA": Pedido explícito para baixar ou receber documento/PDF de proposta já registrada (ex: "me manda o pdf da proposta", "envia a proposta em pdf").
             5. "CONSULTA_COMERCIAL": Dúvidas em primeira pessoa sobre propostas ou contratos já existentes do próprio cliente (ex: "quais propostas eu tenho?", "qual o valor do meu contrato?").
-            6. "PRODUTOS_CATALOGO": Perguntas sobre o que a empresa faz, catálogo, quais produtos/serviços/planos oferece, escopo, funcionalidades ou preços de tabela.
+            6. "PRODUTOS_CATALOGO": Perguntas informativas sobre o que a empresa faz, catálogo, quais produtos/serviços/planos oferece, escopo ou funcionalidades.
             7. "FORA_DO_ESCOPO": Assuntos totalmente desconexos do atendimento da empresa (ex: receitas de comida, futebol, conselhos pessoais, piadas, programação externa).
             8. "SAUDACAO": Cumprimento inicial ou comando de início sem dúvida substantiva (ex: "olá", "oi tudo bem", "bom dia", "/start").
             9. "DESPEDIDA": Encerramento cordeal (ex: "obrigado por tudo", "era só isso", "valeu tchau", "até mais").
@@ -850,7 +914,7 @@ class AgentOrchestrator:
             {{
               "intencao": "TRANSBORDO_HUMANO" | "CONSULTA_STATUS_TICKET" | "PROPOSTA_COMERCIAL" | "ENVIO_PDF_PROPOSTA" | "CONSULTA_COMERCIAL" | "PRODUTOS_CATALOGO" | "FORA_DO_ESCOPO" | "SAUDACAO" | "DESPEDIDA" | "BLOQUEIO_PRIVACIDADE",
               "ticket_id_referenciado": null,
-              "tipo_ticket": "suporte" | "proposta" | "negociacao",
+              "tipo_ticket": "suporte" | "proposta" | "negociacao" | "compra",
               "criterio": "Breve justificativa em 1 frase",
               "fora_do_escopo": false
             }}
@@ -878,6 +942,8 @@ class AgentOrchestrator:
         """
         Agente Gerente: Analisa a mensagem prioritariamente via LLM (Opção 1)
         com fallback heurístico de alta resiliência caso a API externa oscile.
+        Garante a coleta de contato obrigatória (WhatsApp/telefone) a partir do interesse
+        em comprar produto, fazer propostas, contratos, orçamentos ou contratação.
         """
         msg_limpa = mensagem.strip().lower()
         msg_sem_pont = re.sub(r"[^\w\s]", "", msg_limpa).strip()
@@ -910,6 +976,77 @@ class AgentOrchestrator:
                                 "criterio": f"Seleção do Chamado #{t['id']} pelo cliente"
                             }
 
+        # 0.3 Saudação Simples e Início de Conversa (/start, oi, olá, bom dia) sem dúvidas: responde cordial sem pedir número
+        if self.eh_saudacao_simples(mensagem):
+            return {"intencao": "SAUDACAO", "criterio": "Saudação inicial sem perguntas adicionais"}
+
+        # 0.4 Despedida / Encerramento cordial
+        despedidas_exatas = {
+            "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
+            "valeu", "valeu!", "valeu obrigado", "muito obrigado por tudo", "muito obrigada por tudo",
+            "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
+            "pode encerrar", "encerrar", "obrigado tenha um bom dia", "obrigado boa tarde", "obrigado boa noite",
+            "nao preciso de mais nada", "não preciso de mais nada", "finalizar", "pode finalizar", "encerrar atendimento",
+            "fim", "fechar", "ok obrigado tchau", "obrigado tchau", "valeu tchau", "só isso", "so isso",
+            "tudo certo obrigado", "tudo certo obrigada"
+        }
+        termos_despedida = [
+            "tchau", "adeus", "até mais", "ate mais", "até logo", "ate logo", "até amanhã", "ate amanha",
+            "era só isso", "era so isso", "só isso obrigado", "so isso obrigado", "por hoje é só", "por hoje e so",
+            "pode encerrar", "encerrar atendimento", "muito obrigado por tudo", "muito obrigada por tudo",
+            "não preciso de mais nada", "nao preciso de mais nada", "pode finalizar", "finalizar atendimento",
+            "fechar atendimento", "encerrar a conversa", "pode encerrar a conversa", "por hoje era só"
+        ]
+        if msg_sem_pont in despedidas_exatas or any(d in msg_limpa for d in termos_despedida):
+            return {"intencao": "DESPEDIDA", "criterio": "Usuário encerrou o diálogo ou despediu-se cordialmente"}
+
+        # 0.5 Processos base da empresa (horário de funcionamento, localização, endereço, sobre a empresa): responde direto sem exigir número
+        if self.eh_pergunta_processo_base(mensagem):
+            return {
+                "intencao": "PERGUNTA_CONHECIMENTO",
+                "criterio": "Pergunta sobre processo base da empresa (horário/localização/endereço/funcionamento) respondida livremente"
+            }
+
+        # ------------------------------------------------------------------------
+        # DETECÇÃO DE INTERESSE EM COMPRA, PROPOSTAS, CONTRATOS OU COMERCIAL
+        # ------------------------------------------------------------------------
+        eh_prop_neg, tipo_prop_neg = self.eh_solicitacao_proposta_ou_negociacao(
+            mensagem,
+            chat_id=contexto.get("chat_id"),
+            empresa_id=contexto.get("empresa_id", 1)
+        )
+        eh_compra = self.eh_interesse_compra_ou_contratacao(mensagem)
+        eh_consulta_com = self.eh_consulta_comercial_cliente(mensagem)
+        eh_duvida_comercial = self.eh_pergunta_comercial_ou_produtos(mensagem)
+
+        # Se o cliente NÃO possui telefone válido cadastrado e manifestou interesse em:
+        # - Solicitação de proposta comercial, orçamento ou negociação
+        # - Solicitação de compra, contratação ou interesse em comprar produto
+        # - Consulta a propostas e contratos existentes do CRM
+        # - Dúvidas sobre produtos, planos, valores ou contratação
+        # -> Exige IMEDIATAMENTE a coleta do WhatsApp/telefone para contato e elaboração
+        if not contexto.get("tem_telefone_valido"):
+            if eh_prop_neg:
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": f"Solicitação de {tipo_prop_neg} formal exigindo WhatsApp/telefone para contato e elaboração"
+                }
+            if eh_compra:
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Interesse em comprar produto ou contratação exigindo WhatsApp/telefone para atendimento comercial"
+                }
+            if eh_consulta_com:
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Consulta de proposta ou contrato no sistema exigindo WhatsApp/telefone para localização segura"
+                }
+            if eh_duvida_comercial:
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Dúvida sobre produtos, planos ou valores exigindo telefone para atendimento comercial personalizado"
+                }
+
         # 1. CLASSIFICAÇÃO SEMÂNTICA PRINCIPAL VIA LLM (Opção 1 - Todas as Mensagens)
         classificacao_llm = self.classificar_intencao_via_llm(
             mensagem=mensagem,
@@ -932,12 +1069,14 @@ class AgentOrchestrator:
                     if classificacao_llm.get("ticket_id_referenciado"):
                         break
 
-            # Valida exigência de contato obrigatório para demandas comerciais
-            if intencao_llm in ["PROPOSTA_COMERCIAL", "CONSULTA_COMERCIAL"]:
+            # Valida exigência de contato obrigatório para demandas comerciais ou interesse de compra
+            if intencao_llm in ["PROPOSTA_COMERCIAL", "CONSULTA_COMERCIAL"] or (
+                intencao_llm in ["PRODUTOS_CATALOGO", "TRANSBORDO_HUMANO"] and (eh_prop_neg or eh_compra or eh_duvida_comercial)
+            ):
                 if not contexto.get("tem_telefone_valido"):
                     return {
                         "intencao": "COLETA_CONTATO",
-                        "criterio": "Demanda comercial identificada por IA exigindo telefone para contato e elaboração"
+                        "criterio": "Demanda comercial ou interesse de compra identificado por IA exigindo telefone para contato e elaboração"
                     }
 
             return classificacao_llm
@@ -949,6 +1088,52 @@ class AgentOrchestrator:
             return {
                 "intencao": "ENVIO_PDF_PROPOSTA",
                 "criterio": "Cliente solicitou envio da proposta comercial em PDF ou envio de proposta já cadastrada"
+            }
+
+        if eh_prop_neg:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": f"Solicitação de {tipo_prop_neg} formal exigindo WhatsApp/telefone para contato e elaboração (fallback)"
+                }
+            return {
+                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                "tipo_ticket": tipo_prop_neg,
+                "criterio": f"Cliente solicitou {tipo_prop_neg} formal (fallback)"
+            }
+
+        if eh_compra:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Interesse em comprar produto exigindo WhatsApp/telefone para atendimento comercial (fallback)"
+                }
+            return {
+                "intencao": "SOLICITACAO_PROPOSTA_NEGOCIACAO",
+                "tipo_ticket": "compra",
+                "criterio": "Interesse em comprar produto encaminhado para ticket comercial (fallback)"
+            }
+
+        if eh_consulta_com:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Consulta comercial exigindo WhatsApp/telefone (fallback)"
+                }
+            return {
+                "intencao": "CONSULTA_COMERCIAL",
+                "criterio": "Consulta comercial a propostas/contratos (fallback)"
+            }
+
+        if eh_duvida_comercial:
+            if not contexto.get("tem_telefone_valido"):
+                return {
+                    "intencao": "COLETA_CONTATO",
+                    "criterio": "Dúvida sobre produtos/planos exigindo WhatsApp/telefone (fallback)"
+                }
+            return {
+                "intencao": "PERGUNTA_CONHECIMENTO",
+                "criterio": "Apresentação de produtos do catálogo (fallback)"
             }
 
         termos_transbordo = [
@@ -1056,8 +1241,33 @@ class AgentOrchestrator:
         if intencao == "COLETA_CONTATO":
             self.atualizar_dados_cliente(cliente_id=contexto["cliente_id"], aguardando=True)
 
-            eh_comercial = "proposta" in mensagem.lower() or "contrato" in mensagem.lower() or "negócio" in mensagem.lower()
-            if eh_comercial:
+            msg_lower = mensagem.lower()
+            eh_interesse_compra = (
+                self.eh_interesse_compra_ou_contratacao(mensagem) or
+                any(w in msg_lower for w in ["comprar", "compra", "contratar", "contratação", "adesão", "fechar negócio", "adquirir"])
+            )
+            eh_solicita_proposta_contrato = (
+                any(w in msg_lower for w in ["proposta", "orçamento", "orcamento", "cotação", "cotacao", "contrato"]) and
+                not self.eh_consulta_comercial_cliente(mensagem)
+            )
+            eh_consulta_existente = self.eh_consulta_comercial_cliente(mensagem)
+
+            if eh_interesse_compra or eh_solicita_proposta_contrato:
+                if nome_exibicao:
+                    msg_coleta = (
+                        f"👋 Olá, {nome_exibicao}! Que excelente saber do seu interesse!\n\n"
+                        "Para prepararmos a sua **proposta comercial personalizada**, alinharmos os detalhes da compra/contratação "
+                        "e te passar as melhores condições exclusivas com nossos especialistas, "
+                        "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
+                    )
+                else:
+                    msg_coleta = (
+                        "👋 Olá! Que excelente saber do seu interesse!\n\n"
+                        "Para prepararmos a sua **proposta comercial personalizada**, alinharmos os detalhes da compra/contratação "
+                        "e te passar as melhores condições exclusivas com nossos especialistas, "
+                        "por favor compartilhe seu número de **WhatsApp/Telefone** no botão abaixo (ou digite seu número com DDD)."
+                    )
+            elif eh_consulta_existente:
                 if nome_exibicao:
                     msg_coleta = (
                         f"👋 Olá, {nome_exibicao}! Para eu localizar suas **propostas e contratos** com total sigilo e precisão no sistema, "
@@ -1390,11 +1600,12 @@ class AgentOrchestrator:
         # --- AÇÃO: SOLICITAÇÃO DE PROPOSTA OU NEGOCIAÇÃO DE CONTRATO (GERAÇÃO DE TICKET IA) ---
         if intencao in ["SOLICITACAO_PROPOSTA_NEGOCIACAO", "PROPOSTA_COMERCIAL"]:
             tipo_ticket = classificacao.get("tipo_ticket", "proposta")
-            titulo_ticket = (
-                "Solicitação de Proposta Comercial"
-                if tipo_ticket == "proposta"
-                else "Negociação de Valores / Termos de Contrato"
-            )
+            if tipo_ticket == "compra":
+                titulo_ticket = "Solicitação de Compra / Contratação"
+            elif tipo_ticket == "proposta":
+                titulo_ticket = "Solicitação de Proposta Comercial"
+            else:
+                titulo_ticket = "Negociação de Valores / Termos de Contrato"
 
             from app.services.ticket_service import criar_ticket_automatico
             ticket = criar_ticket_automatico(
@@ -1430,7 +1641,14 @@ class AgentOrchestrator:
                 conexao.close()
 
             saudacao_nome = f", {nome_exibicao}" if nome_exibicao else ""
-            if tipo_ticket == "proposta":
+            if tipo_ticket == "compra":
+                msg_resposta = (
+                    f"Excelente escolha{saudacao_nome}! Para formalizarmos a sua solicitação de compra e contratação "
+                    "com as melhores condições, nosso atendimento comercial foi acionado prioritariamente com o resumo do que você precisa.\n\n"
+                    f"🎫 Já abri um chamado prioritário (**Ticket #{ticket_id}**) para nossa equipe com o seu pedido. "
+                    "Em instantes um atendente dará continuidade por aqui mesmo no Telegram!"
+                )
+            elif tipo_ticket == "proposta":
                 msg_resposta = (
                     f"Perfeito{saudacao_nome}! Para elaboração de propostas comerciais personalizadas com todos os detalhes e "
                     "as melhores condições, nosso atendimento é conduzido diretamente por um dos nossos consultores especialistas.\n\n"
