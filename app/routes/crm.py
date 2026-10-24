@@ -2691,6 +2691,51 @@ def obter_metricas_dashboard(
         estagios_raw = cursor.fetchall()
         estagios = {r["estagio_label"]: {"quantidade": r["qtd"], "valor": float(r["soma_valor"])} for r in estagios_raw}
 
+        # Comparativo, faturamento e vendas por produto
+        cursor.execute(f"""
+            SELECT 
+                p.id AS produto_id,
+                p.nome AS produto_nome,
+                COALESCE(p.preco, 0) AS produto_preco,
+                p.ativo AS produto_ativo,
+                COUNT(n.id) AS total_negocios,
+                COUNT(CASE WHEN LOWER(COALESCE(n.estagio, '')) = 'fechado' OR LOWER(COALESCE(ep.nome, '')) = 'fechado' THEN 1 END) AS vendas_fechadas,
+                COALESCE(SUM(CASE WHEN LOWER(COALESCE(n.estagio, '')) = 'fechado' OR LOWER(COALESCE(ep.nome, '')) = 'fechado' THEN n.valor_estimado ELSE 0 END), 0) AS faturamento_fechado,
+                COUNT(CASE WHEN (n.estagio IS NULL OR LOWER(n.estagio) NOT IN ('fechado', 'perdido')) AND (ep.nome IS NULL OR LOWER(COALESCE(ep.nome, '')) NOT IN ('fechado', 'perdido')) THEN 1 END) AS negocios_em_aberto,
+                COALESCE(SUM(CASE WHEN (n.estagio IS NULL OR LOWER(n.estagio) NOT IN ('fechado', 'perdido')) AND (ep.nome IS NULL OR LOWER(COALESCE(ep.nome, '')) NOT IN ('fechado', 'perdido')) THEN n.valor_estimado ELSE 0 END), 0) AS valor_em_aberto
+            FROM produtos p
+            LEFT JOIN negocios n ON n.produto_id = p.id AND n.empresa_id = {ph}
+            LEFT JOIN etapas_pipeline ep ON n.etapa_id = ep.id
+            WHERE p.empresa_id = {ph}
+            GROUP BY p.id, p.nome, p.preco, p.ativo
+            ORDER BY faturamento_fechado DESC, vendas_fechadas DESC, p.nome ASC
+        """, (target_empresa, target_empresa))
+        prods_raw = cursor.fetchall()
+
+        produtos_comparativo = []
+        total_faturamento_todos_prods = sum(float(r["faturamento_fechado"] or 0) for r in prods_raw)
+
+        for pr in prods_raw:
+            fat = float(pr["faturamento_fechado"] or 0)
+            vendas = int(pr["vendas_fechadas"] or 0)
+            part_pct = round((fat / total_faturamento_todos_prods * 100), 1) if total_faturamento_todos_prods > 0 else 0.0
+            produtos_comparativo.append({
+                "produto_id": pr["produto_id"],
+                "nome": pr["produto_nome"],
+                "preco_tabela": float(pr["produto_preco"] or 0),
+                "ativo": bool(pr["produto_ativo"]),
+                "total_negocios": int(pr["total_negocios"] or 0),
+                "vendas_fechadas": vendas,
+                "faturamento_fechado": fat,
+                "negocios_em_aberto": int(pr["negocios_em_aberto"] or 0),
+                "valor_em_aberto": float(pr["valor_em_aberto"] or 0),
+                "participacao_pct": part_pct
+            })
+
+        mais_vendido = max(produtos_comparativo, key=lambda x: x["vendas_fechadas"]) if (produtos_comparativo and any(x["vendas_fechadas"] > 0 for x in produtos_comparativo)) else (produtos_comparativo[0] if produtos_comparativo else None)
+        maior_faturamento = max(produtos_comparativo, key=lambda x: x["faturamento_fechado"]) if (produtos_comparativo and any(x["faturamento_fechado"] > 0 for x in produtos_comparativo)) else (produtos_comparativo[0] if produtos_comparativo else None)
+        maior_pipeline = max(produtos_comparativo, key=lambda x: x["valor_em_aberto"]) if (produtos_comparativo and any(x["valor_em_aberto"] > 0 for x in produtos_comparativo)) else (produtos_comparativo[0] if produtos_comparativo else None)
+
         return {
             "empresa_id": target_empresa,
             "total_clientes": total_clientes,
@@ -2703,7 +2748,12 @@ def obter_metricas_dashboard(
             "receita_fechada": receita_fechada,
             "receita_total": receita_pipeline + receita_fechada,
             "taxa_conversao": taxa_conversao,
-            "estagios": estagios
+            "estagios": estagios,
+            "produtos_comparativo": produtos_comparativo,
+            "produto_mais_vendido": mais_vendido,
+            "produto_maior_faturamento": maior_faturamento,
+            "produto_maior_pipeline": maior_pipeline,
+            "total_produtos_catalogo": len(produtos_comparativo)
         }
     finally:
         conexao.close()

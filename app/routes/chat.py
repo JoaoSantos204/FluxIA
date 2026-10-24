@@ -259,6 +259,47 @@ def conversar(pergunta: Pergunta, background_tasks: BackgroundTasks):
         # 4. Verifica se o usuário solicitou acrescentar documento / nota à base de conhecimento
         intencao_adicionar = extrair_intencao_adicionar_conhecimento(texto_pergunta)
         if intencao_adicionar:
+            # Trava de Segurança RBAC: Apenas perfis 'admin' ou 'master' podem cadastrar novas regras na base
+            eh_admin = False
+            if usuario_id:
+                try:
+                    cursor.execute(f"SELECT perfil, status FROM usuarios WHERE id = {ph}", (usuario_id,))
+                    u_row = cursor.fetchone()
+                    if u_row and u_row.get("status") == "ativo" and str(u_row.get("perfil", "")).lower() in ("admin", "master"):
+                        eh_admin = True
+                except Exception as e_perm:
+                    logger.warning(f"[ChatPortal] Falha ao verificar perfil do usuário {usuario_id}: {e_perm}")
+
+            if not eh_admin:
+                resposta_texto = (
+                    "🔒 **Permissão Negada**: Apenas usuários com perfil de **Administrador** ou **Master** têm autorização "
+                    "para alterar, cadastrar ou alimentar novas regras e informações na Base de Conhecimento corporativa.\n\n"
+                    "Sua solicitação não foi adicionada. Caso precise incluir esta regra oficialmente, solicite a um administrador da empresa."
+                )
+                fonte = "permissao_negada"
+                cursor.execute(f"""
+                    INSERT INTO mensagens_chat_portal 
+                    (conversa_id, remetente, texto, fonte, teve_contexto, documentos_utilizados, modelo_usado, criado_em)
+                    VALUES ({ph}, 'ia', {ph}, {ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (conversa_id, resposta_texto, fonte, False, "[]", ai_service.primary_model))
+                msg_ia_row = cursor.fetchone()
+                conexao.commit()
+
+                return {
+                    "conversa_id": conversa_id,
+                    "titulo": titulo_ativo,
+                    "resposta": resposta_texto,
+                    "fonte": fonte,
+                    "teve_contexto": False,
+                    "documentos_consultados": [],
+                    "modelo_usado": ai_service.primary_model,
+                    "telemetria_id": 0,
+                    "session_id": session_id,
+                    "msg_user_id": msg_user_id,
+                    "msg_ia_id": msg_ia_row["id"]
+                }
+
             try:
                 res_add = adicionar_conhecimento_empresa(
                     titulo=intencao_adicionar["titulo"],

@@ -539,6 +539,72 @@
         </div>
       </div>
 
+      <!-- COMPARATIVO E DESEMPENHO POR PRODUTO -->
+      <div id="dashboard-produtos-section" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; box-shadow:var(--shadow-sm);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+          <div>
+            <div style="font-weight:700; font-size:15px; color:var(--text); font-family:'Syne',sans-serif; display:flex; align-items:center; gap:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <span>Inteligência Comercial por Produto & Faturamento</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted);">Comparativo de vendas concluídas, faturamento acumulado e oportunidades ativas no funil</div>
+          </div>
+          <button class="btn-secondary" style="font-size:11px; padding:5px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" onclick="switchTab('produtos', document.querySelectorAll('.sidebar-nav .nav-item')[5])">
+            <span>Gerenciar Catálogo</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
+        <!-- 3 Cards de Destaque por Produto -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:16px;">
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+            <div style="font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span>🏆 Produto Mais Vendido</span>
+            </div>
+            <div id="dash-prod-mais-vendido-nome" style="font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">--</div>
+            <div id="dash-prod-mais-vendido-sub" style="font-size:11px; color:#34d399; margin-top:2px; font-weight:600;">0 vendas concluídas</div>
+          </div>
+
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+            <div style="font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span>💰 Maior Faturamento</span>
+            </div>
+            <div id="dash-prod-maior-fat-nome" style="font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">--</div>
+            <div id="dash-prod-maior-fat-sub" style="font-size:11px; color:#38bdf8; margin-top:2px; font-weight:600;">R$ 0,00 faturado</div>
+          </div>
+
+          <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+            <div style="font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span>📈 Maior Pipeline Ativo</span>
+            </div>
+            <div id="dash-prod-maior-pipe-nome" style="font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">--</div>
+            <div id="dash-prod-maior-pipe-sub" style="font-size:11px; color:#fbbf24; margin-top:2px; font-weight:600;">R$ 0,00 em negociação</div>
+          </div>
+        </div>
+
+        <!-- Tabela Comparativa de Produtos -->
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border); color:var(--text-muted);">
+                <th style="padding:8px 10px; font-weight:600;">Produto / Serviço</th>
+                <th style="padding:8px 10px; font-weight:600;">Preço Tabela</th>
+                <th style="padding:8px 10px; font-weight:600; text-align:center;">Vendas Concluídas</th>
+                <th style="padding:8px 10px; font-weight:600; text-align:right;">Faturamento Fechado</th>
+                <th style="padding:8px 10px; font-weight:600; text-align:center;">Em Pipeline</th>
+                <th style="padding:8px 10px; font-weight:600; text-align:right;">Valor em Pipeline</th>
+                <th style="padding:8px 10px; font-weight:600; text-align:center;">Participação</th>
+              </tr>
+            </thead>
+            <tbody id="dash-tabela-produtos-corpo">
+              <tr>
+                <td colspan="7" style="padding:16px; text-align:center; color:var(--text-muted);">Carregando comparativo de produtos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="dash-body" style="grid-template-columns: 1fr; padding-left:0; padding-right:0;">
         <div class="chat-list" style="box-shadow:var(--shadow-sm);">
           <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
@@ -2683,6 +2749,7 @@ async function carregarDashboardMetricas() {
     }
 
     renderizarMiniKanbanDashboard(m.estagios || {});
+    renderizarComparativoProdutosDashboard(m);
   } catch (e) {
     console.error('Erro ao carregar métricas:', e);
   }
@@ -2691,6 +2758,99 @@ async function carregarDashboardMetricas() {
 function renderizarMiniKanbanDashboard(estagios) {
   const container = document.getElementById('dash-mini-kanban');
   if (!container) return;
+}
+
+function renderizarComparativoProdutosDashboard(m) {
+  const formatBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+  // 1. Destaques
+  const elMaisVendNome = document.getElementById('dash-prod-mais-vendido-nome');
+  const elMaisVendSub = document.getElementById('dash-prod-mais-vendido-sub');
+  if (elMaisVendNome && elMaisVendSub) {
+    if (m.produto_mais_vendido && m.produto_mais_vendido.vendas_fechadas > 0) {
+      elMaisVendNome.textContent = m.produto_mais_vendido.nome;
+      elMaisVendSub.textContent = `${m.produto_mais_vendido.vendas_fechadas} venda(s) · ${formatBRL(m.produto_mais_vendido.faturamento_fechado)}`;
+    } else {
+      elMaisVendNome.textContent = 'Nenhuma venda registrada';
+      elMaisVendSub.textContent = 'Aguardando fechamentos no CRM';
+    }
+  }
+
+  const elMaiorFatNome = document.getElementById('dash-prod-maior-fat-nome');
+  const elMaiorFatSub = document.getElementById('dash-prod-maior-fat-sub');
+  if (elMaiorFatNome && elMaiorFatSub) {
+    if (m.produto_maior_faturamento && m.produto_maior_faturamento.faturamento_fechado > 0) {
+      elMaiorFatNome.textContent = m.produto_maior_faturamento.nome;
+      elMaiorFatSub.textContent = `${formatBRL(m.produto_maior_faturamento.faturamento_fechado)} (${m.produto_maior_faturamento.participacao_pct}% da receita)`;
+    } else {
+      elMaiorFatNome.textContent = 'R$ 0,00 faturado';
+      elMaiorFatSub.textContent = 'Sem receita fechada ainda';
+    }
+  }
+
+  const elMaiorPipeNome = document.getElementById('dash-prod-maior-pipe-nome');
+  const elMaiorPipeSub = document.getElementById('dash-prod-maior-pipe-sub');
+  if (elMaiorPipeNome && elMaiorPipeSub) {
+    if (m.produto_maior_pipeline && m.produto_maior_pipeline.valor_em_aberto > 0) {
+      elMaiorPipeNome.textContent = m.produto_maior_pipeline.nome;
+      elMaiorPipeSub.textContent = `${formatBRL(m.produto_maior_pipeline.valor_em_aberto)} (${m.produto_maior_pipeline.negocios_em_aberto} oportunidade(s))`;
+    } else {
+      elMaiorPipeNome.textContent = 'Sem pipeline ativo';
+      elMaiorPipeSub.textContent = 'Crie negócios no Kanban';
+    }
+  }
+
+  // 2. Tabela Comparativa de Produtos
+  const tbody = document.getElementById('dash-tabela-produtos-corpo');
+  if (!tbody) return;
+
+  const lista = m.produtos_comparativo || [];
+  if (lista.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="padding:20px; text-align:center; color:var(--text-muted);">
+          Nenhum produto cadastrado no catálogo desta empresa. Cadastre produtos no menu 'Produtos' para acompanhar o desempenho comercial.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = lista.map((p) => {
+    const statusPill = p.ativo 
+      ? '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#22c55e; margin-right:6px;" title="Ativo"></span>'
+      : '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8; margin-right:6px;" title="Inativo"></span>';
+    
+    const pct = p.participacao_pct || 0;
+    
+    return `
+      <tr style="border-bottom:1px solid var(--border); transition:background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+        <td style="padding:10px; font-weight:600; color:var(--text); display:flex; align-items:center;">
+          ${statusPill}
+          <span title="${p.nome}">${p.nome}</span>
+        </td>
+        <td style="padding:10px; color:var(--text-muted);">${formatBRL(p.preco_tabela)}</td>
+        <td style="padding:10px; text-align:center; font-weight:700; color:${p.vendas_fechadas > 0 ? '#34d399' : 'var(--text-muted)'};">
+          ${p.vendas_fechadas}
+        </td>
+        <td style="padding:10px; text-align:right; font-weight:700; color:${p.faturamento_fechado > 0 ? '#38bdf8' : 'var(--text-muted)'};">
+          ${formatBRL(p.faturamento_fechado)}
+        </td>
+        <td style="padding:10px; text-align:center; color:var(--text-muted);">${p.negocios_em_aberto}</td>
+        <td style="padding:10px; text-align:right; color:${p.valor_em_aberto > 0 ? '#fbbf24' : 'var(--text-muted)'}; font-weight:600;">
+          ${formatBRL(p.valor_em_aberto)}
+        </td>
+        <td style="padding:10px; text-align:center;">
+          <div style="display:flex; align-items:center; justify-content:center; gap:6px;">
+            <div style="flex:1; max-width:60px; height:6px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+              <div style="width:${Math.min(pct, 100)}%; height:100%; background:linear-gradient(90deg, #38bdf8, #34d399); border-radius:4px;"></div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:var(--text); min-width:32px;">${pct}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ===== DASHBOARD SÉRIE TEMPORAL (PARTE 24) =====
