@@ -7,3 +7,5 @@ venv/
 uploads/*
 !.gitkeep
 scratch/
+ARQUITETURA_FLUXIA.md
+ARQUITETURA_FLUXIA.pdf
